@@ -95,7 +95,7 @@ class BasePOProcessor(BaseDataProcessor):
             
         except Exception as e:
             self.logger.error(f"添加列時出錯: {str(e)}", exc_info=True)
-            return df, m
+            raise ValueError("添加列時出錯")
     
     def _determine_fa_status(self, df: pd.DataFrame) -> pd.Series:
         """確定是否為FA
@@ -147,7 +147,7 @@ class BasePOProcessor(BaseDataProcessor):
             
         except Exception as e:
             self.logger.error(f"處理關單清單時出錯: {str(e)}", exc_info=True)
-            return df
+            raise ValueError("處理關單清單時出錯")
     
     def judge_previous(self, df: pd.DataFrame, previous_wp: pd.DataFrame, m: int) -> pd.DataFrame:
         """處理前期底稿
@@ -192,7 +192,7 @@ class BasePOProcessor(BaseDataProcessor):
             
         except Exception as e:
             self.logger.error(f"處理前期底稿時出錯: {str(e)}", exc_info=True)
-            return df
+            raise ValueError("處理前期底稿時出錯")
     
     def judge_procurement(self, df: pd.DataFrame, df_procu: pd.DataFrame) -> pd.DataFrame:
         """處理採購底稿
@@ -255,7 +255,7 @@ class BasePOProcessor(BaseDataProcessor):
             
         except Exception as e:
             self.logger.error(f"處理採購底稿時出錯: {str(e)}", exc_info=True)
-            return df
+            raise ValueError("處理採購底稿時出錯")
     
     def get_logic_date(self, df: pd.DataFrame) -> pd.DataFrame:
         """處理日期邏輯
@@ -287,7 +287,7 @@ class BasePOProcessor(BaseDataProcessor):
             
         except Exception as e:
             self.logger.error(f"處理日期邏輯時出錯: {str(e)}", exc_info=True)
-            return df
+            raise ValueError("處理日期邏輯時出錯")
     
     def erm(self, df: pd.DataFrame, ym: int, ref_a: pd.DataFrame, ref_b: pd.DataFrame) -> pd.DataFrame:
         """處理ERM邏輯
@@ -626,14 +626,14 @@ class BasePOProcessor(BaseDataProcessor):
                     )
                 except Exception as e:
                     self.logger.error(f"設置PR Product Code Check時出錯: {str(e)}", exc_info=True)
-                    pass
+                    raise ValueError("設置PR Product Code Check時出錯")
             
             self.logger.info("成功處理ERM邏輯")
             return df
             
         except Exception as e:
             self.logger.error(f"處理ERM邏輯時出錯: {str(e)}", exc_info=True)
-            return df
+            raise ValueError("處理ERM邏輯時出錯")
     
     def process_spt_specific(self, df: pd.DataFrame) -> pd.DataFrame:
         """處理SPT特有邏輯(僅當entity_type為SPT時調用)
@@ -660,7 +660,7 @@ class BasePOProcessor(BaseDataProcessor):
             
         except Exception as e:
             self.logger.error(f"處理SPT特有邏輯時出錯: {str(e)}", exc_info=True)
-            return df
+            raise ValueError("處理SPT特有邏輯時出錯")
     
     def _update_commission_data(self, df: pd.DataFrame) -> pd.DataFrame:
         """更新分潤數據
@@ -710,7 +710,7 @@ class BasePOProcessor(BaseDataProcessor):
             
         except Exception as e:
             self.logger.error(f"更新分潤數據時出錯: {str(e)}", exc_info=True)
-            return df
+            raise ValueError("更新分潤數據時出錯")
     
     def reformate(self, df: pd.DataFrame) -> pd.DataFrame:
         """格式化最終數據
@@ -774,7 +774,7 @@ class BasePOProcessor(BaseDataProcessor):
             
         except Exception as e:
             self.logger.error(f"格式化數據時出錯: {str(e)}", exc_info=True)
-            return df
+            raise ValueError("格式化數據時出錯")
     
     def process(self, fileUrl: str, file_name: str, 
                 fileUrl_previwp: str = None, fileUrl_p: str = None, 
@@ -838,4 +838,4 @@ class BasePOProcessor(BaseDataProcessor):
             
         except Exception as e:
             self.logger.error(f"處理PO數據時出錯: {str(e)}", exc_info=True)
-            raise
+            raise ValueError("處理PO數據時出錯")

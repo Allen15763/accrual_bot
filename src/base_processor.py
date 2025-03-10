@@ -84,7 +84,7 @@ class BaseDataProcessor:
             return df
         except Exception as e:
             self.logger.error(f"格式化日期時出錯: {str(e)}", exc_info=True)
-            return df
+            raise ValueError("日期格式化時出錯")
     
     def _format_numeric_columns(self, df: pd.DataFrame, int_cols: List[str], float_cols: List[str]) -> pd.DataFrame:
         """格式化數值列，包括千分位
@@ -115,7 +115,7 @@ class BaseDataProcessor:
             return df
         except Exception as e:
             self.logger.error(f"格式化數值列時出錯: {str(e)}", exc_info=True)
-            return df
+            raise ValueError("數值格式化時出錯")
     
     def parse_date_from_description(self, df: pd.DataFrame) -> pd.DataFrame:
         """從描述欄位解析日期範圍
@@ -165,7 +165,7 @@ class BaseDataProcessor:
             return df
         except Exception as e:
             self.logger.error(f"解析描述中的日期時出錯: {str(e)}", exc_info=True)
-            return df
+            raise ValueError("解析日期時出錯")
     
     def evaluate_status_based_on_dates(self, df: pd.DataFrame, status_col: str) -> pd.DataFrame:
         """根據日期範圍評估狀態
@@ -213,7 +213,7 @@ class BaseDataProcessor:
             return df
         except Exception as e:
             self.logger.error(f"根據日期評估狀態時出錯: {str(e)}", exc_info=True)
-            return df
+            raise ValueError("根據日期評估狀態時出錯")
     
     def update_estimation_based_on_status(self, df: pd.DataFrame, status_col: str) -> pd.DataFrame:
         """根據狀態更新估計入帳標識
@@ -254,7 +254,7 @@ class BaseDataProcessor:
             return df
         except Exception as e:
             self.logger.error(f"根據狀態更新估計入帳時出錯: {str(e)}", exc_info=True)
-            return df
+            raise ValueError("根據狀態更新估計入帳時出錯")
     
     def judge_ac_code(self, df: pd.DataFrame) -> pd.DataFrame:
         """判斷科目代碼
@@ -275,7 +275,7 @@ class BaseDataProcessor:
             return df
         except Exception as e:
             self.logger.error(f"判斷科目代碼時出錯: {str(e)}", exc_info=True)
-            return df
+            raise ValueError("判斷科目代碼時出錯")
         
     def convert_dep_code(self, df: pd.DataFrame) -> pd.Series:
         # Create a new column or series for the result
@@ -381,7 +381,7 @@ class BaseDataProcessor:
                     ) == df['Product code']
                 except Exception as e:
                     self.logger.error(f"設置產品代碼檢查時出錯: {str(e)}", exc_info=True)
-                    pass
+                    raise ValueError("設置產品代碼檢查時出錯")
                 
                 df['PR Product Code Check'] = np.where(
                     df['Product code'].notnull(),
@@ -392,7 +392,7 @@ class BaseDataProcessor:
             return df.drop('Product code', axis=1)
         except Exception as e:
             self.logger.error(f"判斷欄位值時出錯: {str(e)}", exc_info=True)
-            return df.drop('Product code', axis=1)
+            raise ValueError("判斷欄位值時出錯")
     
     def export_file(self, df: pd.DataFrame, date: int, file_prefix: str) -> None:
         """導出文件
@@ -419,4 +419,4 @@ class BaseDataProcessor:
                 
         except Exception as e:
             self.logger.error(f"導出文件時出錯: {str(e)}", exc_info=True)
-            raise
+            raise ValueError("導出文件時出錯")

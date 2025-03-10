@@ -70,7 +70,7 @@ class BasePRProcessor(BaseDataProcessor):
             
         except Exception as e:
             self.logger.error(f"添加列時出錯: {str(e)}", exc_info=True)
-            return df
+            raise ValueError("添加列時出錯")
     
     def _determine_sm_status(self, df: pd.DataFrame) -> pd.Series:
         """確定是否為S&M
@@ -130,7 +130,7 @@ class BasePRProcessor(BaseDataProcessor):
             
         except Exception as e:
             self.logger.error(f"處理採購底稿時出錯: {str(e)}", exc_info=True)
-            return df
+            raise ValueError("處理採購底稿時出錯")
     
     def process_with_previous(self, df: pd.DataFrame, previous_wp: pd.DataFrame) -> pd.DataFrame:
         """處理前期底稿
@@ -164,7 +164,7 @@ class BasePRProcessor(BaseDataProcessor):
             
         except Exception as e:
             self.logger.error(f"處理前期底稿時出錯: {str(e)}", exc_info=True)
-            return df
+            raise ValueError("處理前期底稿時出錯")
     
     def process_with_closing_list(self, df: pd.DataFrame, mapping_list: List[str]) -> pd.DataFrame:
         """處理關單清單
@@ -188,7 +188,7 @@ class BasePRProcessor(BaseDataProcessor):
             
         except Exception as e:
             self.logger.error(f"處理關單清單時出錯: {str(e)}", exc_info=True)
-            return df
+            raise ValueError("處理關單清單時出錯")
     
     def process_special_cases(self, df: pd.DataFrame) -> pd.DataFrame:
         """處理特殊情況
@@ -218,7 +218,7 @@ class BasePRProcessor(BaseDataProcessor):
             
         except Exception as e:
             self.logger.error(f"處理特殊情況時出錯: {str(e)}", exc_info=True)
-            return df
+            raise ValueError("處理特殊情況時出錯")
     
     def process_spt_specific(self, df: pd.DataFrame) -> pd.DataFrame:
         """處理SPT特有邏輯(僅當entity_type為SPT時調用)
@@ -245,7 +245,7 @@ class BasePRProcessor(BaseDataProcessor):
             
         except Exception as e:
             self.logger.error(f"處理SPT特有邏輯時出錯: {str(e)}", exc_info=True)
-            return df
+            raise ValueError("處理SPT特有邏輯時出錯")
     
     def _update_commission_data(self, df: pd.DataFrame) -> pd.DataFrame:
         """更新分潤數據
@@ -297,7 +297,7 @@ class BasePRProcessor(BaseDataProcessor):
             
         except Exception as e:
             self.logger.error(f"更新分潤數據時出錯: {str(e)}", exc_info=True)
-            return df
+            raise ValueError("更新分潤數據時出錯")
     
     def reformate(self, df: pd.DataFrame) -> pd.DataFrame:
         """格式化最終數據
@@ -353,7 +353,7 @@ class BasePRProcessor(BaseDataProcessor):
             
         except Exception as e:
             self.logger.error(f"格式化數據時出錯: {str(e)}", exc_info=True)
-            return df
+            raise ValueError("格式化數據時出錯")
     
     def process(self, fileUrl: str, file_name: str, 
                 fileUrl_p: str = None, fileUrl_c: str = None, 
@@ -430,4 +430,4 @@ class BasePRProcessor(BaseDataProcessor):
             
         except Exception as e:
             self.logger.error(f"處理PR數據時出錯: {str(e)}", exc_info=True)
-            raise
+            raise ValueError("處理PR數據時出錯")
