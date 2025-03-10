@@ -379,7 +379,8 @@ class BaseDataProcessor:
                     product_match = df['Project'].str.findall(r'^(\w+(?:))').apply(
                         lambda x: x[0] if len(x) > 0 else ''
                     ) == df['Product code']
-                except:
+                except Exception as e:
+                    self.logger.error(f"設置產品代碼檢查時出錯: {str(e)}", exc_info=True)
                     pass
                 
                 df['PR Product Code Check'] = np.where(
@@ -412,7 +413,7 @@ class BaseDataProcessor:
             try:
                 df.to_excel(file_name, index=False, encoding='utf-8-sig', engine='xlsxwriter')
                 self.logger.info(f"成功導出文件: {file_name}")
-            except:
+            except Exception as e:
                 df.to_excel(file_name, index=False, engine='xlsxwriter')
                 self.logger.info(f"成功導出文件(無encoding): {file_name}")
                 

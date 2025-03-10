@@ -39,7 +39,8 @@ class HRISDuplicateChecker:
             self.logger.error(f"檢查PO中的重複項時出錯: {str(e)}", exc_info=True)
             raise
     
-    def check_duplicates_in_ap(self, df_pr: pd.DataFrame, df_po: pd.DataFrame, df_ap: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    def check_duplicates_in_ap(
+            self, df_pr: pd.DataFrame, df_po: pd.DataFrame, df_ap: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """檢查AP中的重複項
         
         Args:

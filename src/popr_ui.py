@@ -272,12 +272,14 @@ class Main(QWidget):
             
             # 驗證文件格式
             try:
-                column_checking = pd.read_excel(self.fileUrl_previwp, dtype=str, nrows=3, engine='openpyxl').columns.tolist()
+                column_checking = (pd.read_excel(self.fileUrl_previwp, dtype=str, nrows=3, engine='openpyxl')
+                                   .columns.tolist())
                 important_col = ['Remarked by Procurement', 'Noted by Procurement', 'Line#']
                 
                 if not set(important_col).issubset(column_checking):
                     self.logger.warning("前期底稿格式錯誤，缺少必要列")
-                    QMessageBox.warning(self, "警告", "請檢查前期底稿是否包含必要欄位: Remarked by Procurement, Noted by Procurement, Line#")
+                    QMessageBox.warning(
+                        self, "警告", "請檢查前期底稿是否包含必要欄位: Remarked by Procurement, Noted by Procurement, Line#")
                     return
                     
                 # 添加到列表
@@ -319,7 +321,8 @@ class Main(QWidget):
                 
                 if not set(important_col).issubset(column_checking):
                     self.logger.warning("採購底稿格式錯誤，缺少必要列")
-                    QMessageBox.warning(self, "警告", "請檢查採購底稿是否包含必要欄位: Remarked by Procurement, Noted by Procurement, Line#")
+                    QMessageBox.warning(
+                        self, "警告", "請檢查採購底稿是否包含必要欄位: Remarked by Procurement, Noted by Procurement, Line#")
                     return
                     
                 # 添加到列表
@@ -379,7 +382,8 @@ class Main(QWidget):
                 if len(items) == 4:  # 原始資料 + 前期底稿 + 採購底稿 + 關單清單
                     QMessageBox.warning(self, "警告", "Locked")
                     raise ValueError("Locked")
-                    # processor.mode_5(self.fileUrl, self.file_name, self.fileUrl_p, self.fileUrl_c, self.fileUrl_previwp)
+                    # processor.mode_5(self.fileUrl, self.file_name, self.fileUrl_p, self.fileUrl_c, 
+                    # self.fileUrl_previwp)
                 elif len(items) == 3 and '採購底稿' in items:  # 原始資料 + 前期底稿 + 採購底稿
                     processor.mode_5(self.fileUrl, self.file_name, self.fileUrl_p, self.fileUrl_previwp)
                 elif len(items) == 3 and '關單清單' in items:  # 原始資料 + 前期底稿 + 關單清單
@@ -446,7 +450,8 @@ class Main(QWidget):
                 if len(items) == 4:  # 原始資料 + 前期底稿 + 採購底稿 + 關單清單
                     QMessageBox.warning(self, "警告", "Locked")
                     raise ValueError("Locked")
-                    # processor.mode_5(self.fileUrl, self.file_name, self.fileUrl_p, self.fileUrl_c, self.fileUrl_previwp)
+                    # processor.mode_5(self.fileUrl, self.file_name, self.fileUrl_p, self.fileUrl_c, 
+                    # self.fileUrl_previwp)
                 elif len(items) == 3 and '採購底稿' in items:  # 原始資料 + 前期底稿 + 採購底稿
                     processor.mode_5(self.fileUrl, self.file_name, self.fileUrl_p, self.fileUrl_previwp)
                 elif len(items) == 3 and '關單清單' in items:  # 原始資料 + 前期底稿 + 關單清單

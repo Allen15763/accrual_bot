@@ -167,8 +167,8 @@ class UploadFormProcessor:
         return df.Currency_c_variable == currency
     
     def make_pivot(self, df: DataFrame, index: Union[List[str], str], 
-                  values: Union[List[str], str], columns=None, 
-                  aggfunc: str = 'sum') -> DataFrame:
+                   values: Union[List[str], str], columns=None, 
+                   aggfunc: str = 'sum') -> DataFrame:
         """
         建立樞紐表
         
@@ -197,8 +197,8 @@ class UploadFormProcessor:
             return pd.DataFrame()
     
     def get_item_description_dr(self, df: DataFrame, period: str, 
-                               sm: bool = True, is_pr: str = 'PR', 
-                               is_cost: bool = False) -> Series:
+                                sm: bool = True, is_pr: str = 'PR', 
+                                is_cost: bool = False) -> Series:
         """
         獲取借方項目描述
         
@@ -232,8 +232,8 @@ class UploadFormProcessor:
             return pd.Series([''] * len(df))
     
     def get_item_description_cr(self, df: DataFrame, period: str, 
-                               sm: bool = True, is_pr: str = 'PR', 
-                               is_cost: bool = True) -> Series:
+                                sm: bool = True, is_pr: str = 'PR', 
+                                is_cost: bool = True) -> Series:
         """
         獲取貸方項目描述
         
@@ -279,10 +279,12 @@ class UploadFormProcessor:
         """
         try:
             if extract:
-                df_filtered = df.loc[df['Account code_variable'].fillna('na').str.contains('^(4|5)'), :].reset_index(drop=True)
+                df_filtered = \
+                    df.loc[df['Account code_variable'].fillna('na').str.contains('^(4|5)'), :].reset_index(drop=True)
                 return df_filtered
             else:
-                df_filtered = df.loc[~df['Account code_variable'].fillna('na').str.contains('^(4|5)'), :].reset_index(drop=True)
+                df_filtered = \
+                    df.loc[~df['Account code_variable'].fillna('na').str.contains('^(4|5)'), :].reset_index(drop=True)
                 return df_filtered
                 
         except Exception as e:
@@ -373,7 +375,7 @@ class MOBUpload(UploadFormProcessor):
         """
         try:
             if df_non_cost.empty:
-                self.logger.warning(f"沒有符合條件的非成本項目")
+                self.logger.warning("沒有符合條件的非成本項目")
                 self.flatten_df_dr = pd.DataFrame()
                 self.flatten_df_cr = pd.DataFrame()
                 return
@@ -592,7 +594,7 @@ class MOBUpload(UploadFormProcessor):
                     desc=self.get_item_description_cr(flatten_df_cr_ga, period, sm=False, is_cost=True)
                 )
                 
-                self.logger.info(f"成功處理PR G&A成本項目")
+                self.logger.info("成功處理PR G&A成本項目")
             else:
                 self.logger.info("PR G&A成本項目為空")
                 self.flatten_df_pr_dr_cost, self.flatten_df_pr_cr_cost = None, None
@@ -618,7 +620,7 @@ class MOBUpload(UploadFormProcessor):
                     desc=self.get_item_description_cr(flatten_df_cr_ga, period, sm=False, is_pr='PO', is_cost=True)
                 )
                 
-                self.logger.info(f"成功處理PO G&A成本項目")
+                self.logger.info("成功處理PO G&A成本項目")
             else:
                 self.logger.info("PO G&A成本項目為空")
                 self.flatten_df_po_dr_cost, self.flatten_df_po_cr_cost = None, None
@@ -672,8 +674,8 @@ class SPTUpload(MOBUpload):
         self.update_configs(entity='SPT')
     
     def get_item_description_dr(self, df: DataFrame, period: str, 
-                               sm: bool = True, is_pr: str = 'PR', 
-                               is_cost: bool = False) -> Series:
+                                sm: bool = True, is_pr: str = 'PR', 
+                                is_cost: bool = False) -> Series:
         """
         獲取借方項目描述(SPTTW特有邏輯)
         
@@ -707,8 +709,8 @@ class SPTUpload(MOBUpload):
             return pd.Series([''] * len(df))
     
     def get_item_description_cr(self, df: DataFrame, period: str, 
-                               sm: bool = True, is_pr: str = 'PR', 
-                               is_cost: bool = True) -> Series:
+                                sm: bool = True, is_pr: str = 'PR', 
+                                is_cost: bool = True) -> Series:
         """
         獲取貸方項目描述(SPTTW特有邏輯)
         
@@ -1173,8 +1175,8 @@ def relocate_orders(df: DataFrame, dr: bool = True) -> DataFrame:
 
 
 def pre_defined(df: DataFrame, entity: str, period: str, 
-               accounting_date: str, category: str, 
-               usr: str, currency: str) -> DataFrame:
+                accounting_date: str, category: str, 
+                usr: str, currency: str) -> DataFrame:
     """
     預定義數據框
     
@@ -1231,8 +1233,8 @@ def pre_defined(df: DataFrame, entity: str, period: str,
 
 
 def get_entries(dfs: Iterable, entity: str, period: str, 
-               ac_date: str, cate: str, accountant: str, 
-               currency: str) -> DataFrame:
+                ac_date: str, cate: str, accountant: str, 
+                currency: str) -> DataFrame:
     """
     獲取所有條目
     
@@ -1282,7 +1284,8 @@ if __name__ == "__main__":
     """測試上傳表單功能"""
     # path = r'C:\SEA\MOB PRPO re\頂一下\202501\SPT\BACA看過\SPT_202501_POPR_wp_v06 2nd reviewed by Rebecca.xlsm'
     path = r'C:\SEA\MOB PRPO re\頂一下\202501\MOBA\BACA看過\MOBTW_202501_Purchase Order_WP.xlsm'
-    entity, period, ac_date, cate, accountant, currency = 'MOBTW', 'JAN-25', '2025/01/23', '01 SEA Accrual Expense', 'Rebecca', 'HKD'
+    entity, period, ac_date, cate, accountant, currency = \
+        'MOBTW', 'JAN-25', '2025/01/23', '01 SEA Accrual Expense', 'Rebecca', 'HKD'
     
     # 獲取聚合數據
     # dfs = get_aggregation_twd(path, 

@@ -356,8 +356,8 @@ class BasePRProcessor(BaseDataProcessor):
             return df
     
     def process(self, fileUrl: str, file_name: str, 
-               fileUrl_p: str = None, fileUrl_c: str = None, 
-               fileUrl_previwp: str = None) -> None:
+                fileUrl_p: str = None, fileUrl_c: str = None, 
+                fileUrl_previwp: str = None) -> None:
         """處理PR數據的主流程
         
         Args:

@@ -385,7 +385,7 @@ class ReconEntryAmt:
     """對帳金額比較類"""
     
     def __init__(self, df_pre_acwp: pd.DataFrame, df_cur_procwp: pd.DataFrame, 
-                is_pr: bool, vs_pr: bool):
+                 is_pr: bool, vs_pr: bool):
         """
         檢測如前期會計底稿有人工修改Entry amount，下載當期HRIS時避免用到未修改的amount。
         
@@ -409,11 +409,11 @@ class ReconEntryAmt:
         try:
             if self.is_pr:
                 kv = self.df_pre_acwp.loc[filter_necessary_rows(self.df_pre_acwp), 
-                     ['PR Line', 'Accr. Amount_variable']].set_index('PR Line').to_dict('index')
+                                          ['PR Line', 'Accr. Amount_variable']].set_index('PR Line').to_dict('index')
                 kv = {k: v['Accr. Amount_variable'] for k, v in kv.items()}
             else:
                 kv = self.df_pre_acwp.loc[filter_necessary_rows(self.df_pre_acwp), 
-                     ['PO Line', 'Accr. Amount_variable']].set_index('PO Line').to_dict('index')
+                                          ['PO Line', 'Accr. Amount_variable']].set_index('PO Line').to_dict('index')
                 kv = {k: v['Accr. Amount_variable'] for k, v in kv.items()}
                 
             return kv

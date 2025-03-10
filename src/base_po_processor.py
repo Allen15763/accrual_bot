@@ -268,7 +268,8 @@ class BasePOProcessor(BaseDataProcessor):
         """
         try:
             # 處理分潤合作
-            mask_profit_sharing = ((df['PO狀態'].isna()) | (df['PO狀態'] == 'nan')) & df['Item Description'].str.contains('分潤合作')
+            mask_profit_sharing = (((df['PO狀態'].isna()) | (df['PO狀態'] == 'nan')) & 
+                                   df['Item Description'].str.contains('分潤合作'))
             df.loc[mask_profit_sharing, 'PO狀態'] = '分潤'
             
             if self.entity_type == 'SPT':
@@ -495,7 +496,8 @@ class BasePOProcessor(BaseDataProcessor):
             df['PO狀態'] = np.select(conditions, results, default=df['PO狀態'])
             
             # 處理格式錯誤
-            mask_format_error = ((df['PO狀態'].isna()) | (df['PO狀態'] == 'nan')) & (df['YMs of Item Description'] == '100001,100002')
+            mask_format_error = (((df['PO狀態'].isna()) | (df['PO狀態'] == 'nan')) & 
+                                 (df['YMs of Item Description'] == '100001,100002'))
             df.loc[mask_format_error, 'PO狀態'] = '格式錯誤，退單'
             
             # 根據PO狀態設置估計入帳
@@ -579,7 +581,8 @@ class BasePOProcessor(BaseDataProcessor):
             else:  # SPT
                 if 'Account code' in df.columns:
                     mask_income_expense = df['Account code'].str.match(r'^[4-6]')
-                    df.loc[(df['是否估計入帳'] == 'Y') & mask_income_expense, 'Region_c'] = df.loc[(df['是否估計入帳'] == 'Y') & mask_income_expense, 'Region']
+                    df.loc[(df['是否估計入帳'] == 'Y') & mask_income_expense, 'Region_c'] = \
+                        df.loc[(df['是否估計入帳'] == 'Y') & mask_income_expense, 'Region']
                     df.loc[(df['是否估計入帳'] == 'Y') & ~mask_income_expense.fillna(False), 'Region_c'] = '000'
             
             # 設置Dep.
@@ -621,7 +624,8 @@ class BasePOProcessor(BaseDataProcessor):
                     df.loc[mask_product_code, 'PR Product Code Check'] = np.where(
                         product_match, 'good', 'bad'
                     )
-                except:
+                except Exception as e:
+                    self.logger.error(f"設置PR Product Code Check時出錯: {str(e)}", exc_info=True)
                     pass
             
             self.logger.info("成功處理ERM邏輯")
@@ -773,8 +777,8 @@ class BasePOProcessor(BaseDataProcessor):
             return df
     
     def process(self, fileUrl: str, file_name: str, 
-               fileUrl_previwp: str = None, fileUrl_p: str = None, 
-               fileUrl_c: str = None) -> None:
+                fileUrl_previwp: str = None, fileUrl_p: str = None, 
+                fileUrl_c: str = None) -> None:
         """處理PO數據的主流程
         
         Args:
