@@ -18,11 +18,11 @@ warnings.filterwarnings(action='ignore')
 
 
 class UploadFormProcessor:
-    """上傳表單處理基類，提供共同的處理方法"""
+    """Upload Form處理基類，提供共同的處理方法"""
     
     def __init__(self, currency: str):
         """
-        初始化上傳表單處理器
+        初始化Upload Form處理器
         
         Args:
             currency: 貨幣類型
@@ -317,11 +317,11 @@ class UploadFormProcessor:
 
 
 class MOBUpload(UploadFormProcessor):
-    """MOBTW上傳表單處理器"""
+    """MOBTW Upload Form處理器"""
     
     def __init__(self, currency: str, df_pr: DataFrame = None, df_po: DataFrame = None):
         """
-        初始化MOBTW上傳表單處理器
+        初始化MOBTW Upload Form處理器
         
         Args:
             currency: 貨幣類型
@@ -657,11 +657,11 @@ class MOBUpload(UploadFormProcessor):
 
 
 class SPTUpload(MOBUpload):
-    """SPTTW上傳表單處理器"""
+    """SPTTW Upload Form處理器"""
     
     def __init__(self, currency: str, df_pr: DataFrame = None, df_po: DataFrame = None):
         """
-        初始化SPTTW上傳表單處理器
+        初始化SPTTW Upload Form處理器
         
         Args:
             currency: 貨幣類型
@@ -980,7 +980,7 @@ def create_form(df_dr: DataFrame, df_cr: DataFrame,
                 entity: str, period: str, accounting_date: str, 
                 category: str, usr: str, currency: str) -> Union[DataFrame, None]:
     """
-    創建上傳表單
+    創建Upload Form
     
     Args:
         df_dr: 借方數據框
@@ -993,12 +993,12 @@ def create_form(df_dr: DataFrame, df_cr: DataFrame,
         currency: 幣別
         
     Returns:
-        Union[DataFrame, None]: 上傳表單或None
+        Union[DataFrame, None]: Upload Form或None
     """
     logger = Logger().get_logger(__name__)
     
     try:
-        logger.info(f"創建上傳表單: {entity}, {period}, {currency}")
+        logger.info(f"創建Upload Form: {entity}, {period}, {currency}")
         
         # 檢查輸入數據框是否有效
         if is_NA_df(df_dr) or is_NA_df(df_cr):
@@ -1039,11 +1039,11 @@ def create_form(df_dr: DataFrame, df_cr: DataFrame,
         # 合併結果
         result = pd.concat([df_dr, df_cr], ignore_index=True)
         
-        logger.info(f"成功創建上傳表單, 形狀: {result.shape}")
+        logger.info(f"成功創建Upload Form, 形狀: {result.shape}")
         return result
         
     except Exception as e:
-        logger.error(f"創建上傳表單時出錯: {str(e)}", exc_info=True)
+        logger.error(f"創建Upload Form時出錯: {str(e)}", exc_info=True)
         return None
 
 
@@ -1281,7 +1281,7 @@ def get_entries(dfs: Iterable, entity: str, period: str,
 
 # 測試代碼，僅在直接運行時執行
 if __name__ == "__main__":
-    """測試上傳表單功能"""
+    """測試Upload Form功能"""
     # path = r'C:\SEA\MOB PRPO re\頂一下\202501\SPT\BACA看過\SPT_202501_POPR_wp_v06 2nd reviewed by Rebecca.xlsm'
     path = r'C:\SEA\MOB PRPO re\頂一下\202501\MOBA\BACA看過\MOBTW_202501_Purchase Order_WP.xlsm'
     entity, period, ac_date, cate, accountant, currency = \
@@ -1296,10 +1296,10 @@ if __name__ == "__main__":
                                   is_mob=True, 
                                   currency=currency)
     
-    # 生成上傳表單
+    # 生成Upload Form
     result = get_entries(dfs, entity, period, ac_date, cate, accountant, currency)
     
     # 保存結果
     result.to_excel(r'MOB_test_{period}_{currency}_.xlsx'.format(period=period[:3], currency=currency), index=False)
     
-    print("上傳表單生成完成")
+    print("Upload Form生成完成")

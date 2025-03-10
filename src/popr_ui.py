@@ -696,10 +696,10 @@ class Main(QWidget):
             QMessageBox.critical(self, "錯誤", f"刪除文件時出錯:\n{str(err)}")
     
     def uploadFormWidget(self):
-        """打開上傳表單對話框"""
+        """打開Upload Form對話框"""
         try:
             self.had_error = False  # 重置錯誤狀態
-            self.updateStatus("打開上傳表單對話框...")
+            self.updateStatus("打開Upload Form對話框...")
             
             sub_widget = UploadFormWidget(self)
             sub_widget.exec_()
@@ -707,9 +707,9 @@ class Main(QWidget):
             self.updateStatus("準備就緒")
             
         except Exception as err:
-            self.logger.error(f"打開上傳表單對話框時出錯: {str(err)}", exc_info=True)
-            self.updateStatus("錯誤: 打開上傳表單對話框時出錯", error=True)
-            QMessageBox.critical(self, "錯誤", f"打開上傳表單對話框時出錯:\n{str(err)}")
+            self.logger.error(f"打開Upload Form對話框時出錯: {str(err)}", exc_info=True)
+            self.updateStatus("錯誤: 打開Upload Form對話框時出錯", error=True)
+            QMessageBox.critical(self, "錯誤", f"打開Upload Form對話框時出錯:\n{str(err)}")
     
     def check2(self):
         """執行兩期檢查"""
@@ -765,17 +765,17 @@ class Main(QWidget):
 
 
 class UploadFormWidget(QDialog):
-    """上傳表單對話框"""
+    """Upload Form對話框"""
     
     def __init__(self, parent=None):
-        """初始化上傳表單對話框"""
+        """初始化Upload Form對話框"""
         super().__init__(parent)
         self.logger = Logger().get_logger(__name__)
         self.had_error = False  # 標記是否有錯誤發生
         
         self.setWindowTitle("Upload Form")
         self.setupUI()
-        self.logger.info("上傳表單對話框已打開")
+        self.logger.info("Upload Form對話框已打開")
     
     def updateStatus(self, message, error=False):
         """更新狀態"""
@@ -898,11 +898,11 @@ class UploadFormWidget(QDialog):
             QMessageBox.critical(self, "錯誤", f"選擇工作底稿時出錯:\n{str(err)}")
     
     def process_upload_form(self):
-        """處理並生成上傳表單"""
+        """處理並生成Upload Form"""
         try:
             self.had_error = False  # 重置錯誤狀態
-            self.logger.info("開始生成上傳表單")
-            self.statusLabel.setText("狀態: 正在生成上傳表單...")
+            self.logger.info("開始生成Upload Form")
+            self.statusLabel.setText("狀態: 正在生成Upload Form...")
             
             # 獲取輸入參數
             entity = self.combo_entity.currentText()
@@ -974,22 +974,22 @@ class UploadFormWidget(QDialog):
                 output_file = f'Upload Form-{entity}-{period[:3]}-{currency}.xlsx'
                 result.to_excel(output_file, index=False)
                 
-                self.logger.info(f"已成功生成上傳表單: {output_file}")
-                self.statusLabel.setText("狀態: 已成功生成上傳表單")
-                QMessageBox.information(self, "完成", f"上傳表單已生成: {output_file}")
+                self.logger.info(f"已成功生成Upload Form: {output_file}")
+                self.statusLabel.setText("狀態: 已成功生成Upload Form")
+                QMessageBox.information(self, "完成", f"Upload Form已生成: {output_file}")
                 
             except Exception as e:
-                self.logger.error(f"生成上傳表單時出錯: {str(e)}", exc_info=True)
-                self.statusLabel.setText("狀態: 錯誤 - 生成上傳表單時出錯")
-                self.updateStatus("錯誤: 生成上傳表單時出錯", error=True)
-                QMessageBox.critical(self, "錯誤", f"生成上傳表單時出錯:\n{str(e)}")
+                self.logger.error(f"生成Upload Form時出錯: {str(e)}", exc_info=True)
+                self.statusLabel.setText("狀態: 錯誤 - 生成Upload Form時出錯")
+                self.updateStatus("錯誤: 生成Upload Form時出錯", error=True)
+                QMessageBox.critical(self, "錯誤", f"生成Upload Form時出錯:\n{str(e)}")
                 return
                 
         except Exception as err:
-            self.logger.error(f"處理上傳表單時出錯: {str(err)}", exc_info=True)
-            self.statusLabel.setText("狀態: 錯誤 - 處理上傳表單時出錯")
-            self.updateStatus("錯誤: 處理上傳表單時出錯", error=True)
-            QMessageBox.critical(self, "錯誤", f"處理上傳表單時出錯:\n{str(err)}")
+            self.logger.error(f"處理Upload Form時出錯: {str(err)}", exc_info=True)
+            self.statusLabel.setText("狀態: 錯誤 - 處理Upload Form時出錯")
+            self.updateStatus("錯誤: 處理Upload Form時出錯", error=True)
+            QMessageBox.critical(self, "錯誤", f"處理Upload Form時出錯:\n{str(err)}")
 
 
 def main():
