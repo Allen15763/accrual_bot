@@ -2,9 +2,21 @@ import os
 import sys
 import logging
 import configparser
+from typing import Tuple, List, Dict, Optional, Union, Any
+
 import pandas as pd
 import numpy as np
-from typing import Tuple, List, Dict, Optional, Union, Any
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
+
+
+def resource_path(relative_path):
+    """打包環境時，透過 sys._MEIPASS 拼出正確路徑；未打包時則回傳原始路徑。"""
+    if hasattr(sys, '_MEIPASS'):
+        # sys._MEIPASS 為 PyInstaller 解壓後的臨時資料夾
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.abspath('.'), relative_path)
 
 class ConfigManager:
     """配置管理器，負責加載和提供配置信息"""
@@ -126,6 +138,99 @@ class Logger:
     def get_logger(self, name: str = None) -> logging.Logger:
         """獲取命名日誌器"""
         return logging.getLogger(name)
+
+
+class GoogleSheetsBase:
+    def __init__(self, config: Dict[str, Any]):
+        self.certificate = resource_path(config.get("certificate_path"))
+        self.scopes = config.get("scopes")
+
+    def getData(self, 
+                spreadsheet_id: str, 
+                year_month: str,  # 改為接收 yyyymm 字串
+                range_value: str = None,
+                skip_header: bool = True) -> pd.DataFrame:
+        """
+        讀取 Google Sheets 上的資料。
+
+        Args:
+            spreadsheet_id (str): Google Sheet 的 ID。
+            year_month (str): yyyymm 格式的字串，用來指定 sheet name (例如 "202310")。
+            range_value (str, optional): Sheet 中讀取資料的範圍，例如 "A1:Z100"。
+                                       如果為 None，則讀取整個 sheet。 Defaults to None.
+            skip_header (bool, optional): 是否跳過第一列(標題列)。 Defaults to True.
+
+        Returns:
+            pd.DataFrame: 從 Google Sheets 讀取的資料。
+        """
+
+        creds = service_account.Credentials.from_service_account_file(
+            self.certificate, scopes=self.scopes)
+
+        try:
+            service = build('sheets', 'v4', credentials=creds)
+
+            # 根據 yyyymm 字串建立 sheet name
+            sheet_name = year_month
+            
+            # 組合 range_sheet_name
+            if range_value:
+                range_sheet_name = f"{sheet_name}!{range_value}"
+            else:
+                range_sheet_name = sheet_name
+
+            # Call the Sheets API
+            sheet = service.spreadsheets()
+            # Return a dict, keys:['range', 'majorDimension', 'values']
+            result = sheet.values().get(spreadsheetId=spreadsheet_id,
+                                        range=range_sheet_name).execute()
+
+            if result.get("values"):
+                if skip_header:
+                    columns = result['values'][1]
+                    data = result['values'][2:]
+                else:
+                    # 如果不需要 skip header，則使用整組資料的第一個row當做 column name
+                    if result['values']:
+                        columns = result['values'][0]
+                        data = result['values']
+                    else:
+                        columns = []
+                        data = []
+                df = pd.DataFrame(data, columns=columns)
+            else:
+                df = pd.DataFrame()
+            
+            return df
+            
+        except HttpError as err:
+            print(f"HttpError occurred: {err}")
+            return pd.DataFrame()  # 返回空的 DataFrame
+
+        except Exception as err:
+            print(f"An unexpected error occurred: {err}")
+            return pd.DataFrame()  # 返回空的 DataFrame
+        
+class ClosingList2025(GoogleSheetsBase):
+    def __init__(self, config):
+        super().__init__(config)
+        self.spreadsheet_id = '1wuwyyNtU6dhK7JF2AFJfUJC0ChNScrDza6UQtfE7sCE'
+        self.range_sheet_name = '2025年'
+        self.range_value = 'A:J'
+
+class ClosingList2024(GoogleSheetsBase):
+    def __init__(self, config):
+        super().__init__(config)
+        self.spreadsheet_id = '1wuwyyNtU6dhK7JF2AFJfUJC0ChNScrDza6UQtfE7sCE'
+        self.range_sheet_name = '2024年'
+        self.range_value = 'A:J'
+
+class ClosingList2023(GoogleSheetsBase):
+    def __init__(self, config):
+        super().__init__(config)
+        self.spreadsheet_id = '1wuwyyNtU6dhK7JF2AFJfUJC0ChNScrDza6UQtfE7sCE'
+        self.range_sheet_name = '2023年_done'
+        self.range_value = 'A:J'
 
 
 class DataImporter:
@@ -380,6 +485,48 @@ class DataImporter:
             self.logger.error(f"導入關單清單(PO)時出錯: {str(e)}", exc_info=True)
             raise
 
+    def import_spx_closing_list(self, config: Dict[str, Any]) -> pd.DataFrame:
+        """導入SPX關單清單"""
+        try:
+            self.logger.info("正在導入關單清單(SPX)")
+            # 將各年份對應的類別放入串列中
+            closing_list_classes = [ClosingList2023, ClosingList2024, ClosingList2025]
+            dfs = []
+            for cls in closing_list_classes:
+                instance = cls(config)
+                self.logger.info(f"正在導入 {cls.__name__} 資料")
+                df = instance.getData(instance.spreadsheet_id, instance.range_sheet_name, instance.range_value)
+                dfs.append(df)
+            # 合併所有 DataFrame 並重設索引
+            combined_df = pd.concat(dfs, ignore_index=True)
+            # 移除 'Date' 欄位為空的列
+            combined_df.dropna(subset=['Date'], inplace=True)
+            combined_df.rename(columns={'Date': 'date', 'Type': 'type', 'PO Number': 'po_no', 
+                                        'Requester': 'requester', 'Supplier': 'supplier',
+                                        'Line Number / ALL': 'line_no', 'Reason': 'reason', 
+                                        'New PR Number': 'new_pr_no', 'Remark': 'remark', 
+                                        'Done(V)': 'done_by_fn'}, inplace=True)
+            combined_df = combined_df.query("date!=''").reset_index(drop=True)
+            self.logger.info("完成導入關單清單(SPX)")
+            return combined_df
+        except Exception as e:
+            self.logger.error("導入SPX關單清單時出錯: %s", str(e), exc_info=True)
+            raise
+
+    def import_ap_invoice(self, url: str, cols: list) -> pd.DataFrame:
+        """導入AP invoice"""
+        try:
+            self.logger.info("正在導入AP invoice(SPX)")
+            necessary_cols = cols
+            df = pd.read_excel(url, dtype=str, header=1, sheet_name=1, usecols=necessary_cols)
+            self.logger.info("完成導入AP invoice(SPX)")
+            return df
+        except Exception as e:
+            self.logger.error("導入AP invoice時出錯: %s", str(e), exc_info=True)
+            raise
+
+
+
 
 class ReconEntryAmt:
     """對帳金額比較類"""
@@ -569,3 +716,25 @@ class Utils:
     def import_closing_list_PO(url):
         """導入關單清單(PO)"""
         return DataImporter().import_closing_list_PO(url)
+
+
+if __name__ == "__main__":
+    # 測試代碼
+    # config = {
+    #     "certificate_path": "./src/credentials.json",
+    #     "scopes": ["https://www.googleapis.com/auth/spreadsheets.readonly"]
+    # }
+    # gs = GoogleSheetsBase(config)
+    # df = gs.getData("1wuwyyNtU6dhK7JF2AFJfUJC0ChNScrDza6UQtfE7sCE", "2025年", "A:J", skip_header=1)
+    # print(df)
+
+    # gs = ClosingList2023(config)
+    # df = gs.getData(gs.spreadsheet_id, gs.range_sheet_name, gs.range_value)
+    # print(df)
+
+    di = DataImporter()
+    config_manager = ConfigManager()
+    config = {'certificate_path': config_manager.get('CREDENTIALS', 'certificate_path'),
+              'scopes': config_manager.get_list('CREDENTIALS', 'scopes')}
+    df = di.import_spx_closing_list(config)
+    print(df, df.shape)

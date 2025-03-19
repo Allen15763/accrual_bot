@@ -101,7 +101,7 @@ class Main(QWidget):
         
         # 實體選擇下拉框
         self.entitySelect = QComboBox(self)
-        entities = ['MOBA_PR', 'MOBA_PO', 'SPT_PR', 'SPT_PO']
+        entities = ['MOBA_PR', 'MOBA_PO', 'SPT_PR', 'SPT_PO', 'SPX_PR', 'SPX_PO']
         for name in entities:
             self.entitySelect.addItem(name)
         
@@ -504,6 +504,7 @@ class Main(QWidget):
                 if not self.had_error:
                     self.updateStatus("SPT PO處理完成")
                     QMessageBox.information(self, "完成", "SPT PO處理完成")
+            # TODO: 新增SPX PO PR模組
             else:
                 self.logger.warning("無法確定處理模式")
                 self.updateStatus("錯誤: 無法確定處理模式", error=True)

@@ -46,7 +46,7 @@ class BasePOProcessor(BaseDataProcessor):
             )
             
             # 生成PR Line和PO Line
-            df['PR Line'] = df['PO#'].str.replace('PO', 'PR')
+            df['PR Line'] = df['PR#'] + '-' + df['Line#']
             df['PO Line'] = df['PO#'] + '-' + df['Line#']
             
             # 添加標記和備註
@@ -836,6 +836,226 @@ class BasePOProcessor(BaseDataProcessor):
             
             self.logger.info(f"成功完成PO數據處理: {file_name}")
             
+        except Exception as e:
+            self.logger.error(f"處理PO數據時出錯: {str(e)}", exc_info=True)
+            raise ValueError("處理PO數據時出錯")
+
+class SpxPOProcessor(BasePOProcessor):
+    """SPX處理器，繼承自BaseDataProcessor"""
+    
+    def __init__(self, entity_type: str = "SPX"):
+        """
+        初始化PO處理器
+        
+        Args:
+            entity_type: 實體類型，'SPX'
+        """
+        super().__init__(entity_type)
+        self.logger = Logger().get_logger(self.__class__.__name__)
+
+    def fillter_spx_product_code(self, df: pd.DataFrame) -> pd.DataFrame:
+        return df.loc[df['Product Code'].str.contains('(?i)LG_SPX_OWN'), :].reset_index(drop=True)
+
+    def add_cols(self, df: pd.DataFrame, m: int) -> Tuple[pd.DataFrame, int]:
+        # 先執行父類別的邏輯
+        df, m = super().add_cols(df, m)
+        # 再額外新增特定欄位
+        df['memo'] = np.nan
+        df['GL DATE'] = np.nan
+        return df, m
+
+    # def _determine_fa_status(self, df: pd.DataFrame) -> pd.Series:
+    #     base_status = super()._determine_fa_status(df) # 應該可以直接使用SPT的，只要在config上新增entity內容即可。
+    #     # 根據子類需求進一步處理 base_status
+    #     # 例如：將某些情況強制設為 'N' 或其他值
+    #     # base_status = np.where(某條件, 'N', base_status)
+    #     return base_status
+
+    def get_logic_date(self, df: pd.DataFrame) -> pd.DataFrame:
+        """處理日期邏輯
+        
+        Args:
+            df: PO數據框
+            
+        Returns:
+            pd.DataFrame: 處理後的數據框
+        """
+        try:
+            # 解析日期
+            df = self.parse_date_from_description(df)
+            return df
+            
+        except Exception as e:
+            self.logger.error(f"處理日期邏輯時出錯: {str(e)}", exc_info=True)
+            raise ValueError("處理日期邏輯時出錯")
+        
+    def judge_previous(self, df: pd.DataFrame, previous_wp: pd.DataFrame, m: int) -> pd.DataFrame:
+        df = super().judge_previous(df, previous_wp, m)
+
+        return df
+        # TODO
+        # get memo from previous_wp
+
+    def get_closing_note(self) -> pd.DataFrame:
+        config = {'certificate_path': self.config.get('CREDENTIALS', 'certificate_path'),
+                  'scopes': self.config.get_list('CREDENTIALS', 'scopes')}
+        return self.importer.import_spx_closing_list(config)
+    
+    def is_closed_spx(self, df: pd.DataFrame) -> pd.Series:
+        """
+        [0]有新的PR編號，但FN未上系統關單的
+        [1]有新的PR編號，但FN已經上系統關單的
+        """
+        return (((~df['new_pr_no'].isna()) & (df['new_pr_no'] != '')) & (df['done_by_fn'].isna())), \
+            (((~df['new_pr_no'].isna()) & (df['new_pr_no'] != '')) & (~df['done_by_fn'].isna()))
+
+    def get_period_from_ap_invoice(self, df, df_ap, yyyymm: int) -> pd.DataFrame:
+        """
+        Fill in the AP invoice period into the PO data (excluding periods after month m).
+        """
+        try:
+            # Drop rows with missing 'PO Number' and reset index
+            df_ap = df_ap.dropna(subset=['PO Number']).reset_index(drop=True)
+            
+            # Create a combined key for matching
+            df_ap['po_line'] = df_ap['Company'] + '-' + df_ap['PO Number'] + '-' + df_ap['Line']
+            
+            # Convert 'Period' to datetime then format as integer yyyymm
+            df_ap['period'] = (
+                pd.to_datetime(df_ap['Period'], format='%b-%y', errors='coerce')
+                .dt.strftime('%Y%m')
+                .fillna(0)
+                .astype('int32')
+            )
+            
+            # Keep only AP invoices for periods up to m and for each po_line keep the latest period
+            df_ap = (
+                df_ap.loc[df_ap['period'] <= yyyymm, :]
+                .sort_values(by=['po_line', 'period'])
+                .drop_duplicates(subset='po_line', keep='last')
+                .reset_index(drop=True)
+            )
+            
+            # Merge the period info into df based on matching 'PO Line'
+            df = df.merge(df_ap[['po_line', 'period']], left_on='PO Line', right_on='po_line', how='left')
+            df['GL DATE'] = df['period']
+            df.drop(columns=['po_line', 'period'], inplace=True)
+            
+            # For each PO#, fill missing GL DATE with the maximum GL DATE available in that group
+            df['GL DATE'] = df['GL DATE'].fillna(df.groupby('PO#')['GL DATE'].transform('max'))
+            """
+            # 檢查有無PO#含有兩個以上GL DATE
+            fillna_dict = df.groupby('PO#')['GL DATE'].max().to_dict()
+            df['GL DATE'] = df.apply(lambda x: fillna_dict[x['PO#']] if np.isnan(x['GL DATE']) and x['PO#'] in fillna_dict else x['GL DATE'], axis=1)
+            """
+            self.logger.info("成功添加GL DATE")
+            return df
+        except Exception as e:
+            self.logger.error(f"添加GL DATE時出錯: {str(e)}", exc_info=True)
+            raise ValueError("添加GL DATE時出錯")
+    
+    def give_status_stage_1(self, df: pd.DataFrame, df_spx_closing: pd.DataFrame) -> pd.DataFrame:
+        # TODO
+        try:
+            c1, c2 = self.is_closed_spx(df_spx_closing)
+            to_be_close = df_spx_closing.loc[c1, 'po_no'].unique()
+            closed = df_spx_closing.loc[c2, 'po_no'].unique()
+
+            bao = ['Cost of Logistics and Warehouse - Water', 'Cost of Logistics and Warehouse - Electricity']
+            conditions = [
+                df['Item Description'].str.contains('(?i)押金|保證金|Deposit|找零金'),
+                (df['PO Supplier']=='TW_寶倉物流股份有限公司') & (df['Category'].isin(bao)),
+                df['PO#'].isin(to_be_close),
+                df['PO#'].isin(closed)
+            ]
+            results = [
+                '摘要內有押金\保證金\Deposit\找零金',
+                'GL調整',
+                '待關單',
+                '已關單'
+            ]
+            df['PO狀態'] = np.select(conditions, results, default=df['PO狀態'])
+            self.logger.info("成功給予第一階段狀態")
+            pass
+        except Exception as e:
+            self.logger.error(f"給予第一階段狀態時出錯: {str(e)}", exc_info=True)
+            raise ValueError("給予第一階段狀態時出錯")
+
+    def process(self, fileUrl: str, file_name: str, 
+                fileUrl_previwp: str = None, fileUrl_p: str = None, 
+                fileUrl_ap: str = None) -> None:
+        """處理PO數據的主流程
+        
+        Args:
+            fileUrl: PO原始數據文件路徑
+            file_name: PO原始數據文件名
+            fileUrl_previwp: 前期底稿文件路徑
+            fileUrl_p: 採購底稿文件路徑
+            fileUrl_ap: AP文件路徑
+            
+        Returns:
+            None
+        """
+        try:
+            self.logger.info(f"開始處理PO數據: {file_name}")
+            
+            # 導入原始數據
+            df, date, m = self.importer.import_rawdata_POonly(fileUrl, file_name)
+            
+            # 導入參考數據; 用SPT的ref檔案參照會計科目和負債科目
+            ref_key = 'SPT'
+            ref_ac, ref_liability = self.importer.import_reference_data(ref_key)
+
+            df = self.fillter_spx_product_code(df)
+            
+            # 添加必要列
+            df, m = self.add_cols(df, m)
+            
+            # 處理AP invoice
+            if fileUrl_ap:
+                df_ap = self.importer.import_ap_invoice(fileUrl_ap, self.config.get_list('SPX', 'ap_columns'))
+                df = self.get_period_from_ap_invoice(df, df_ap, date)
+            
+            # 處理前期底稿
+            if fileUrl_previwp:
+                previous_wp = self.importer.import_previous_wp(fileUrl_previwp)
+                df = self.judge_previous(df, previous_wp, m)
+            
+            # 處理採購底稿
+            if fileUrl_p:
+                procurement = self.importer.import_procurement_PO(fileUrl_p)
+                df = self.judge_procurement(df, procurement)
+            
+            # 處理日期邏輯
+            df = self.get_logic_date(df)
+            
+            # 處理
+            # TODO
+            """
+            1.get AP invoice
+            2.get GL date from AP invoice
+            3.give status, 前期入FA, 摘要內有押金\保證金\Deposit\找零金
+            4.give status, GL調整
+            5.give status, 關單
+            """
+            df_spx_closing = self.get_closing_note()
+            self.give_status_stage_1(df, df_spx_closing)
+
+
+
+
+
+            
+
+            
+            # 格式化數據
+            df = self.reformate(df)
+            
+            # 導出文件
+            self.export_file(df, date, 'PO')
+            
+            self.logger.info(f"成功完成PO數據處理: {file_name}")
+
         except Exception as e:
             self.logger.error(f"處理PO數據時出錯: {str(e)}", exc_info=True)
             raise ValueError("處理PO數據時出錯")
