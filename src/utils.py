@@ -525,9 +525,6 @@ class DataImporter:
             self.logger.error("導入AP invoice時出錯: %s", str(e), exc_info=True)
             raise
 
-
-
-
 class ReconEntryAmt:
     """對帳金額比較類"""
     

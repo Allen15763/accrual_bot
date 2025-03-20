@@ -1,4 +1,4 @@
-import logging
+import re
 import pandas as pd
 import numpy as np
 from typing import Tuple, List, Dict, Optional, Union, Any
@@ -862,6 +862,10 @@ class SpxPOProcessor(BasePOProcessor):
         # 再額外新增特定欄位
         df['memo'] = np.nan
         df['GL DATE'] = np.nan
+
+        df['Remarked by Procurement PR'] = np.nan
+        df['Noted by Procurement PR'] = np.nan
+        df['Remarked by 上月 FN PR'] = np.nan
         return df, m
 
     # def _determine_fa_status(self, df: pd.DataFrame) -> pd.Series:
@@ -889,12 +893,83 @@ class SpxPOProcessor(BasePOProcessor):
             self.logger.error(f"處理日期邏輯時出錯: {str(e)}", exc_info=True)
             raise ValueError("處理日期邏輯時出錯")
         
-    def judge_previous(self, df: pd.DataFrame, previous_wp: pd.DataFrame, m: int) -> pd.DataFrame:
+    def judge_previous(self, 
+                       df: pd.DataFrame, 
+                       previous_wp: pd.DataFrame, 
+                       m: int, 
+                       previous_wp_pr: pd.DataFrame) -> pd.DataFrame:
         df = super().judge_previous(df, previous_wp, m)
 
-        return df
-        # TODO
-        # get memo from previous_wp
+        """處理PR前期底稿
+        
+        Args:
+            df: PO數據框
+            previous_wp_pr: PR前期底稿數據框
+            m: 月份
+            
+        Returns:
+            pd.DataFrame: 處理後的數據框
+        """
+        try:
+            # 重命名前期底稿中的列
+            previous_wp_pr = previous_wp_pr.rename(
+                columns={
+                    'Remarked by FN': 'Remarked by FN_l',
+                }
+            )
+            
+            # 獲取前期FN備註
+            df['前期FN備註'] = pd.merge(
+                df, previous_wp_pr, how='left', on='PR Line'
+            ).loc[:, ['Remarked by FN_l']]
+            
+            df['Remarked by 上月 FN PR'] = df['前期FN備註']
+            
+            df.drop('前期FN備註', axis=1, inplace=True)
+            
+            self.logger.info("成功處理PR前期底稿")
+            return df
+            
+        except Exception as e:
+            self.logger.error(f"處理PR前期底稿時出錯: {str(e)}", exc_info=True)
+            raise ValueError("處理PR前期底稿時出錯")
+        
+    def judge_procurement(self, 
+                          df: pd.DataFrame, 
+                          procurement: pd.DataFrame, 
+                          procurement_pr: pd.DataFrame) -> pd.DataFrame:
+        df = super().judge_procurement(df, procurement)
+        # 移除SPT模組給的狀態
+        df.loc[df['PO狀態'] == 'Not In Procurement WP', 'PO狀態'] = pd.NA
+
+        try:
+            # 重命名PR採購底稿中的列
+            procurement_pr = procurement_pr.rename(
+                columns={
+                    'Remarked by Procurement': 'Remark by PR Team',
+                    'Noted by Procurement': 'Noted by PR'
+                }
+            )
+            
+            # 獲取PR採購底稿中的備註
+            df_procu_fv = pd.merge(
+                df, procurement_pr, how='inner', on='PR Line'
+            ).loc[:, ['PR Line', 'Remark by PR Team', 'Noted by PR']]
+            
+            df['Remarked by Procurement PR'] = pd.merge(
+                df, df_procu_fv, how='left', on='PR Line'
+            ).loc[:, 'Remark by PR Team']
+            
+            df['Noted by Procurement PR'] = pd.merge(
+                df, df_procu_fv, how='left', on='PR Line'
+            ).loc[:, 'Noted by PR']
+            
+            self.logger.info("成功處理PR採購底稿")
+            return df
+            
+        except Exception as e:
+            self.logger.error(f"處理PR採購底稿時出錯: {str(e)}", exc_info=True)
+            raise ValueError("處理PR採購底稿時出錯")
 
     def get_closing_note(self) -> pd.DataFrame:
         config = {'certificate_path': self.config.get('CREDENTIALS', 'certificate_path'),
@@ -946,7 +1021,8 @@ class SpxPOProcessor(BasePOProcessor):
             """
             # 檢查有無PO#含有兩個以上GL DATE
             fillna_dict = df.groupby('PO#')['GL DATE'].max().to_dict()
-            df['GL DATE'] = df.apply(lambda x: fillna_dict[x['PO#']] if np.isnan(x['GL DATE']) and x['PO#'] in fillna_dict else x['GL DATE'], axis=1)
+            df['GL DATE'] = df.apply(lambda x: 
+            fillna_dict[x['PO#']] if np.isnan(x['GL DATE']) and x['PO#'] in fillna_dict else x['GL DATE'], axis=1)
             """
             self.logger.info("成功添加GL DATE")
             return df
@@ -954,36 +1030,78 @@ class SpxPOProcessor(BasePOProcessor):
             self.logger.error(f"添加GL DATE時出錯: {str(e)}", exc_info=True)
             raise ValueError("添加GL DATE時出錯")
     
+    def convert_date_format_in_remark(self, series) -> pd.Series:
+        return series.str.replace(r'(\d{4})/(\d{2})', r'\1\2', regex=True)
+    
+    def extact_fa_remark(self, series) -> pd.Series:
+        return series.str.extract(r'(\d{6}入FA)', expand=False)
+        
     def give_status_stage_1(self, df: pd.DataFrame, df_spx_closing: pd.DataFrame) -> pd.DataFrame:
-        # TODO
         try:
+            # 依據已關單條件取得對應的 PO#
             c1, c2 = self.is_closed_spx(df_spx_closing)
             to_be_close = df_spx_closing.loc[c1, 'po_no'].unique()
             closed = df_spx_closing.loc[c2, 'po_no'].unique()
 
+            # 處理特殊品項與供應商條件
             bao = ['Cost of Logistics and Warehouse - Water', 'Cost of Logistics and Warehouse - Electricity']
-            conditions = [
-                df['Item Description'].str.contains('(?i)押金|保證金|Deposit|找零金'),
-                (df['PO Supplier']=='TW_寶倉物流股份有限公司') & (df['Category'].isin(bao)),
-                df['PO#'].isin(to_be_close),
-                df['PO#'].isin(closed)
-            ]
-            results = [
-                '摘要內有押金\保證金\Deposit\找零金',
-                'GL調整',
-                '待關單',
-                '已關單'
-            ]
-            df['PO狀態'] = np.select(conditions, results, default=df['PO狀態'])
+            
+            # 定義「上月FN」備註關單條件
+            remarked_close_by_fn_last_month = (
+                df['Remarked by 上月 FN'].str.contains('刪|關', na=False) | 
+                df['Remarked by 上月 FN PR'].str.contains('刪|關', na=False)
+            )
+            
+            # 統一轉換日期格式
+            df['Remarked by 上月 FN'] = self.convert_date_format_in_remark(df['Remarked by 上月 FN'])
+            df['Remarked by 上月 FN PR'] = self.convert_date_format_in_remark(df['Remarked by 上月 FN PR'])
+            
+            # 條件1：摘要中有押金/保證金/Deposit/找零金
+            cond1 = df['Item Description'].str.contains('(?i)押金|保證金|Deposit|找零金', na=False)
+            df.loc[cond1, 'PO狀態'] = '摘要內有押金/保證金/Deposit/找零金'
+            
+            # 條件2：供應商與類別對應，做 GL 調整
+            cond2 = (df['PO Supplier'] == 'TW_寶倉物流股份有限公司') & (df['Category'].isin(bao))
+            df.loc[cond2, 'PO狀態'] = 'GL調整'
+            
+            # 條件3：該 PO# 在待關單清單中
+            cond3 = df['PO#'].isin(to_be_close)
+            df.loc[cond3, 'PO狀態'] = '待關單'
+            
+            # 條件4：該 PO# 在已關單清單中
+            cond4 = df['PO#'].isin(closed)
+            df.loc[cond4, 'PO狀態'] = '已關單'
+            
+            # 條件5：上月 FN 備註含有「刪」或「關」
+            cond5 = remarked_close_by_fn_last_month
+            df.loc[cond5, 'PO狀態'] = '參照上月關單'
+            
+            # 條件6：若「Remarked by 上月 FN」含有「入FA」，則提取該數字，並更新狀態
+            cond6 = df['Remarked by 上月 FN'].str.contains('入FA', na=False)
+            if cond6.any():
+                extracted_fn = self.extact_fa_remark(df.loc[cond6, 'Remarked by 上月 FN'])
+                df.loc[cond6, 'PO狀態'] = extracted_fn
+            
+            # 條件7：若「Remarked by 上月 FN PR」含有「入FA」，則提取該數字，並更新狀態
+            cond7 = df['Remarked by 上月 FN PR'].str.contains('入FA', na=False)
+            if cond7.any():
+                extracted_pr = self.extact_fa_remark(df.loc[cond7, 'Remarked by 上月 FN PR'])
+                df.loc[cond7, 'PO狀態'] = extracted_pr
+            
             self.logger.info("成功給予第一階段狀態")
-            pass
+            return df
+        
         except Exception as e:
             self.logger.error(f"給予第一階段狀態時出錯: {str(e)}", exc_info=True)
             raise ValueError("給予第一階段狀態時出錯")
 
-    def process(self, fileUrl: str, file_name: str, 
-                fileUrl_previwp: str = None, fileUrl_p: str = None, 
-                fileUrl_ap: str = None) -> None:
+    def process(self, 
+                fileUrl: str, file_name: str, 
+                fileUrl_previwp: str = None, 
+                fileUrl_p: str = None, 
+                fileUrl_ap: str = None,
+                fileUrl_previwp_pr: str = None,
+                fileUrl_p_pr: str = None) -> None:
         """處理PO數據的主流程
         
         Args:
@@ -992,6 +1110,8 @@ class SpxPOProcessor(BasePOProcessor):
             fileUrl_previwp: 前期底稿文件路徑
             fileUrl_p: 採購底稿文件路徑
             fileUrl_ap: AP文件路徑
+            fileUrl_previwp_pr: PR前期底稿文件路徑
+            fileUrl_p_pr: PR採購底稿文件路徑
             
         Returns:
             None
@@ -1019,12 +1139,14 @@ class SpxPOProcessor(BasePOProcessor):
             # 處理前期底稿
             if fileUrl_previwp:
                 previous_wp = self.importer.import_previous_wp(fileUrl_previwp)
-                df = self.judge_previous(df, previous_wp, m)
+                previous_wp_pr = self.importer.import_previous_wp(fileUrl_previwp_pr)
+                df = self.judge_previous(df, previous_wp, m, previous_wp_pr)
             
             # 處理採購底稿
             if fileUrl_p:
                 procurement = self.importer.import_procurement_PO(fileUrl_p)
-                df = self.judge_procurement(df, procurement)
+                procurement_pr = self.importer.import_procurement(fileUrl_p_pr)
+                df = self.judge_procurement(df, procurement, procurement_pr)
             
             # 處理日期邏輯
             df = self.get_logic_date(df)
@@ -1041,13 +1163,6 @@ class SpxPOProcessor(BasePOProcessor):
             df_spx_closing = self.get_closing_note()
             self.give_status_stage_1(df, df_spx_closing)
 
-
-
-
-
-            
-
-            
             # 格式化數據
             df = self.reformate(df)
             
