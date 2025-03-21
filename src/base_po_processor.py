@@ -1095,6 +1095,304 @@ class SpxPOProcessor(BasePOProcessor):
             self.logger.error(f"給予第一階段狀態時出錯: {str(e)}", exc_info=True)
             raise ValueError("給予第一階段狀態時出錯")
 
+    def erm(self, df: pd.DataFrame, ym: int, ref_a: pd.DataFrame, ref_b: pd.DataFrame) -> pd.DataFrame:
+        """處理ERM邏輯
+        
+        Args:
+            df: PO數據框
+            ym: 年月
+            ref_a: 科目參考數據
+            ref_b: 負債參考數據
+            
+        Returns:
+            pd.DataFrame: 處理後的數據框
+        """
+        try:
+            # 設置檔案日期
+            df['檔案日期'] = ym
+            
+            # 定義ERM狀態條件
+            # 條件1：已入帳
+            condition_booked = (
+                (~df['GL DATE'].isna()) & 
+                ((df['PO狀態'].isna()) | (df['PO狀態'] == 'nan')) &
+                (df['Expected Received Month_轉換格式'].between(
+                    df['YMs of Item Description'].str[:6].astype('int32'),
+                    df['YMs of Item Description'].str[7:].astype('int32'),
+                    inclusive='both')) &
+                (df['Expected Received Month_轉換格式'] <= df['檔案日期']) &
+                (df['Entry Quantity'] == df['Received Quantity']) &
+                ((df['Remarked by Procurement'].str.contains('(?i)已完成|rent', na=False)) | 
+                 (df['Remarked by 上月 FN'].str.contains('(?i)已完成|已入帳', na=False)))
+            )
+
+            # 條件2：已完成
+            condition_completed = (
+                ((df['Remarked by Procurement'].str.contains('(?i)已完成|rent', na=False)) | 
+                 (df['Remarked by 上月 FN'].str.contains('(?i)已完成', na=False))) &
+                ((df['PO狀態'].isna()) | (df['PO狀態'] == 'nan')) &
+                (df['Expected Received Month_轉換格式'].between(
+                    df['YMs of Item Description'].str[:6].astype('int32'),
+                    df['YMs of Item Description'].str[7:].astype('int32'),
+                    inclusive='both'
+                )) &
+                (df['Expected Received Month_轉換格式'] <= df['檔案日期']) &
+                (df['Entry Quantity'] == df['Received Quantity']) &
+                (df['Entry Billed Amount'].astype(float) == 0)
+            )
+            
+            # 條件3：全付完，未關單
+            condition_paid_not_closed = (
+                ((df['Remarked by Procurement'].str.contains('(?i)已完成|rent', na=False)) | 
+                 (df['Remarked by 上月 FN'].str.contains('(?i)已完成', na=False))) &
+                ((df['PO狀態'].isna()) | (df['PO狀態'] == 'nan')) &
+                (df['Expected Received Month_轉換格式'].between(
+                    df['YMs of Item Description'].str[:6].astype('int32'),
+                    df['YMs of Item Description'].str[7:].astype('int32'),
+                    inclusive='both'
+                )) &
+                (df['Expected Received Month_轉換格式'] <= df['檔案日期']) &
+                (df['Entry Quantity'] == df['Received Quantity']) &
+                (df['Entry Billed Amount'].astype(float) != 0) &
+                (df['Entry Amount'].astype(float) - df['Entry Billed Amount'].astype(float) == 0)
+            )
+            
+            # 條件4：已完成但有未付款部分
+            condition_completed_with_unpaid = (
+                ((df['Remarked by Procurement'].str.contains('(?i)已完成|rent', na=False)) | 
+                 (df['Remarked by 上月 FN'].str.contains('(?i)已完成', na=False))) &
+                ((df['PO狀態'].isna()) | (df['PO狀態'] == 'nan')) &
+                (df['Expected Received Month_轉換格式'].between(
+                    df['YMs of Item Description'].str[:6].astype('int32'),
+                    df['YMs of Item Description'].str[7:].astype('int32'),
+                    inclusive='both'
+                )) &
+                (df['Expected Received Month_轉換格式'] <= df['檔案日期']) &
+                (df['Entry Quantity'] == df['Received Quantity']) &
+                (df['Entry Billed Amount'].astype(float) != 0) &
+                (df['Entry Amount'].astype(float) - df['Entry Billed Amount'].astype(float) != 0)
+            )
+            
+            # 條件5：需檢查收貨
+            condition_check_receipt = (
+                (df['Remarked by Procurement'] != 'error') &
+                ((df['PO狀態'].isna()) | (df['PO狀態'] == 'nan')) &
+                (df['Expected Received Month_轉換格式'].between(
+                    df['YMs of Item Description'].str[:6].astype('int32'),
+                    df['YMs of Item Description'].str[7:].astype('int32'),
+                    inclusive='both'
+                )) &
+                (df['Expected Received Month_轉換格式'] <= df['檔案日期']) &
+                (df['Entry Quantity'] != df['Received Quantity'])
+            )
+            
+            # 條件6：未完成
+            condition_incomplete = (
+                (df['Remarked by Procurement'] != 'error') &
+                ((df['PO狀態'].isna()) | (df['PO狀態'] == 'nan')) &
+                (df['Expected Received Month_轉換格式'].between(
+                    df['YMs of Item Description'].str[:6].astype('int32'),
+                    df['YMs of Item Description'].str[7:].astype('int32'),
+                    inclusive='both'
+                )) &
+                (df['Expected Received Month_轉換格式'] > df['檔案日期'])
+            )
+            
+            # 條件7：範圍錯誤
+            condition_range_error = (
+                (df['Remarked by Procurement'] != 'error') &
+                ((df['PO狀態'].isna()) | (df['PO狀態'] == 'nan')) &
+                (df['Expected Received Month_轉換格式'].between(
+                    df['YMs of Item Description'].str[:6].astype('int32'),
+                    df['YMs of Item Description'].str[7:].astype('int32'),
+                    inclusive='both'
+                ) == False) &
+                (df['YMs of Item Description'] != '100001,100002')
+            )
+            
+            # 條件8：部分完成ERM
+            condition_partially_completed_erm = (
+                (df['Remarked by Procurement'] != 'error') &
+                ((df['PO狀態'].isna()) | (df['PO狀態'] == 'nan')) &
+                (df['Expected Received Month_轉換格式'].between(
+                    df['YMs of Item Description'].str[:6].astype('int32'),
+                    df['YMs of Item Description'].str[7:].astype('int32'),
+                    inclusive='both'
+                ) == False) &
+                (df['YMs of Item Description'] != '100001,100002') &
+                (df['Received Quantity'].astype(float) != 0) &
+                (df['Entry Quantity'] != df['Received Quantity'])
+            )
+            
+            # 組合所有條件
+            conditions = [
+                condition_booked,
+                condition_completed,
+                condition_paid_not_closed,
+                condition_completed_with_unpaid,
+                condition_check_receipt,
+                condition_incomplete,
+                condition_range_error,
+                condition_partially_completed_erm
+
+            ]
+            
+            # 對應的結果
+            results = [
+                '已入帳',
+                '已完成',
+                '全付完，未關單?',
+                '已完成',
+                'Check收貨',
+                '未完成',
+                'error(Description Period is out of ERM)',
+                '部分完成ERM',
+            ]
+            
+            # 應用條件
+            df['PO狀態'] = np.select(conditions, results, default=df['PO狀態'])
+            
+            # 處理格式錯誤
+            # TODO; 上面的條件目前尚可，次期由此更新
+            mask_format_error = (((df['PO狀態'].isna()) | (df['PO狀態'] == 'nan')) & 
+                                 (df['YMs of Item Description'] == '100001,100002'))
+            df.loc[mask_format_error, 'PO狀態'] = '格式錯誤，退單'
+            
+            # 根據PO狀態設置估計入帳
+            # 條件1: 已完成
+            mask_completed = (df['PO狀態'] == '已完成') & (df['Remarked by Procurement'] != '已入帳')
+            df.loc[mask_completed, '是否估計入帳'] = 'Y'
+            
+            # 條件2: error(Description Period is out of ERM)或全付完，未關單?
+            mask_design_formula = (df['PO狀態'] == 'error(Description Period is out of ERM)') | (df['PO狀態'] == '全付完，未關單?')
+            df.loc[mask_design_formula, '是否估計入帳'] = '設計公式'
+            
+            # 條件3: 未完成
+            mask_incomplete = df['PO狀態'] == '未完成'
+            df.loc[mask_incomplete, '是否估計入帳'] = 'N'
+            
+            # 條件4: ERM相關狀態
+            df.loc[df.PO狀態.eq('已完成ERM'), '是否估計入帳'] = 'Y'
+            df.loc[df.PO狀態.eq('未完成ERM'), '是否估計入帳'] = 'N'
+            
+            # 條件5: 採購已完成但狀態未設置
+            mask_procurement_completed = (
+                (df['是否估計入帳'] == 'nan') &
+                (df['Remarked by Procurement'] == '已完成') &
+                (df['PO狀態'] != '格式錯誤，退單') &
+                (df['PO狀態'] != '全付完，未關單?') &
+                (df['PO狀態'] != '提早完成?') &
+                (df['PO狀態'] != 'Check收貨') &
+                (df['PO狀態'] != 'error(Description Period is out of ERM)') &
+                (df['PO狀態'] != '已完成ERM') &
+                (df['PO狀態'] != '部分完成ERM') &
+                (df['PO狀態'] != '未完成ERM')
+            )
+            df.loc[mask_procurement_completed, '是否估計入帳'] = 'Y'
+            
+            # 處理設計公式狀態
+            # error(Description Period is out of ERM)且Remarked by Procurement為已完成且Check with Entry Invoice為未結案
+            mask_design_formula_1 = (
+                (df['是否估計入帳'] == '設計公式') &
+                (df['PO狀態'] == 'error(Description Period is out of ERM)') &
+                (df['Check with Entry Invoice'] == '未結案') &
+                (df['Remarked by Procurement'] == '已完成')
+            )
+            df.loc[mask_design_formula_1, '是否估計入帳'] = 'Y'
+            
+            # error(Description Period is out of ERM)且Remarked by Procurement為未完成且Check with Entry Invoice為未結案
+            mask_design_formula_2 = (
+                (df['是否估計入帳'] == '設計公式') &
+                (df['PO狀態'] == 'error(Description Period is out of ERM)') &
+                (df['Check with Entry Invoice'] == '未結案') &
+                (df['Remarked by Procurement'] == '未完成')
+            )
+            df.loc[mask_design_formula_2, '是否估計入帳'] = 'N'
+            
+            # error(Description Period is out of ERM)且Remarked by Procurement為已完成且Check with Entry Invoice不是未結案
+            mask_design_formula_3 = (
+                (df['是否估計入帳'] == '設計公式') &
+                (df['PO狀態'] == 'error(Description Period is out of ERM)') &
+                (df['Check with Entry Invoice'] != '未結案') &
+                (df['Remarked by Procurement'] == '已完成')
+            )
+            df.loc[mask_design_formula_3, '是否估計入帳'] = 'N'
+            
+            # 採購備註為error，不估計
+            df.loc[df['Remarked by Procurement'] == 'error', '是否估計入帳'] = 'N'
+            
+            # 設置Account code
+            df.loc[df['是否估計入帳'] == 'Y', 'Account code'] = df.loc[df['是否估計入帳'] == 'Y', 'GL#']
+            
+            # 設置Account Name
+            df['Account Name'] = pd.merge(
+                df, ref_a, how='left',
+                left_on='Account code', right_on='Account'
+            ).loc[:, 'Account Desc']
+            
+            # 設置Product code
+            df.loc[df['是否估計入帳'] == 'Y', 'Product code'] = df.loc[df['是否估計入帳'] == 'Y', 'Product Code']
+            
+            # 設置Region_c
+            if self.entity_type == 'MOB':
+                df.loc[df['是否估計入帳'] == 'Y', 'Region_c'] = df.loc[df['是否估計入帳'] == 'Y', 'Region']
+            else:  # SPT
+                if 'Account code' in df.columns:
+                    mask_income_expense = df['Account code'].str.match(r'^[4-6]')
+                    df.loc[(df['是否估計入帳'] == 'Y') & mask_income_expense, 'Region_c'] = \
+                        df.loc[(df['是否估計入帳'] == 'Y') & mask_income_expense, 'Region']
+                    df.loc[(df['是否估計入帳'] == 'Y') & ~mask_income_expense.fillna(False), 'Region_c'] = '000'
+            
+            # 設置Dep.
+            if self.entity_type == 'MOB':
+                df.loc[df['是否估計入帳'] == 'Y', 'Dep.'] = df.loc[df['是否估計入帳'] == 'Y', 'Department'].str[:3]
+            else:  # SPT
+                # if 'Account code' in df.columns:
+                #     mask_expense = df['Account code'].str.startswith('6')
+                #     df.loc[(df['是否估計入帳'] == 'Y') & mask_expense, 'Dep.'] = 'A09'
+                #     df.loc[(df['是否估計入帳'] == 'Y') & ~mask_expense, 'Dep.'] = '000'
+                df['Dep.'] = self.convert_dep_code(df)
+            
+            # 設置Currency_c
+            df.loc[df['是否估計入帳'] == 'Y', 'Currency_c'] = df.loc[df['是否估計入帳'] == 'Y', 'Currency']
+            
+            # 設置Accr. Amount
+            df.loc[df['是否估計入帳'] == 'Y', 'Accr. Amount'] = (
+                df.loc[df['是否估計入帳'] == 'Y', 'Entry Amount'].astype(float) - 
+                df.loc[df['是否估計入帳'] == 'Y', 'Entry Billed Amount'].astype(float)
+            )
+            
+            # 設置Liability
+            df['Liability'] = pd.merge(
+                df, ref_b, how='left',
+                left_on='Account code', right_on='Account'
+            ).loc[:, 'Liability_y']
+            
+            # 設置是否有預付
+            df.loc[df['是否估計入帳'] == 'Y', '是否有預付'] = df.loc[df['是否估計入帳'] == 'Y', 'Entry Prepay Amount']
+            
+            # 設置PR Product Code Check
+            if 'Product code' in df.columns and 'Project' in df.columns:
+                mask_product_code = df['Product code'].notnull()
+                try:
+                    product_match = df.loc[mask_product_code, 'Project'].str.findall(r'^(\w+(?:))').apply(
+                        lambda x: x[0] if len(x) > 0 else ''
+                    ) == df.loc[mask_product_code, 'Product code']
+                    
+                    df.loc[mask_product_code, 'PR Product Code Check'] = np.where(
+                        product_match, 'good', 'bad'
+                    )
+                except Exception as e:
+                    self.logger.error(f"設置PR Product Code Check時出錯: {str(e)}", exc_info=True)
+                    raise ValueError("設置PR Product Code Check時出錯")
+            
+            self.logger.info("成功處理ERM邏輯")
+            return df
+            
+        except Exception as e:
+            self.logger.error(f"處理ERM邏輯時出錯: {str(e)}", exc_info=True)
+            raise ValueError("處理ERM邏輯時出錯")
+    
     def process(self, 
                 fileUrl: str, file_name: str, 
                 fileUrl_previwp: str = None, 
@@ -1161,7 +1459,8 @@ class SpxPOProcessor(BasePOProcessor):
             5.give status, 關單
             """
             df_spx_closing = self.get_closing_note()
-            self.give_status_stage_1(df, df_spx_closing)
+            df = self.give_status_stage_1(df, df_spx_closing)
+            df = self.erm(df, date, ref_ac, ref_liability)
 
             # 格式化數據
             df = self.reformate(df)
