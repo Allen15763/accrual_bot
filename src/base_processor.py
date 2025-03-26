@@ -37,11 +37,11 @@ class BaseDataProcessor:
         """清理DataFrame中的nan值
         
         Args:
-            df: 要處理的數據框
+            df: 要處理的DataFrame
             columns: 要清理nan值的列名列表
             
         Returns:
-            pd.DataFrame: 處理後的數據框
+            pd.DataFrame: 處理後的DataFrame
         """
         for col in columns:
             if col in df.columns:
@@ -52,10 +52,10 @@ class BaseDataProcessor:
         """格式化日期字段
         
         Args:
-            df: 要處理的數據框
+            df: 要處理的DataFrame
             
         Returns:
-            pd.DataFrame: 處理後的數據框
+            pd.DataFrame: 處理後的DataFrame
         """
         try:
             # 格式化提交日期
@@ -90,12 +90,12 @@ class BaseDataProcessor:
         """格式化數值列，包括千分位
         
         Args:
-            df: 要處理的數據框
+            df: 要處理的DataFrame
             int_cols: 整數列名列表
             float_cols: 浮點數列名列表
             
         Returns:
-            pd.DataFrame: 處理後的數據框
+            pd.DataFrame: 處理後的DataFrame
         """
         try:
             # 處理整數列
@@ -121,17 +121,17 @@ class BaseDataProcessor:
         """從描述欄位解析日期範圍
         
         Args:
-            df: 包含Item Description的數據框
+            df: 包含Item Description的DataFrame
             
         Returns:
-            pd.DataFrame: 添加了解析結果的數據框
+            pd.DataFrame: 添加了解析結果的DataFrame
         """
         try:
             # 定義正規表達式模式
-            pt_YM = r'(\d{4}\/(0[1-9]|1[0-2])(\s|$))'  # YYYY/MM
-            pt_YMD = r'(\d{4}\/(0[1-9]|1[0-2])\/((0[1-9])|(1[0-9])|(2[0-9])|(3[0-1]))(\s|$))'  # YYYY/MM/DD
-            pt_YMtoYM = r'(\d{4}\/(0[1-9]|1[0-2])[-]\d{4}\/(0[1-9]|1[0-2])(\s|$))'  # YYYY/MM-YYYY/MM
-            pt_YMDtoYMD = r'(\d{4}\/(0[1-9]|1[0-2])\/((0[1-9])|(1[0-9])|(2[0-9])|(3[0-1]))[-]\d{4}\/(0[1-9]|1[0-2])\/((0[1-9])|(1[0-9])|(2[0-9])|(3[0-1]))(\s|$))'  # YYYY/MM/DD-YYYY/MM/DD
+            pt_YM = self.config.get('GENERAL', 'pt_YM')  # YYYY/MM
+            pt_YMD = self.config.get('GENERAL', 'pt_YMD')  # YYYY/MM/DD
+            pt_YMtoYM = self.config.get('GENERAL', 'pt_YMtoYM')  # YYYY/MM-YYYY/MM
+            pt_YMDtoYMD = self.config.get('GENERAL', 'pt_YMDtoYMD')  # YYYY/MM/DD-YYYY/MM/DD
             pt_YMYMD = f'({pt_YM}|{pt_YMD})'  # 將YM&YMD的正規表示式彙總
             
             # 將Expected Receive Month轉換為數值格式以便比較
@@ -141,22 +141,23 @@ class BaseDataProcessor:
             ).dt.strftime('%Y%m').fillna(0).astype('int32')
             
             # 解析Item Description中的日期範圍
+            col_desc = 'Item Description'
             conditions = [
                 # 如果匹配單一日期格式（年月或年月日）
-                (df['Item Description'].str.match(pat=pt_YMYMD)),
+                (df[col_desc].str.match(pat=pt_YMYMD)),
                 # 如果匹配年月-年月範圍格式
-                (df['Item Description'].str.match(pat=pt_YMtoYM)),
+                (df[col_desc].str.match(pat=pt_YMtoYM)),
                 # 如果匹配年月日-年月日範圍格式
-                (df['Item Description'].str.match(pat=pt_YMDtoYMD))
+                (df[col_desc].str.match(pat=pt_YMDtoYMD))
             ]
             
             choices = [
                 # 單一日期處理：使用相同的日期作為開始和結束
-                (df['Item Description'].str[:7] + ',' + df['Item Description'].str[:7]).str.replace('/', '', regex=False),
+                (df[col_desc].str[:7] + ',' + df[col_desc].str[:7]).str.replace('/', '', regex=False),
                 # 年月-年月處理：提取開始和結束日期
-                (df['Item Description'].str[:7] + ',' + df['Item Description'].str[8:15]).str.replace('/', '', regex=False),
+                (df[col_desc].str[:7] + ',' + df[col_desc].str[8:15]).str.replace('/', '', regex=False),
                 # 年月日-年月日處理：提取開始和結束日期（只取年月部分）
-                (df['Item Description'].str[:7] + ',' + df['Item Description'].str[11:18]).str.replace('/', '', regex=False)
+                (df[col_desc].str[:7] + ',' + df[col_desc].str[11:18]).str.replace('/', '', regex=False)
             ]
             
             # 使用numpy.select進行條件選擇
@@ -171,11 +172,11 @@ class BaseDataProcessor:
         """根據日期範圍評估狀態
         
         Args:
-            df: 要處理的數據框
+            df: 要處理的DataFrame
             status_col: 狀態列名 ('PR狀態' 或 'PO狀態')
             
         Returns:
-            pd.DataFrame: 更新了狀態的數據框
+            pd.DataFrame: 更新了狀態的DataFrame
         """
         try:
             # 確保檔案日期和已知狀態存在
@@ -219,11 +220,11 @@ class BaseDataProcessor:
         """根據狀態更新估計入帳標識
         
         Args:
-            df: 要處理的數據框
+            df: 要處理的DataFrame
             status_col: 狀態列名 ('PR狀態' 或 'PO狀態')
             
         Returns:
-            pd.DataFrame: 更新了估計入帳的數據框
+            pd.DataFrame: 更新了估計入帳的DataFrame
         """
         try:
             # 已完成狀態設為Y，未完成設為N
@@ -260,10 +261,10 @@ class BaseDataProcessor:
         """判斷科目代碼
         
         Args:
-            df: 要處理的數據框
+            df: 要處理的DataFrame
             
         Returns:
-            pd.DataFrame: 更新了科目代碼的數據框
+            pd.DataFrame: 更新了科目代碼的DataFrame
         """
         try:
             # 設置Account code
@@ -308,12 +309,12 @@ class BaseDataProcessor:
         """判斷各種欄位值
         
         Args:
-            df: 要處理的數據框
+            df: 要處理的DataFrame
             ref_ac: 科目參考數據
             ref_liability: 負債參考數據
             
         Returns:
-            pd.DataFrame: 更新了各種欄位的數據框
+            pd.DataFrame: 更新了各種欄位的DataFrame
         """
         try:
             # 設置科目名稱
@@ -398,7 +399,7 @@ class BaseDataProcessor:
         """導出文件
         
         Args:
-            df: 要導出的數據框
+            df: 要導出的DataFrame
             date: 日期值
             file_prefix: 文件前綴
             

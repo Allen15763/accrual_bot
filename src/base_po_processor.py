@@ -29,7 +29,7 @@ class BasePOProcessor(BaseDataProcessor):
             m: 月份
             
         Returns:
-            Tuple[pd.DataFrame, int]: 添加了必要列的數據框和更新的月份
+            Tuple[pd.DataFrame, int]: 添加了必要列的DataFrame和更新的月份
         """
         try:
             # 添加狀態欄位
@@ -101,7 +101,7 @@ class BasePOProcessor(BaseDataProcessor):
         """確定是否為FA
         
         Args:
-            df: PO數據框
+            df: PO DataFrame
             
         Returns:
             pd.Series: 是否為FA的結果
@@ -115,7 +115,7 @@ class BasePOProcessor(BaseDataProcessor):
         """確定是否為S&M
         
         Args:
-            df: PO數據框
+            df: PO DataFrame
             
         Returns:
             pd.Series: 是否為S&M的結果
@@ -129,11 +129,11 @@ class BasePOProcessor(BaseDataProcessor):
         """處理關單清單
         
         Args:
-            df: PO數據框
+            df: PO DataFrame
             mapping_list: 關單清單
             
         Returns:
-            pd.DataFrame: 處理後的數據框
+            pd.DataFrame: 處理後的DataFrame
         """
         try:
             # 設置在關單清單中的PO狀態
@@ -153,12 +153,12 @@ class BasePOProcessor(BaseDataProcessor):
         """處理前期底稿
         
         Args:
-            df: PO數據框
-            previous_wp: 前期底稿數據框
+            df: PO DataFrame
+            previous_wp: 前期底稿DataFrame
             m: 月份
             
         Returns:
-            pd.DataFrame: 處理後的數據框
+            pd.DataFrame: 處理後的DataFrame
         """
         try:
             # 重命名前期底稿中的列
@@ -198,11 +198,11 @@ class BasePOProcessor(BaseDataProcessor):
         """處理採購底稿
         
         Args:
-            df: PO數據框
-            df_procu: 採購底稿數據框
+            df: PO DataFrame
+            df_procu: 採購底稿DataFrame
             
         Returns:
-            pd.DataFrame: 處理後的數據框
+            pd.DataFrame: 處理後的DataFrame
         """
         try:
             # 重命名採購底稿中的列
@@ -261,10 +261,10 @@ class BasePOProcessor(BaseDataProcessor):
         """處理日期邏輯
         
         Args:
-            df: PO數據框
+            df: PO DataFrame
             
         Returns:
-            pd.DataFrame: 處理後的數據框
+            pd.DataFrame: 處理後的DataFrame
         """
         try:
             # 處理分潤合作
@@ -293,13 +293,13 @@ class BasePOProcessor(BaseDataProcessor):
         """處理ERM邏輯
         
         Args:
-            df: PO數據框
+            df: PO DataFrame
             ym: 年月
             ref_a: 科目參考數據
             ref_b: 負債參考數據
             
         Returns:
-            pd.DataFrame: 處理後的數據框
+            pd.DataFrame: 處理後的DataFrame
         """
         try:
             # 設置檔案日期
@@ -639,10 +639,10 @@ class BasePOProcessor(BaseDataProcessor):
         """處理SPT特有邏輯(僅當entity_type為SPT時調用)
         
         Args:
-            df: PO數據框
+            df: PO DataFrame
             
         Returns:
-            pd.DataFrame: 處理後的數據框
+            pd.DataFrame: 處理後的DataFrame
         """
         if self.entity_type != 'SPT':
             return df
@@ -666,10 +666,10 @@ class BasePOProcessor(BaseDataProcessor):
         """更新分潤數據
         
         Args:
-            df: PO數據框
+            df: PO DataFrame
             
         Returns:
-            pd.DataFrame: 更新後的數據框
+            pd.DataFrame: 更新後的DataFrame
         """
         try:
             def update_remark(df, type_=True):
@@ -716,10 +716,10 @@ class BasePOProcessor(BaseDataProcessor):
         """格式化最終數據
         
         Args:
-            df: PO數據框
+            df: PO DataFrame
             
         Returns:
-            pd.DataFrame: 格式化後的數據框
+            pd.DataFrame: 格式化後的DataFrame
         """
         try:
             # 處理數值格式
@@ -879,10 +879,10 @@ class SpxPOProcessor(BasePOProcessor):
         """處理日期邏輯
         
         Args:
-            df: PO數據框
+            df: PO DataFrame
             
         Returns:
-            pd.DataFrame: 處理後的數據框
+            pd.DataFrame: 處理後的DataFrame
         """
         try:
             # 解析日期
@@ -903,12 +903,12 @@ class SpxPOProcessor(BasePOProcessor):
         """處理PR前期底稿
         
         Args:
-            df: PO數據框
-            previous_wp_pr: PR前期底稿數據框
+            df: PO DataFrame
+            previous_wp_pr: PR前期底稿DataFrame
             m: 月份
             
         Returns:
-            pd.DataFrame: 處理後的數據框
+            pd.DataFrame: 處理後的DataFrame
         """
         try:
             # 重命名前期底稿中的列
@@ -993,7 +993,7 @@ class SpxPOProcessor(BasePOProcessor):
             df_ap = df_ap.dropna(subset=['PO Number']).reset_index(drop=True)
             
             # Create a combined key for matching
-            df_ap['po_line'] = df_ap['Company'] + '-' + df_ap['PO Number'] + '-' + df_ap['Line']
+            df_ap['po_line'] = df_ap['Company'] + '-' + df_ap['PO Number'] + '-' + df_ap['PO_LINE_NUMBER']
             
             # Convert 'Period' to datetime then format as integer yyyymm
             df_ap['period'] = (
@@ -1017,7 +1017,7 @@ class SpxPOProcessor(BasePOProcessor):
             df.drop(columns=['po_line', 'period'], inplace=True)
             
             # For each PO#, fill missing GL DATE with the maximum GL DATE available in that group
-            df['GL DATE'] = df['GL DATE'].fillna(df.groupby('PO#')['GL DATE'].transform('max'))
+            # df['GL DATE'] = df['GL DATE'].fillna(df.groupby('PO#')['GL DATE'].transform('max'))
             """
             # 檢查有無PO#含有兩個以上GL DATE
             fillna_dict = df.groupby('PO#')['GL DATE'].max().to_dict()
@@ -1077,13 +1077,15 @@ class SpxPOProcessor(BasePOProcessor):
             df.loc[cond5, 'PO狀態'] = '參照上月關單'
             
             # 條件6：若「Remarked by 上月 FN」含有「入FA」，則提取該數字，並更新狀態
-            cond6 = df['Remarked by 上月 FN'].str.contains('入FA', na=False)
+            cond6 = ((df['Remarked by 上月 FN'].str.contains('入FA', na=False)) & 
+                     (~df['Remarked by 上月 FN'].str.contains('部分完成', na=False)))
             if cond6.any():
                 extracted_fn = self.extact_fa_remark(df.loc[cond6, 'Remarked by 上月 FN'])
                 df.loc[cond6, 'PO狀態'] = extracted_fn
             
             # 條件7：若「Remarked by 上月 FN PR」含有「入FA」，則提取該數字，並更新狀態
-            cond7 = df['Remarked by 上月 FN PR'].str.contains('入FA', na=False)
+            cond7 = ((df['Remarked by 上月 FN PR'].str.contains('入FA', na=False)) & 
+                     (~df['Remarked by 上月 FN PR'].str.contains('部分完成', na=False)))
             if cond7.any():
                 extracted_pr = self.extact_fa_remark(df.loc[cond7, 'Remarked by 上月 FN PR'])
                 df.loc[cond7, 'PO狀態'] = extracted_pr
@@ -1099,13 +1101,13 @@ class SpxPOProcessor(BasePOProcessor):
         """處理ERM邏輯
         
         Args:
-            df: PO數據框
+            df: PO DataFrame
             ym: 年月
             ref_a: 科目參考數據
             ref_b: 負債參考數據
             
         Returns:
-            pd.DataFrame: 處理後的數據框
+            pd.DataFrame: 處理後的DataFrame
         """
         try:
             # 設置檔案日期
@@ -1122,6 +1124,7 @@ class SpxPOProcessor(BasePOProcessor):
                     inclusive='both')) &
                 (df['Expected Received Month_轉換格式'] <= df['檔案日期']) &
                 (df['Entry Quantity'] == df['Received Quantity']) &
+                (df['Billed Quantity'] != '0') &
                 ((df['Remarked by Procurement'].str.contains('(?i)已完成|rent', na=False)) | 
                  (df['Remarked by 上月 FN'].str.contains('(?i)已完成|已入帳', na=False)))
             )
@@ -1198,7 +1201,33 @@ class SpxPOProcessor(BasePOProcessor):
                 (df['Expected Received Month_轉換格式'] > df['檔案日期'])
             )
             
-            # 條件7：範圍錯誤
+            # 條件7：範圍錯誤_租金
+            condition_range_error_lease = (
+                (df['Remarked by Procurement'] != 'error') &
+                ((df['PO狀態'].isna()) | (df['PO狀態'] == 'nan')) &
+                (df['Expected Received Month_轉換格式'].between(
+                    df['YMs of Item Description'].str[:6].astype('int32'),
+                    df['YMs of Item Description'].str[7:].astype('int32'),
+                    inclusive='both'
+                ) == False) &
+                (df['YMs of Item Description'] != '100001,100002') & 
+                (df['Item Description'].str.contains('(?i)租金', na=False))
+            )
+
+            # 條件8：範圍錯誤_薪資
+            condition_range_error_salary = (
+                (df['Remarked by Procurement'] != 'error') &
+                ((df['PO狀態'].isna()) | (df['PO狀態'] == 'nan')) &
+                (df['Expected Received Month_轉換格式'].between(
+                    df['YMs of Item Description'].str[:6].astype('int32'),
+                    df['YMs of Item Description'].str[7:].astype('int32'),
+                    inclusive='both'
+                ) == False) &
+                (df['YMs of Item Description'] != '100001,100002') & 
+                (df['Item Description'].str.contains('(?i)派遣|Salary|Agency Fee', na=False))
+            )
+
+            # 條件9：範圍錯誤
             condition_range_error = (
                 (df['Remarked by Procurement'] != 'error') &
                 ((df['PO狀態'].isna()) | (df['PO狀態'] == 'nan')) &
@@ -1210,7 +1239,7 @@ class SpxPOProcessor(BasePOProcessor):
                 (df['YMs of Item Description'] != '100001,100002')
             )
             
-            # 條件8：部分完成ERM
+            # 條件10：部分完成ERM
             condition_partially_completed_erm = (
                 (df['Remarked by Procurement'] != 'error') &
                 ((df['PO狀態'].isna()) | (df['PO狀態'] == 'nan')) &
@@ -1232,6 +1261,8 @@ class SpxPOProcessor(BasePOProcessor):
                 condition_completed_with_unpaid,
                 condition_check_receipt,
                 condition_incomplete,
+                condition_range_error_lease,
+                condition_range_error_salary,
                 condition_range_error,
                 condition_partially_completed_erm
 
@@ -1245,6 +1276,8 @@ class SpxPOProcessor(BasePOProcessor):
                 '已完成',
                 'Check收貨',
                 '未完成',
+                'error(Description Period is out of ERM)_租金',
+                'error(Description Period is out of ERM)_薪資',
                 'error(Description Period is out of ERM)',
                 '部分完成ERM',
             ]
@@ -1259,70 +1292,14 @@ class SpxPOProcessor(BasePOProcessor):
             df.loc[mask_format_error, 'PO狀態'] = '格式錯誤，退單'
             
             # 根據PO狀態設置估計入帳
-            # 條件1: 已完成
-            mask_completed = (df['PO狀態'] == '已完成') & (df['Remarked by Procurement'] != '已入帳')
+            # 條件: 已完成 ->入帳, 其餘N
+            mask_completed = (df['PO狀態'] == '已完成')
             df.loc[mask_completed, '是否估計入帳'] = 'Y'
+            df.loc[~mask_completed, '是否估計入帳'] = 'N'
             
-            # 條件2: error(Description Period is out of ERM)或全付完，未關單?
-            mask_design_formula = (df['PO狀態'] == 'error(Description Period is out of ERM)') | (df['PO狀態'] == '全付完，未關單?')
-            df.loc[mask_design_formula, '是否估計入帳'] = '設計公式'
-            
-            # 條件3: 未完成
-            mask_incomplete = df['PO狀態'] == '未完成'
-            df.loc[mask_incomplete, '是否估計入帳'] = 'N'
-            
-            # 條件4: ERM相關狀態
-            df.loc[df.PO狀態.eq('已完成ERM'), '是否估計入帳'] = 'Y'
-            df.loc[df.PO狀態.eq('未完成ERM'), '是否估計入帳'] = 'N'
-            
-            # 條件5: 採購已完成但狀態未設置
-            mask_procurement_completed = (
-                (df['是否估計入帳'] == 'nan') &
-                (df['Remarked by Procurement'] == '已完成') &
-                (df['PO狀態'] != '格式錯誤，退單') &
-                (df['PO狀態'] != '全付完，未關單?') &
-                (df['PO狀態'] != '提早完成?') &
-                (df['PO狀態'] != 'Check收貨') &
-                (df['PO狀態'] != 'error(Description Period is out of ERM)') &
-                (df['PO狀態'] != '已完成ERM') &
-                (df['PO狀態'] != '部分完成ERM') &
-                (df['PO狀態'] != '未完成ERM')
-            )
-            df.loc[mask_procurement_completed, '是否估計入帳'] = 'Y'
-            
-            # 處理設計公式狀態
-            # error(Description Period is out of ERM)且Remarked by Procurement為已完成且Check with Entry Invoice為未結案
-            mask_design_formula_1 = (
-                (df['是否估計入帳'] == '設計公式') &
-                (df['PO狀態'] == 'error(Description Period is out of ERM)') &
-                (df['Check with Entry Invoice'] == '未結案') &
-                (df['Remarked by Procurement'] == '已完成')
-            )
-            df.loc[mask_design_formula_1, '是否估計入帳'] = 'Y'
-            
-            # error(Description Period is out of ERM)且Remarked by Procurement為未完成且Check with Entry Invoice為未結案
-            mask_design_formula_2 = (
-                (df['是否估計入帳'] == '設計公式') &
-                (df['PO狀態'] == 'error(Description Period is out of ERM)') &
-                (df['Check with Entry Invoice'] == '未結案') &
-                (df['Remarked by Procurement'] == '未完成')
-            )
-            df.loc[mask_design_formula_2, '是否估計入帳'] = 'N'
-            
-            # error(Description Period is out of ERM)且Remarked by Procurement為已完成且Check with Entry Invoice不是未結案
-            mask_design_formula_3 = (
-                (df['是否估計入帳'] == '設計公式') &
-                (df['PO狀態'] == 'error(Description Period is out of ERM)') &
-                (df['Check with Entry Invoice'] != '未結案') &
-                (df['Remarked by Procurement'] == '已完成')
-            )
-            df.loc[mask_design_formula_3, '是否估計入帳'] = 'N'
-            
-            # 採購備註為error，不估計
-            df.loc[df['Remarked by Procurement'] == 'error', '是否估計入帳'] = 'N'
-            
+            need_to_accrual = df['是否估計入帳'] == 'Y'
             # 設置Account code
-            df.loc[df['是否估計入帳'] == 'Y', 'Account code'] = df.loc[df['是否估計入帳'] == 'Y', 'GL#']
+            df.loc[need_to_accrual, 'Account code'] = df.loc[need_to_accrual, 'GL#']
             
             # 設置Account Name
             df['Account Name'] = pd.merge(
@@ -1331,45 +1308,39 @@ class SpxPOProcessor(BasePOProcessor):
             ).loc[:, 'Account Desc']
             
             # 設置Product code
-            df.loc[df['是否估計入帳'] == 'Y', 'Product code'] = df.loc[df['是否估計入帳'] == 'Y', 'Product Code']
+            df.loc[need_to_accrual, 'Product code'] = "LG_SPX_OWN"
             
             # 設置Region_c
-            if self.entity_type == 'MOB':
-                df.loc[df['是否估計入帳'] == 'Y', 'Region_c'] = df.loc[df['是否估計入帳'] == 'Y', 'Region']
-            else:  # SPT
-                if 'Account code' in df.columns:
-                    mask_income_expense = df['Account code'].str.match(r'^[4-6]')
-                    df.loc[(df['是否估計入帳'] == 'Y') & mask_income_expense, 'Region_c'] = \
-                        df.loc[(df['是否估計入帳'] == 'Y') & mask_income_expense, 'Region']
-                    df.loc[(df['是否估計入帳'] == 'Y') & ~mask_income_expense.fillna(False), 'Region_c'] = '000'
+            df.loc[need_to_accrual, 'Region_c'] = "TW"
             
             # 設置Dep.
-            if self.entity_type == 'MOB':
-                df.loc[df['是否估計入帳'] == 'Y', 'Dep.'] = df.loc[df['是否估計入帳'] == 'Y', 'Department'].str[:3]
-            else:  # SPT
-                # if 'Account code' in df.columns:
-                #     mask_expense = df['Account code'].str.startswith('6')
-                #     df.loc[(df['是否估計入帳'] == 'Y') & mask_expense, 'Dep.'] = 'A09'
-                #     df.loc[(df['是否估計入帳'] == 'Y') & ~mask_expense, 'Dep.'] = '000'
-                df['Dep.'] = self.convert_dep_code(df)
+            necessary_columns_for_dept = ['650005', '610104', '630001', '650003', '600301', 
+                                          '610110', '610105', '600310', '620003', '610311']
+            isin_dept_account = df['Account code'].isin(necessary_columns_for_dept)
+            df.loc[need_to_accrual & isin_dept_account, 'Dep.'] = \
+                df.loc[need_to_accrual & isin_dept_account, 'Department'].str[:3]
+            df.loc[need_to_accrual & ~isin_dept_account, 'Dep.'] = '000'
             
             # 設置Currency_c
-            df.loc[df['是否估計入帳'] == 'Y', 'Currency_c'] = df.loc[df['是否估計入帳'] == 'Y', 'Currency']
+            df.loc[need_to_accrual, 'Currency_c'] = df.loc[need_to_accrual, 'Currency']
             
             # 設置Accr. Amount
-            df.loc[df['是否估計入帳'] == 'Y', 'Accr. Amount'] = (
-                df.loc[df['是否估計入帳'] == 'Y', 'Entry Amount'].astype(float) - 
-                df.loc[df['是否估計入帳'] == 'Y', 'Entry Billed Amount'].astype(float)
-            )
+            df['temp_amount'] = (df['Unit Price'].astype(float) * 
+                                 (df['Entry Quantity'].astype(float) - df['Billed Quantity'].astype(float))
+                                 )
+            df.loc[need_to_accrual, 'Accr. Amount'] = df.loc[need_to_accrual, 'temp_amount']
+            df.drop('temp_amount', axis=1, inplace=True)
             
+            # 設置是否有預付
+            is_not_prepayment = df['Entry Prepay Amount'] != '0'
+            df.loc[need_to_accrual & is_not_prepayment, '是否有預付'] = 'Y'
+
             # 設置Liability
             df['Liability'] = pd.merge(
                 df, ref_b, how='left',
                 left_on='Account code', right_on='Account'
             ).loc[:, 'Liability_y']
-            
-            # 設置是否有預付
-            df.loc[df['是否估計入帳'] == 'Y', '是否有預付'] = df.loc[df['是否估計入帳'] == 'Y', 'Entry Prepay Amount']
+            df.loc[need_to_accrual & is_not_prepayment, 'Liability'] = '111112'
             
             # 設置PR Product Code Check
             if 'Product code' in df.columns and 'Project' in df.columns:
@@ -1393,6 +1364,77 @@ class SpxPOProcessor(BasePOProcessor):
             self.logger.error(f"處理ERM邏輯時出錯: {str(e)}", exc_info=True)
             raise ValueError("處理ERM邏輯時出錯")
     
+    def reformate(self, df: pd.DataFrame) -> pd.DataFrame:
+        """格式化最終數據
+        
+        Args:
+            df: PO DataFrame
+            
+        Returns:
+            pd.DataFrame: 格式化後的DataFrame
+        """
+        try:
+            # 處理數值格式
+            int_cols = ['Line#', 'GL#']
+            float_cols = [
+                'Unit Price', 'Entry Amount', 'Entry Invoiced Amount', 
+                'Entry Billed Amount', 'Entry Prepay Amount', 
+                'PO Entry full invoiced status', 'Accr. Amount'
+            ]
+            
+            # 格式化數值列
+            df = self._format_numeric_columns(df, int_cols, float_cols)
+            
+            # 格式化日期
+            df = self._reformat_dates(df)
+            
+            # 移除臨時計算列
+            if '檔案日期' in df.columns:
+                df.drop(columns=['檔案日期'], axis='columns', inplace=True)
+                
+            if 'Expected Received Month_轉換格式' in df.columns:
+                df.drop(columns=['Expected Received Month_轉換格式'], axis='columns', inplace=True)
+                
+            if 'YMs of Item Description' in df.columns:
+                df.drop(columns=['YMs of Item Description'], axis='columns', inplace=True)
+            
+            # 清理nan值
+            columns_to_clean = [
+                '是否估計入帳', 'PR Product Code Check', 'PO狀態',
+                'Accr. Amount', '是否為FA', 'Region_c', 'Dep.'
+            ]
+            df = self._clean_nan_values(df, columns_to_clean)
+            
+            # 重新排列上月備註欄位位置
+            num = df.columns.get_loc('Remarked by FN') + 1
+            last_col = df.pop('Remarked by 上月 FN')
+            df.insert(num, last_col.name, last_col)  # Move Remarked by 上月 FN
+
+            num += 1
+            last_col = df.pop('Remarked by 上月 FN PR')
+            df.insert(num, last_col.name, last_col)  # Move Remarked by 上月 FN
+            
+            # 重新排列PO狀態欄位位置
+            num = df.columns.get_loc('Remarked by FN') + 3
+            last_col = df.pop(df.columns[df.columns.get_loc('PO狀態')])
+            df.insert(num, last_col.name, last_col)  # Move PO狀態
+
+            # 重新排列PR欄位位置
+            num = df.columns.get_loc('Noted by Procurement') + 1
+            last_col = df.pop(df.columns[df.columns.get_loc('Remarked by Procurement PR')])
+            df.insert(num, last_col.name, last_col)
+
+            num += 1
+            last_col = df.pop(df.columns[df.columns.get_loc('Noted by Procurement PR')])
+            df.insert(num, last_col.name, last_col)
+            
+            self.logger.info("成功格式化數據")
+            return df
+            
+        except Exception as e:
+            self.logger.error(f"格式化數據時出錯: {str(e)}", exc_info=True)
+            raise ValueError("格式化數據時出錯")
+        
     def process(self, 
                 fileUrl: str, file_name: str, 
                 fileUrl_previwp: str = None, 
