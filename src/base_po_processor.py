@@ -868,13 +868,6 @@ class SpxPOProcessor(BasePOProcessor):
         df['Remarked by 上月 FN PR'] = np.nan
         return df, m
 
-    # def _determine_fa_status(self, df: pd.DataFrame) -> pd.Series:
-    #     base_status = super()._determine_fa_status(df) # 應該可以直接使用SPT的，只要在config上新增entity內容即可。
-    #     # 根據子類需求進一步處理 base_status
-    #     # 例如：將某些情況強制設為 'N' 或其他值
-    #     # base_status = np.where(某條件, 'N', base_status)
-    #     return base_status
-
     def get_logic_date(self, df: pd.DataFrame) -> pd.DataFrame:
         """處理日期邏輯
         
@@ -1056,9 +1049,11 @@ class SpxPOProcessor(BasePOProcessor):
             df['Remarked by 上月 FN'] = self.convert_date_format_in_remark(df['Remarked by 上月 FN'])
             df['Remarked by 上月 FN PR'] = self.convert_date_format_in_remark(df['Remarked by 上月 FN PR'])
             
-            # 條件1：摘要中有押金/保證金/Deposit/找零金
+            # 條件1：摘要中有押金/保證金/Deposit/找零金，且不是 FA 相關科目
             cond1 = df['Item Description'].str.contains('(?i)押金|保證金|Deposit|找零金', na=False)
-            df.loc[cond1, 'PO狀態'] = '摘要內有押金/保證金/Deposit/找零金'
+            is_fa = df['GL#'] == self.config.get('FA_ACCOUNTS', 'spx')
+            cond2 = df['Item Description'].str.contains('(?i)繳費機訂金', na=False)  # 繳費機訂金屬FA，避免前端選錯加強過濾
+            df.loc[cond1 & ~is_fa & ~cond2, 'PO狀態'] = '摘要內有押金/保證金/Deposit/找零金'
             
             # 條件2：供應商與類別對應，做 GL 調整
             cond2 = (df['PO Supplier'] == 'TW_寶倉物流股份有限公司') & (df['Category'].isin(bao))
@@ -1114,7 +1109,9 @@ class SpxPOProcessor(BasePOProcessor):
             df['檔案日期'] = ym
             
             # 定義ERM狀態條件
+            is_fa = df['GL#'] == self.config.get('FA_ACCOUNTS', 'spx')
             # 條件1：已入帳
+            df.loc[df['Remarked by 上月 FN'].str.contains('(?i)已入帳', na=False), 'PO狀態'] = '已入帳'
             condition_booked = (
                 (~df['GL DATE'].isna()) & 
                 ((df['PO狀態'].isna()) | (df['PO狀態'] == 'nan')) &
@@ -1126,13 +1123,15 @@ class SpxPOProcessor(BasePOProcessor):
                 (df['Entry Quantity'] == df['Received Quantity']) &
                 (df['Billed Quantity'] != '0') &
                 ((df['Remarked by Procurement'].str.contains('(?i)已完成|rent', na=False)) | 
-                 (df['Remarked by 上月 FN'].str.contains('(?i)已完成|已入帳', na=False)))
+                 (df['Remarked by 上月 FN'].str.contains('(?i)已完成|已入帳', na=False))) &
+                (~is_fa)
             )
 
             # 條件2：已完成
             condition_completed = (
                 ((df['Remarked by Procurement'].str.contains('(?i)已完成|rent', na=False)) | 
                  (df['Remarked by 上月 FN'].str.contains('(?i)已完成', na=False))) &
+                (~df['Remarked by 上月 FN PR'].str.contains('(?i)未完成', na=False))
                 ((df['PO狀態'].isna()) | (df['PO狀態'] == 'nan')) &
                 (df['Expected Received Month_轉換格式'].between(
                     df['YMs of Item Description'].str[:6].astype('int32'),
@@ -1332,15 +1331,15 @@ class SpxPOProcessor(BasePOProcessor):
             df.drop('temp_amount', axis=1, inplace=True)
             
             # 設置是否有預付
-            is_not_prepayment = df['Entry Prepay Amount'] != '0'
-            df.loc[need_to_accrual & is_not_prepayment, '是否有預付'] = 'Y'
+            is_prepayment = df['Entry Prepay Amount'] != '0'
+            df.loc[need_to_accrual & is_prepayment, '是否有預付'] = 'Y'
 
             # 設置Liability
             df['Liability'] = pd.merge(
                 df, ref_b, how='left',
                 left_on='Account code', right_on='Account'
             ).loc[:, 'Liability_y']
-            df.loc[need_to_accrual & is_not_prepayment, 'Liability'] = '111112'
+            df.loc[need_to_accrual & is_prepayment, 'Liability'] = '111112'
             
             # 設置PR Product Code Check
             if 'Product code' in df.columns and 'Project' in df.columns:
@@ -1414,8 +1413,8 @@ class SpxPOProcessor(BasePOProcessor):
             last_col = df.pop('Remarked by 上月 FN PR')
             df.insert(num, last_col.name, last_col)  # Move Remarked by 上月 FN
             
-            # 重新排列PO狀態欄位位置
-            num = df.columns.get_loc('Remarked by FN') + 3
+            # 重新排列PO狀態欄位位置; 放在"是否估計入帳"之前
+            num = df.columns.get_loc('是否估計入帳')
             last_col = df.pop(df.columns[df.columns.get_loc('PO狀態')])
             df.insert(num, last_col.name, last_col)  # Move PO狀態
 
