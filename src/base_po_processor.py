@@ -1131,7 +1131,7 @@ class SpxPOProcessor(BasePOProcessor):
             condition_completed = (
                 ((df['Remarked by Procurement'].str.contains('(?i)已完成|rent', na=False)) | 
                  (df['Remarked by 上月 FN'].str.contains('(?i)已完成', na=False))) &
-                (~df['Remarked by 上月 FN PR'].str.contains('(?i)未完成', na=False))
+                (~df['Remarked by 上月 FN PR'].str.contains('(?i)未完成', na=False)) &
                 ((df['PO狀態'].isna()) | (df['PO狀態'] == 'nan')) &
                 (df['Expected Received Month_轉換格式'].between(
                     df['YMs of Item Description'].str[:6].astype('int32'),
