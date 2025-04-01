@@ -18,6 +18,9 @@ __pycache__/
 *$py.class
 *.xlsx
 PRPO*
+cred*.json
+*.xlsx
+*.xlsm
 
 # C extensions
 *.so

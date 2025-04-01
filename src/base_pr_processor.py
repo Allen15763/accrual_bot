@@ -1,8 +1,6 @@
-import logging
 import pandas as pd
 import numpy as np
 from typing import Tuple, List, Dict, Optional, Union, Any
-from datetime import datetime
 
 from base_processor import BaseDataProcessor
 from utils import Utils, Logger
@@ -98,17 +96,12 @@ class BasePRProcessor(BaseDataProcessor):
         """
         try:
             # 獲取採購底稿中的Remarked by Procurement
-            df_procu_v = df_procu.loc[:, ['PR Line', 'Remarked by Procurement']]
-            df['Remarked by Procurement'] = pd.merge(
-                df, df_procu_v, how='left', on='PR Line'
-            ).loc[:, 'Remarked by Procurement_y']
+            map_dict = self.get_mapping_dict(df_procu, 'PR Line', 'Remarked by Procurement')
+            df['Remarked by Procurement'] = df['PR Line'].map(map_dict)
             
             # 獲取採購底稿中的Noted by Procurement
-            df_procu_v = df_procu.loc[:, ['PR Line', 'Noted by Procurement']]
-            df_procu_v.rename(columns={'Noted by Procurement': 'NotedPR'}, inplace=True)
-            df['Noted by Procurement'] = pd.merge(
-                df, df_procu_v, how='left', on='PR Line'
-            ).loc[:, 'NotedPR']
+            map_dict = self.get_mapping_dict(df_procu, 'PR Line', 'Noted by Procurement')
+            df['Noted by Procurement'] = df['PR Line'].map(map_dict)
             
             # 設置FN備註
             df['Remarked by FN'] = df['Remarked by Procurement']
@@ -150,14 +143,9 @@ class BasePRProcessor(BaseDataProcessor):
                     'Remarked by Procurement': 'Remark by PR Team_l'
                 }
             )
-            
             # 獲取前期FN備註
-            df['前期FN備註'] = pd.merge(
-                df, previous_wp, how='left', on='PR Line'
-            ).loc[:, ['Remarked by FN_l']]
-            
-            df['Remarked by 上月 FN'] = df['前期FN備註']
-            df.drop('前期FN備註', axis=1, inplace=True)
+            map_dict = self.get_mapping_dict(previous_wp, 'PR Line', 'Remarked by FN_l')
+            df['Remarked by 上月 FN'] = df['PR Line'].map(map_dict)
             
             self.logger.info("成功處理前期底稿")
             return df
