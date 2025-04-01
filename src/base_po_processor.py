@@ -1,8 +1,6 @@
-import re
 import pandas as pd
 import numpy as np
 from typing import Tuple, List, Dict, Optional, Union, Any
-from datetime import datetime
 
 from base_processor import BaseDataProcessor
 from utils import Utils, Logger
@@ -168,24 +166,14 @@ class BasePOProcessor(BaseDataProcessor):
                     'Remarked by Procurement': 'Remark by PR Team_l'
                 }
             )
-            
+
             # 獲取前期FN備註
-            df['前期FN備註'] = pd.merge(
-                df, previous_wp, how='left', on='PO Line'
-            ).loc[:, ['Remarked by FN_l']]
-            
-            df['Remarked by 上月 FN'] = df['前期FN備註']
+            map_dict = self.get_mapping_dict(previous_wp, 'PO Line', 'Remarked by FN_l')
+            df['Remarked by 上月 FN'] = df['PO Line'].map(map_dict)
             
             # 獲取前期採購備註
-            previous_wp_fv = pd.merge(
-                df, previous_wp, how='inner', on='PO Line'
-            ).loc[:, ['PO Line', 'Remark by PR Team_l']]
-            
-            df[f'Remarked by {m}月 Procurement'] = pd.merge(
-                df, previous_wp_fv, on='PO Line', how='left'
-            ).loc[:, 'Remark by PR Team_l']
-            
-            df.drop('前期FN備註', axis=1, inplace=True)
+            df[f'Remarked by {m}月 Procurement'] = \
+                df['PO Line'].map(self.get_mapping_dict(previous_wp, 'PO Line', 'Remark by PR Team_l'))
             
             self.logger.info("成功處理前期底稿")
             return df
@@ -214,30 +202,18 @@ class BasePOProcessor(BaseDataProcessor):
             )
             
             # 獲取採購底稿中的備註
-            df_procu_fv = pd.merge(
-                df, df_procu, how='inner', on='PO Line'
-            ).loc[:, ['PO Line', 'Remark by PR Team', 'Noted by PR']]
+            map_dict = self.get_mapping_dict(df_procu, 'PO Line', 'Remark by PR Team')
+            df['Remarked by Procurement'] = df['PO Line'].map(map_dict)
             
-            df['Remarked by Procurement'] = pd.merge(
-                df, df_procu_fv, how='left', on='PO Line'
-            ).loc[:, 'Remark by PR Team']
-            
-            df['Noted by Procurement'] = pd.merge(
-                df, df_procu_fv, how='left', on='PO Line'
-            ).loc[:, 'Noted by PR']
-            
-            # 將PO Line轉成PR Line去查找
-            df_procu['PR Line'] = df_procu['PO Line'].str.replace('PO', 'PR')
+            map_dict = self.get_mapping_dict(df_procu, 'PO Line', 'Noted by PR')
+            df['Noted by Procurement'] = df['PO Line'].map(map_dict)
             
             # 使用PR Line查找
-            df_procu_fv = pd.merge(
-                df, df_procu, how='left', on='PR Line'
-            ).loc[:, ['PO Line_x', 'Remark by PR Team']]
-            
-            df_m = df.loc[:, ['PO Line', 'Remarked by Procurement']]
-            df_m = df_m.combine_first(df_procu_fv)
-            
-            df['Remarked by Procurement'] = df_m['Remarked by Procurement']
+            map_dict = self.get_mapping_dict(df_procu, 'PR Line', 'Remark by PR Team')
+            df['Remarked by Procurement'] = \
+                (df.apply(lambda x: map_dict.get(x['PR Line'], None) 
+                          if x['Remarked by Procurement'] is np.nan else x['Remarked by Procurement'], axis=1))
+
             df['Remarked by FN'] = df['Remarked by Procurement']
             
             # 標記不在採購底稿中的PO
@@ -910,15 +886,10 @@ class SpxPOProcessor(BasePOProcessor):
                     'Remarked by FN': 'Remarked by FN_l',
                 }
             )
-            
+
             # 獲取前期FN備註
-            df['前期FN備註'] = pd.merge(
-                df, previous_wp_pr, how='left', on='PR Line'
-            ).loc[:, ['Remarked by FN_l']]
-            
-            df['Remarked by 上月 FN PR'] = df['前期FN備註']
-            
-            df.drop('前期FN備註', axis=1, inplace=True)
+            map_dict = self.get_mapping_dict(previous_wp_pr, 'PR Line', 'Remarked by FN_l')
+            df['Remarked by 上月 FN PR'] = df['PR Line'].map(map_dict)
             
             self.logger.info("成功處理PR前期底稿")
             return df
@@ -945,17 +916,11 @@ class SpxPOProcessor(BasePOProcessor):
             )
             
             # 獲取PR採購底稿中的備註
-            df_procu_fv = pd.merge(
-                df, procurement_pr, how='inner', on='PR Line'
-            ).loc[:, ['PR Line', 'Remark by PR Team', 'Noted by PR']]
+            map_dict = self.get_mapping_dict(procurement_pr, 'PR Line', 'Remark by PR Team')
+            df['Remarked by Procurement PR'] = df['PR Line'].map(map_dict)
             
-            df['Remarked by Procurement PR'] = pd.merge(
-                df, df_procu_fv, how='left', on='PR Line'
-            ).loc[:, 'Remark by PR Team']
-            
-            df['Noted by Procurement PR'] = pd.merge(
-                df, df_procu_fv, how='left', on='PR Line'
-            ).loc[:, 'Noted by PR']
+            map_dict = self.get_mapping_dict(procurement_pr, 'PR Line', 'Noted by PR')
+            df['Noted by Procurement PR'] = df['PR Line'].map(map_dict)
             
             self.logger.info("成功處理PR採購底稿")
             return df

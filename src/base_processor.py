@@ -1,9 +1,7 @@
-import logging
 import pandas as pd
 import numpy as np
 from typing import Tuple, List, Dict, Optional, Union, Any
 from datetime import datetime
-import re
 
 # 導入優化後的工具類
 from utils import Utils, Logger, ConfigManager, DataImporter
@@ -341,15 +339,6 @@ class BaseDataProcessor:
             
             # 設置部門; SPT篩選費用類科目, MOB擷取原始字段
             if self.entity_type == 'SPT':
-                # is_expense = False
-                # if 'Account code' in df.columns:
-                #     is_expense = df['Account code'].str.startswith('6')
-                
-                # df['Dep.'] = np.where(
-                #     (df['是否估計入帳'] == 'Y') & is_expense,
-                #     'A09',
-                #     np.where(df['是否估計入帳'] == 'Y', '000', pd.NA)
-                # )
                 df['Dep.'] = self.convert_dep_code(df)
             else:
                 df['Dep.'] = np.where(df['是否估計入帳'].eq("Y"), df['Department'].str[:3], pd.NA)
@@ -421,3 +410,9 @@ class BaseDataProcessor:
         except Exception as e:
             self.logger.error(f"導出文件時出錯: {str(e)}", exc_info=True)
             raise ValueError("導出文件時出錯")
+        
+    def get_mapping_dict(self, df: pd.DataFrame, key_col: str, column: str) -> Dict[str, Any]:
+        """獲取映射字典"""
+        mask = (~df[column].isna())
+        necessary_columns = [key_col, column]
+        return df.loc[mask, necessary_columns].set_index(key_col).to_dict()[column]
