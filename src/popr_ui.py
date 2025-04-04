@@ -14,7 +14,7 @@ from PyQt5.QtWidgets import (
     QApplication, QWidget, QMainWindow, QVBoxLayout, QHBoxLayout, 
     QLabel, QPushButton, QComboBox, QListWidget, QFileDialog, 
     QMessageBox, QDialog, QLineEdit, QGroupBox, QTextEdit, QSplitter,
-    QTabWidget
+    QTabWidget, QGridLayout
 )
 from PyQt5.QtGui import QPixmap, QFont, QTextCursor
 from qt_material import apply_stylesheet
@@ -24,6 +24,7 @@ from spttwpo import SPTTW_PO
 from spttwpr import SPTTW_PR
 from mobtwpr import MOBTW_PR
 from mobtwpo import MOBTW_PO
+from spxtwpo import SPXTW_PO
 from hris_dup import HRISDuplicateChecker
 from upload_form import get_aggregation_twd, get_aggregation_foreign, get_entries
 from utils import Logger, ReconEntryAmt
@@ -38,10 +39,31 @@ class QTextEditLogger(logging.Handler):
         self.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
         
     def emit(self, record):
-        msg = self.format(record)
-        self.widget.append(msg)
-        # 自動滾動到底部
-        self.widget.moveCursor(QTextCursor.End)
+        try:
+            msg = self.format(record)
+            self.widget.append(msg)
+            # 自動滾動到底部
+            self.widget.moveCursor(QTextCursor.End)
+            # 強制處理事件，確保UI更新
+            QApplication.processEvents()
+        except Exception as e:
+            print(f"日誌輸出錯誤: {e}")
+
+# 修改為使用信號和槽的日誌處理器
+class LogHandler(QObject, logging.Handler):
+    new_log_signal = pyqtSignal(str)
+    
+    def __init__(self):
+        QObject.__init__(self)
+        logging.Handler.__init__(self)
+        self.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+    
+    def emit(self, record):
+        try:
+            msg = self.format(record)
+            self.new_log_signal.emit(msg)
+        except Exception as e:
+            print(f"日誌輸出錯誤: {e}")
 
 
 class Main(QWidget):
@@ -51,33 +73,90 @@ class Main(QWidget):
         """初始化主界面"""
         super().__init__()
         self.had_error = False  # 標記是否有錯誤發生
-        self.logger = None  # 將在setupLogger中初始化
         
-        # 初始化UI
+        # 設置窗口基本屬性
         self.setWindowTitle("POPR BOT")
-        self.setGeometry(450, 150, 600, 400)  # 擴大窗口尺寸
-        self.UI()
+        self.setGeometry(450, 150, 600, 400)
+        
+        # 創建基本UI組件
+        self.createBasicComponents()
+        
+        # 設置日誌系統
         self.setupLogger()
+        
+        # 創建完整UI
+        self.createCompleteUI()
+        
+        # 設置標籤切換事件
+        self.setupTabEvents()
+
+        # 顯示窗口
         self.show()
-    
+
+    def createBasicComponents(self):
+        """創建基本UI組件，包括日誌文本框"""
+        # 創建選項卡
+        self.tabWidget = QTabWidget()
+        
+        # 主要操作頁面
+        self.mainTab = QWidget()
+        
+        # 日誌頁面
+        self.logTab = QWidget()
+        self.logTextEdit = QTextEdit()
+        self.logTextEdit.setReadOnly(True)
+        
+        # 日誌頁面布局
+        self.logTabLayout = QVBoxLayout(self.logTab)
+        self.logTabLayout.addWidget(self.logTextEdit)
+
+    def createCompleteUI(self):
+        """創建完整UI"""
+        self.mainDesign()  # 創建主UI組件
+        self.layouts()     # 設置布局
+        self.add_spx_tab_to_main_ui()  # 添加SPX標籤頁
+
     def setupLogger(self):
         """設置日誌系統"""
         self.logger = Logger().get_logger(__name__)
         
-        # 創建自定義處理器，將日誌輸出到UI
-        log_handler = QTextEditLogger(self.logTextEdit)
-        log_handler.setLevel(logging.INFO)
+        # 確保logTextEdit已經被創建
+        if not hasattr(self, 'logTextEdit'):
+            self.logTextEdit = QTextEdit()
+            self.logTextEdit.setReadOnly(True)
+        
+        # 創建自定義處理器
+        self.log_handler = LogHandler()
+        self.log_handler.setLevel(logging.INFO)
+        
+        # 連接信號和槽
+        self.log_handler.new_log_signal.connect(self.append_log)
         
         # 獲取根記錄器，添加我們的處理器
         root_logger = logging.getLogger()
-        root_logger.addHandler(log_handler)
         
+        # 移除舊處理器（如果存在）以避免重複
+        for handler in root_logger.handlers[:]:
+            if isinstance(handler, (QTextEditLogger, LogHandler)):
+                root_logger.removeHandler(handler)
+        
+        root_logger.addHandler(self.log_handler)
+        
+        # 測試日誌記錄
         self.logger.info("POPR BOT 啟動")
-    
-    def UI(self):
-        """設置UI組件"""
-        self.mainDesign()
-        self.layouts()
+        self.logger.info("日誌系統初始化完成")
+
+    @pyqtSlot(str)
+    def append_log(self, message):
+        """處理新的日誌條目"""
+        if hasattr(self, 'logTextEdit') and self.logTextEdit:
+            try:
+                self.logTextEdit.append(message)
+                self.logTextEdit.moveCursor(QTextCursor.End)
+                # 處理事件但無需強制更新
+                QApplication.processEvents()
+            except Exception as e:
+                print(f"日誌顯示錯誤: {e}")
     
     def mainDesign(self):
         """創建UI元素"""
@@ -184,6 +263,41 @@ class Main(QWidget):
         # 設置主布局
         self.setLayout(self.mainLayout)
     
+    def setupTabEvents(self):
+        """設置標籤切換事件"""
+        # 連接標籤切換信號到處理函數
+        self.tabWidget.currentChanged.connect(self.onTabChanged)
+        
+        # 保存原始窗口大小作為主功能標籤的默認大小
+        self.mainTabSize = (450, 150, 600, 400)  # x, y, width, height
+        
+        # 可以為其他標籤設置不同的大小（例如SPX標籤）
+        self.spxTabSize = (450, 150, 800, 600)  # 更大的SPX窗口大小
+        
+    def onTabChanged(self, index):
+        """處理標籤頁切換事件"""
+        try:
+            tab_name = self.tabWidget.tabText(index)
+            self.logger.info(f"切換到標籤頁: {tab_name}")
+            
+            # 保存當前窗口中心位置
+            center = self.frameGeometry().center()
+            
+            # 根據切換到的標籤調整窗口大小
+            if tab_name == "主功能":
+                self.setGeometry(*self.mainTabSize)
+            elif tab_name == "SPX模組":
+                self.setGeometry(*self.spxTabSize)
+            elif tab_name == "日誌":
+                self.setGeometry(*self.mainTabSize)
+                
+            # 重新計算並設置窗口中心位置
+            new_rect = self.frameGeometry()
+            new_rect.moveCenter(center)
+            self.move(new_rect.topLeft())
+        except Exception as e:
+            self.logger.error(f"切換標籤頁時出錯: {str(e)}", exc_info=True)
+
     def updateStatus(self, message, error=False):
         """更新狀態標籤"""
         if error:
@@ -661,6 +775,32 @@ class Main(QWidget):
             self.had_error = True
             QMessageBox.critical(self, "錯誤", f"處理SPT PO時出錯:\n{str(e)}")
     
+    def _process_spx_po(self, items):
+        """處理SPX PO數據"""
+        try:
+            processor = SPXTW_PO()
+
+            # 構建文件路徑字典
+            file_paths = {
+                'po_file': self.fileUrl,
+                'po_file_name': self.file_name,
+                'previous_wp': getattr(self, 'fileUrl_previwp', None) if '前期底稿' in items else None,
+                'procurement': getattr(self, 'fileUrl_p', None) if '採購底稿' in items else None,
+                'ap_invoice': getattr(self, 'fileUrl_ap', None) if 'AP發票' in items else None,
+                'previous_wp_pr': getattr(self, 'fileUrl_previwp_pr', None) if '前期PR底稿' in items else None,
+                'procurement_pr': getattr(self, 'fileUrl_p_pr', None) if '採購PR底稿' in items else None
+            }
+            
+            # 使用並發處理接口
+            processor.concurrent_spx_process(file_paths)
+            self.logger.info("SPX PO處理完成")
+            
+        except Exception as e:
+            self.logger.error(f"處理SPX PO時出錯: {str(e)}", exc_info=True)
+            self.updateStatus("錯誤: 處理SPX PO時出錯", error=True)
+            self.had_error = True
+            QMessageBox.critical(self, "錯誤", f"處理SPX PO時出錯:\n{str(e)}")
+
     def deleteImportFile(self):
         """刪除已導入的文件"""
         try:
@@ -763,6 +903,21 @@ class Main(QWidget):
             self.logger.error(f"兩期檢查時出錯: {str(err)}", exc_info=True)
             self.updateStatus("錯誤: 兩期檢查時出錯", error=True)
             QMessageBox.critical(self, "錯誤", f"兩期檢查時出錯:\n{str(err)}")
+
+    def add_spx_tab_to_main_ui(self):
+        """將SPX tab添加到主UI
+        
+        這個函數應該添加到Main類中，用於初始化SPX Tab
+        """
+        # 創建SPX Tab
+        self.spxTab = SPXTabWidget(self)
+        
+        # 將SPX Tab添加到tabWidget
+        self.tabWidget.addTab(self.spxTab, "SPX模組")
+        
+        # 日誌記錄 - 增加檢查以防 logger 尚未初始化
+        if hasattr(self, 'logger') and self.logger is not None:
+            self.logger.info("SPX模組Tab已初始化")
 
 
 class UploadFormWidget(QDialog):
@@ -992,6 +1147,444 @@ class UploadFormWidget(QDialog):
             self.updateStatus("錯誤: 處理Upload Form時出錯", error=True)
             QMessageBox.critical(self, "錯誤", f"處理Upload Form時出錯:\n{str(err)}")
 
+
+class SPXTabWidget(QWidget):
+    """SPX模組專用的tab介面"""
+    
+    def __init__(self, parent=None):
+        """初始化SPX模組tab介面"""
+        super(SPXTabWidget, self).__init__(parent)
+        self.parent = parent  # 存儲主窗口引用，用於訪問日誌等功能
+        self.file_paths = {}  # 存儲所有文件路徑
+        # 定義文件類型映射，作為類屬性以便在所有方法中使用
+        self.file_types = [
+            ("po_file", "原始PO數據"),
+            ("previous_wp", "前期底稿(PO)"),
+            ("procurement", "採購底稿(PO)"),
+            ("ap_invoice", "AP發票文件"),
+            ("previous_wp_pr", "前期PR底稿"),
+            ("procurement_pr", "採購PR底稿")
+        ]
+        self.setupUI()
+    
+    def setupUI(self):
+        """設置UI組件"""
+        # 主布局
+        main_layout = QHBoxLayout(self)
+        
+        # 左側和右側布局
+        left_layout = QVBoxLayout()
+        right_layout = QVBoxLayout()
+        
+        # 設置左右比例
+        main_layout.addLayout(left_layout, 60)
+        main_layout.addLayout(right_layout, 40)
+        
+        # === 左側部分 ===
+        # 文件上傳區域
+        upload_group = QGroupBox("文件上傳")
+        grid_layout = QGridLayout()
+        
+        # 上傳按鈕和標籤
+        self.buttons = {}
+        self.labels = {}
+        
+        # 使用類屬性 self.file_types
+        for row, (file_key, file_label) in enumerate(self.file_types):
+            # 標籤
+            label = QLabel(f"{file_label}:")
+            grid_layout.addWidget(label, row, 0)
+            
+            # 顯示文件名的標籤
+            file_name_label = QLabel("未選擇文件")
+            file_name_label.setStyleSheet("color: gray;")
+            grid_layout.addWidget(file_name_label, row, 1)
+            self.labels[file_key] = file_name_label
+            
+            # 上傳按鈕
+            upload_btn = QPushButton("選擇文件")
+            upload_btn.clicked.connect(lambda checked, k=file_key, label=file_label: self.select_file(k, label))
+            grid_layout.addWidget(upload_btn, row, 2)
+            self.buttons[file_key] = upload_btn
+        
+        upload_group.setLayout(grid_layout)
+        
+        # 批次處理參數
+        process_group = QGroupBox("處理參數")
+        process_layout = QGridLayout()
+        
+        # 財務年月
+        process_layout.addWidget(QLabel("財務年月 (YYYYMM):"), 0, 0)
+        self.period_input = QLineEdit()
+        self.period_input.setPlaceholderText("例如: 202504")
+        process_layout.addWidget(self.period_input, 0, 1)
+        
+        # 處理人員
+        process_layout.addWidget(QLabel("處理人員:"), 1, 0)
+        self.user_input = QLineEdit()
+        self.user_input.setPlaceholderText("例如: Lynn")
+        process_layout.addWidget(self.user_input, 1, 1)
+        
+        process_group.setLayout(process_layout)
+        
+        # 已上傳文件列表
+        self.file_list = QListWidget()
+        file_list_label = QLabel("已上傳文件")
+        file_list_label.setStyleSheet("font-size:12pt;background-color:#93FF93;color:#000080;font:Bold")
+        file_list_label.setAlignment(Qt.AlignCenter)
+        
+        # 將元素添加到左側布局
+        left_layout.addWidget(upload_group)
+        left_layout.addWidget(process_group)
+        left_layout.addWidget(file_list_label)
+        left_layout.addWidget(self.file_list)
+        
+        # === 右側部分 ===
+        # 操作按鈕
+        self.process_btn = QPushButton("處理並產生結果")
+        self.process_btn.clicked.connect(self.process_files)
+        self.process_btn.setStyleSheet("font-size:12pt;font:Bold;padding:10px;")
+        
+        self.clear_btn = QPushButton("清除所有文件")
+        self.clear_btn.clicked.connect(self.clear_all_files)
+        
+        self.export_btn = QPushButton("匯出上傳表單")
+        self.export_btn.clicked.connect(self.export_upload_form)
+        
+        # 說明文字
+        tips_label = QLabel("SPX模組說明:")
+        tips_label.setStyleSheet("font-size:11pt;font:Bold;")
+        
+        tips_content = QLabel(
+            "此模組用於處理SPX相關的PO/PR數據。\n\n"
+            "使用步驟:\n"
+            "1. 上傳各項必要文件(標*為必須)\n"
+            "2. 填寫處理參數\n"
+            "3. 點擊「處理並產生結果」\n"
+            "4. 結果將自動保存\n\n"
+            "TBC"
+        )
+        tips_content.setWordWrap(True)
+        tips_content.setStyleSheet("background-color:#93FF93;color:#000080;padding:10px;border-radius:5px;")
+        
+        # 狀態欄
+        self.status_label = QLabel("狀態: 準備就緒")
+        self.status_label.setStyleSheet("font-size:10pt;")
+        
+        # 添加元素到右側佈局
+        right_layout.addWidget(self.process_btn)
+        right_layout.addWidget(self.clear_btn)
+        right_layout.addWidget(self.export_btn)
+        right_layout.addSpacing(20)
+        right_layout.addWidget(tips_label)
+        right_layout.addWidget(tips_content)
+        right_layout.addStretch()
+        right_layout.addWidget(self.status_label)
+    
+    def select_file(self, file_key, file_label):
+        """選擇文件
+        
+        Args:
+            file_key: 文件類型鍵
+            file_label: 文件類型標籤
+        """
+        try:
+            # 根據文件類型選擇過濾器
+            if file_key == "ap_invoice":
+                file_filter = "Excel Files (*.xlsx *.xlsm)"
+            else:
+                file_filter = "Files (*.csv *.xlsx);;CSV (*.csv);;Excel (*.xlsx *.xlsm)"
+            
+            # 打開文件選擇對話框
+            file_path, _ = QFileDialog.getOpenFileName(
+                self, f'選擇{file_label}', "", file_filter
+            )
+            
+            if not file_path:
+                return
+            
+            # 保存文件路徑
+            self.file_paths[file_key] = file_path
+            file_name = os.path.basename(file_path)
+            
+            # 更新標籤和文件列表
+            self.labels[file_key].setText(file_name)
+            self.labels[file_key].setStyleSheet("color: blue;")
+            
+            # 更新文件列表
+            list_item = f"{file_label}: {file_name}"
+            # 檢查是否已存在於列表
+            existing_items = [self.file_list.item(i).text() for i in range(self.file_list.count())]
+            matching_items = [item for item in existing_items if item.startswith(f"{file_label}:")]
+            
+            if matching_items:
+                # 替換已存在的項目
+                for item in matching_items:
+                    item_idx = existing_items.index(item)
+                    self.file_list.takeItem(item_idx)
+            
+            self.file_list.addItem(list_item)
+            
+            # 更新狀態
+            self.status_label.setText(f"狀態: 已選擇 {file_label}")
+            
+            # 如果是主文件，嘗試填充年月字段
+            if file_key == "po_file" and not self.period_input.text():
+                try:
+                    # 從文件名提取年月 (假設格式為 YYYYMM_其他內容.csv)
+                    year_month = file_name[:6]
+                    if year_month.isdigit() and len(year_month) == 6:
+                        self.period_input.setText(year_month)
+                except Exception:
+                    pass
+            
+            # 通知父窗口進行日誌記錄
+            if hasattr(self.parent, 'logger'):
+                self.parent.logger.info(f"已選擇 {file_label}: {file_name}")
+            
+        except Exception as e:
+            # 更新狀態並顯示錯誤訊息
+            self.status_label.setText("狀態: 選擇文件出錯")
+            self.status_label.setStyleSheet("font-size:10pt; color: red;")
+            
+            # 通知父窗口進行日誌記錄
+            if hasattr(self.parent, 'logger'):
+                self.parent.logger.error(f"選擇文件時出錯: {str(e)}", exc_info=True)
+            
+            QMessageBox.critical(self, "錯誤", f"選擇文件時出錯:\n{str(e)}")
+    
+    def process_files(self):
+        """處理文件"""
+        try:
+            # 檢查必須文件
+            required_files = ["po_file", "ap_invoice"]
+            missing_files = [file_key for file_key in required_files if file_key not in self.file_paths]
+            
+            if missing_files:
+                # 建立文件類型映射字典
+                file_type_dict = dict(self.file_types)
+                missing_labels = [file_type_dict.get(file_key, file_key) for file_key in missing_files]
+
+                QMessageBox.warning(self, "警告", f"缺少必要文件: {', '.join(missing_labels)}")
+                return
+            
+            # 檢查處理參數
+            period = self.period_input.text()
+            user = self.user_input.text()
+            
+            if not period or not period.isdigit() or len(period) != 6:
+                QMessageBox.warning(self, "警告", "請輸入有效的財務年月 (格式: YYYYMM)")
+                return
+            
+            if not user:
+                QMessageBox.warning(self, "警告", "請輸入處理人員名稱")
+                return
+            
+            # 更新狀態
+            self.status_label.setText("狀態: 處理中...")
+            self.status_label.setStyleSheet("font-size:10pt; color: blue;")
+            
+            # 準備文件路徑參數
+            po_file_path = self.file_paths.get("po_file")
+            po_file_name = os.path.basename(po_file_path)
+            
+            # 構建處理參數字典
+            processing_params = {
+                'po_file': po_file_path,
+                'po_file_name': po_file_name,
+                'previous_wp': self.file_paths.get("previous_wp"),
+                'procurement': self.file_paths.get("procurement"),
+                'ap_invoice': self.file_paths.get("ap_invoice"),
+                'previous_wp_pr': self.file_paths.get("previous_wp_pr"),
+                'procurement_pr': self.file_paths.get("procurement_pr"),
+                'period': period,
+                'user': user
+            }
+            
+            # 調用處理函數 - 這裡連接到主程序的SPX處理邏輯
+            self._process_spx_data(processing_params)
+            
+            # 更新狀態
+            self.status_label.setText("狀態: 處理完成!")
+            self.status_label.setStyleSheet("font-size:10pt; color: green;")
+            
+        except Exception as e:
+            # 更新狀態並顯示錯誤訊息
+            self.status_label.setText("狀態: 處理出錯")
+            self.status_label.setStyleSheet("font-size:10pt; color: red;")
+            
+            # 通知父窗口進行日誌記錄
+            if hasattr(self.parent, 'logger'):
+                self.parent.logger.error(f"處理文件時出錯: {str(e)}", exc_info=True)
+            
+            QMessageBox.critical(self, "錯誤", f"處理文件時出錯:\n{str(e)}")
+    
+    def _process_spx_data(self, params):
+        """處理SPX數據
+        
+        Args:
+            params: 處理參數字典
+        """
+        # 這個方法將連接到主程序的SPX處理邏輯
+        # 在實際整合時，這裡會調用SPXTW_PO的處理方法
+        
+        try:
+            # 通知父窗口進行日誌記錄
+            if hasattr(self.parent, 'logger'):
+                self.parent.logger.info(f"開始處理SPX數據: {params['po_file_name']}")
+            
+            # 實例化SPXTW_PO並處理數據
+            from spxtwpo import SPXTW_PO
+            processor = SPXTW_PO()
+            
+            # 使用並發處理方法
+            processor.process(
+                fileUrl=params['po_file'],
+                file_name=params['po_file_name'],
+                fileUrl_previwp=params['previous_wp'],
+                fileUrl_p=params['procurement'],
+                fileUrl_ap=params['ap_invoice'],
+                fileUrl_previwp_pr=params['previous_wp_pr'],
+                fileUrl_p_pr=params['procurement_pr']
+            )
+            
+            # 顯示成功訊息
+            QMessageBox.information(self, "完成", "SPX數據處理完成！")
+            
+        except Exception as e:
+            if hasattr(self.parent, 'logger'):
+                self.parent.logger.error(f"處理SPX數據時出錯: {str(e)}", exc_info=True)
+            raise
+    
+    def clear_all_files(self):
+        """清除所有已選文件"""
+        try:
+            # 清除文件路徑
+            self.file_paths = {}
+            
+            # 清除標籤
+            for label in self.labels.values():
+                label.setText("未選擇文件")
+                label.setStyleSheet("color: gray;")
+            
+            # 清除文件列表
+            self.file_list.clear()
+            
+            # 更新狀態
+            self.status_label.setText("狀態: 已清除所有文件")
+            
+            # 通知父窗口進行日誌記錄
+            if hasattr(self.parent, 'logger'):
+                self.parent.logger.info("已清除所有SPX文件")
+            
+        except Exception as e:
+            # 更新狀態並顯示錯誤訊息
+            self.status_label.setText("狀態: 清除文件出錯")
+            self.status_label.setStyleSheet("font-size:10pt; color: red;")
+            
+            # 通知父窗口進行日誌記錄
+            if hasattr(self.parent, 'logger'):
+                self.parent.logger.error(f"清除文件時出錯: {str(e)}", exc_info=True)
+            
+            QMessageBox.critical(self, "錯誤", f"清除文件時出錯:\n{str(e)}")
+    
+    def export_upload_form(self):
+        """匯出上傳表單"""
+        try:
+            # 檢查必須文件
+            if "po_file" not in self.file_paths:
+                QMessageBox.warning(self, "警告", "請先選擇原始PO數據文件")
+                return
+            
+            # 檢查處理參數
+            period = self.period_input.text()
+            user = self.user_input.text()
+            
+            if not period or not period.isdigit() or len(period) != 6:
+                QMessageBox.warning(self, "警告", "請輸入有效的財務年月 (格式: YYYYMM)")
+                return
+            
+            if not user:
+                QMessageBox.warning(self, "警告", "請輸入處理人員名稱")
+                return
+            
+            # 更新狀態
+            self.status_label.setText("狀態: 正在匯出上傳表單...")
+            self.status_label.setStyleSheet("font-size:10pt; color: blue;")
+            
+            # 構建參數
+            entity = "SPXTW"
+            year = period[:4]
+            month = period[4:6]
+            period_str = f"{year}-{month}"  # "2025-04" 格式
+            month_abbr = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", 
+                          "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"][int(month) - 1] 
+            period_display = f"{month_abbr}-{year[2:]}"  # "APR-25" 格式
+            accounting_date = f"{year}/{month}/25"  # "2025/04/25" 格式
+            category = "01 SEA Accrual Expense"
+            
+            # 調用上傳表單處理函數
+            self._generate_upload_form(
+                po_file_path=self.file_paths.get("po_file"),
+                entity=entity,
+                period=period_display,
+                period_str=period_str,
+                accounting_date=accounting_date,
+                category=category,
+                user=user
+            )
+            
+            # 更新狀態
+            self.status_label.setText("狀態: 上傳表單已匯出")
+            self.status_label.setStyleSheet("font-size:10pt; color: green;")
+            
+        except Exception as e:
+            # 更新狀態並顯示錯誤訊息
+            self.status_label.setText("狀態: 匯出上傳表單出錯")
+            self.status_label.setStyleSheet("font-size:10pt; color: red;")
+            
+            # 通知父窗口進行日誌記錄
+            if hasattr(self.parent, 'logger'):
+                self.parent.logger.error(f"匯出上傳表單時出錯: {str(e)}", exc_info=True)
+            
+            QMessageBox.critical(self, "錯誤", f"匯出上傳表單時出錯:\n{str(e)}")
+    
+    def _generate_upload_form(self, po_file_path, entity, period, period_str, accounting_date, category, user):
+        """生成上傳表單
+        
+        Args:
+            po_file_path: PO文件路徑
+            entity: 實體名稱
+            period: 期間顯示格式 (如 "APR-25")
+            period_str: 期間字符串格式 (如 "2025-04")
+            accounting_date: 會計日期 (如 "2025/04/25")
+            category: 類別
+            user: 處理人員
+        """
+        try:
+            # 通知父窗口進行日誌記錄
+            if hasattr(self.parent, 'logger'):
+                self.parent.logger.info(f"開始生成上傳表單: {entity}, {period}")
+            
+            from upload_form import get_aggregation_twd, get_entries
+            
+            # 獲取聚合數據
+            dfs = get_aggregation_twd(po_file_path, period_str, is_mob=False)
+            
+            # 生成上傳表單
+            result = get_entries(dfs, entity, period, accounting_date, category, user, "TWD")
+            
+            # 保存結果
+            output_file = f'Upload Form-{entity}-{period}-TWD.xlsx'
+            result.to_excel(output_file, index=False)
+            
+            # 顯示成功訊息
+            QMessageBox.information(self, "完成", f"上傳表單已生成：{output_file}")
+            
+        except Exception as e:
+            if hasattr(self.parent, 'logger'):
+                self.parent.logger.error(f"生成上傳表單時出錯: {str(e)}", exc_info=True)
+            raise
 
 def main():
     """主函數"""
