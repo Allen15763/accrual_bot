@@ -1,9 +1,10 @@
+import os
 import pandas as pd
 import numpy as np
 from typing import Tuple, List, Dict, Optional, Union, Any
 
 from base_processor import BaseDataProcessor
-from utils import Utils, Logger
+from utils import Utils, Logger, AsyncDataImporter, AsyncGoogleSheetsBase
 
 
 class BasePOProcessor(BaseDataProcessor):
@@ -755,7 +756,7 @@ class BasePOProcessor(BaseDataProcessor):
     def process(self, fileUrl: str, file_name: str, 
                 fileUrl_previwp: str = None, fileUrl_p: str = None, 
                 fileUrl_c: str = None) -> None:
-        """處理PO數據的主流程
+        """處理PO數據的主流程（使用並發導入）
         
         Args:
             fileUrl: PO原始數據文件路徑
@@ -770,8 +771,29 @@ class BasePOProcessor(BaseDataProcessor):
         try:
             self.logger.info(f"開始處理PO數據: {file_name}")
             
-            # 導入原始數據
-            df, date, m = self.importer.import_rawdata_POonly(fileUrl, file_name)
+            # 準備文件信息字典
+            file_info = {
+                'raw_po': fileUrl,
+                'previous': fileUrl_previwp if fileUrl_previwp else None,
+                'procurement_po': fileUrl_p if fileUrl_p else None,
+                'closing_po': fileUrl_c if fileUrl_c else None
+            }
+            
+            # 並發導入所有文件
+            import_results = self.concurrent_import_files(file_info)
+            
+            # 提取結果 - 正確處理原始PO數據
+            if 'raw_po' in import_results:
+                raw_po_result = import_results['raw_po']
+                # 檢查raw_po_result是否為元組且包含3個元素
+                if isinstance(raw_po_result, tuple) and len(raw_po_result) == 3:
+                    df, date, m = raw_po_result
+                else:
+                    self.logger.error("原始PO數據格式不正確")
+                    raise ValueError("原始PO數據格式不正確")
+            else:
+                self.logger.error("無法導入原始PO數據")
+                raise ValueError("無法導入原始PO數據")
             
             # 導入參考數據
             ref_key = 'SPT' if self.entity_type == 'SPT' else 'MOB'
@@ -780,20 +802,38 @@ class BasePOProcessor(BaseDataProcessor):
             # 添加必要列
             df, m = self.add_cols(df, m)
             
-            # 處理關單清單
-            if fileUrl_c:
-                mapping_list = self.importer.import_closing_list_PO(fileUrl_c)
-                df = self.judge_closing(df, mapping_list)
+            # 處理關單清單 - 安全地檢查
+            if 'closing_po' in import_results:
+                closing_result = import_results['closing_po']
+                # 檢查是否為None或空列表
+                if self._is_valid_data(closing_result):
+                    mapping_list = closing_result
+                    df = self.judge_closing(df, mapping_list)
+                    self.logger.info("成功處理關單清單")
+                else:
+                    self.logger.warning("關單清單為空或無效")
             
-            # 處理前期底稿
-            if fileUrl_previwp:
-                previous_wp = self.importer.import_previous_wp(fileUrl_previwp)
-                df = self.judge_previous(df, previous_wp, m)
+            # 處理前期底稿 - 安全地檢查
+            if 'previous' in import_results:
+                previous_result = import_results['previous']
+                # 檢查是否為None或空DataFrame
+                if self._is_valid_data(previous_result):
+                    previous_wp = previous_result
+                    df = self.judge_previous(df, previous_wp, m)
+                    self.logger.info("成功處理前期底稿")
+                else:
+                    self.logger.warning("前期底稿為空或無效")
             
-            # 處理採購底稿
-            if fileUrl_p:
-                procurement = self.importer.import_procurement_PO(fileUrl_p)
-                df = self.judge_procurement(df, procurement)
+            # 處理採購底稿 - 安全地檢查
+            if 'procurement_po' in import_results:
+                procurement_result = import_results['procurement_po']
+                # 檢查是否為None或空DataFrame
+                if self._is_valid_data(procurement_result):
+                    procurement = procurement_result
+                    df = self.judge_procurement(df, procurement)
+                    self.logger.info("成功處理採購底稿")
+                else:
+                    self.logger.warning("採購底稿為空或無效")
             
             # 處理日期邏輯
             df = self.get_logic_date(df)
@@ -814,7 +854,43 @@ class BasePOProcessor(BaseDataProcessor):
             
         except Exception as e:
             self.logger.error(f"處理PO數據時出錯: {str(e)}", exc_info=True)
-            raise ValueError("處理PO數據時出錯")
+            raise ValueError(f"處理PO數據時出錯: {str(e)}")
+            
+    def _is_valid_data(self, data) -> bool:
+        """檢查數據是否有效
+        
+        Args:
+            data: 要檢查的數據
+            
+        Returns:
+            bool: 數據是否有效
+        """
+        try:
+            if data is None:
+                return False
+            
+            # 檢查 DataFrame
+            if isinstance(data, pd.DataFrame):
+                return not data.empty
+            
+            # 檢查 Series
+            if isinstance(data, pd.Series):
+                return not data.empty
+            
+            # 檢查列表或元組
+            if isinstance(data, (list, tuple)):
+                return len(data) > 0
+            
+            # 檢查字典
+            if isinstance(data, dict):
+                return len(data) > 0
+            
+            # 其他情況，假設非None即有效
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"檢查數據有效性時出錯: {str(e)}", exc_info=True)
+            return False
 
 class SpxPOProcessor(BasePOProcessor):
     """SPX處理器，繼承自BaseDataProcessor"""
@@ -929,10 +1005,52 @@ class SpxPOProcessor(BasePOProcessor):
             self.logger.error(f"處理PR採購底稿時出錯: {str(e)}", exc_info=True)
             raise ValueError("處理PR採購底稿時出錯")
 
+    # def get_closing_note(self) -> pd.DataFrame:
+    #     config = {'certificate_path': self.config.get('CREDENTIALS', 'certificate_path'),
+    #               'scopes': self.config.get_list('CREDENTIALS', 'scopes')}
+    #     return self.importer.import_spx_closing_list(config)
+
     def get_closing_note(self) -> pd.DataFrame:
-        config = {'certificate_path': self.config.get('CREDENTIALS', 'certificate_path'),
-                  'scopes': self.config.get_list('CREDENTIALS', 'scopes')}
-        return self.importer.import_spx_closing_list(config)
+        """獲取關單數據 - 優化版本支持並發處理
+        
+        Returns:
+            pd.DataFrame: 關單數據框
+        """
+        try:
+            config = {'certificate_path': self.config.get('CREDENTIALS', 'certificate_path'),
+                      'scopes': self.config.get_list('CREDENTIALS', 'scopes')}
+            
+            # 創建並發處理器
+            async_sheets = AsyncGoogleSheetsBase(config)
+            
+            # 準備查詢
+            queries = [
+                ('1wuwyyNtU6dhK7JF2AFJfUJC0ChNScrDza6UQtfE7sCE', '2023年_done', 'A:J', True),
+                ('1wuwyyNtU6dhK7JF2AFJfUJC0ChNScrDza6UQtfE7sCE', '2024年', 'A:J', True),
+                ('1wuwyyNtU6dhK7JF2AFJfUJC0ChNScrDza6UQtfE7sCE', '2025年', 'A:J', True)
+            ]
+            
+            # 並發執行查詢
+            dfs = async_sheets.concurrent_get_data(queries)
+            
+            # 合併結果
+            combined_df = pd.concat(dfs, ignore_index=True)
+            
+            # 處理數據
+            combined_df.dropna(subset=['Date'], inplace=True)
+            combined_df.rename(columns={'Date': 'date', 'Type': 'type', 'PO Number': 'po_no', 
+                                        'Requester': 'requester', 'Supplier': 'supplier',
+                                        'Line Number / ALL': 'line_no', 'Reason': 'reason', 
+                                        'New PR Number': 'new_pr_no', 'Remark': 'remark', 
+                                        'Done(V)': 'done_by_fn'}, inplace=True)
+            combined_df = combined_df.query("date!=''").reset_index(drop=True)
+            
+            self.logger.info("成功獲取關單數據(使用並發處理)")
+            return combined_df
+            
+        except Exception as e:
+            self.logger.error(f"獲取關單數據時出錯: {str(e)}", exc_info=True)
+            raise
     
     def is_closed_spx(self, df: pd.DataFrame) -> pd.Series:
         """
@@ -1399,71 +1517,137 @@ class SpxPOProcessor(BasePOProcessor):
             self.logger.error(f"格式化數據時出錯: {str(e)}", exc_info=True)
             raise ValueError("格式化數據時出錯")
         
-    def process(self, 
-                fileUrl: str, file_name: str, 
-                fileUrl_previwp: str = None, 
-                fileUrl_p: str = None, 
-                fileUrl_ap: str = None,
-                fileUrl_previwp_pr: str = None,
+    def process(self, fileUrl: str, file_name: str, 
+                fileUrl_previwp: str = None, fileUrl_p: str = None, 
+                fileUrl_ap: str = None, fileUrl_previwp_pr: str = None,
                 fileUrl_p_pr: str = None) -> None:
-        """處理PO數據的主流程
+        """處理PO數據的主流程（使用並發導入）
         
         Args:
             fileUrl: PO原始數據文件路徑
             file_name: PO原始數據文件名
             fileUrl_previwp: 前期底稿文件路徑
             fileUrl_p: 採購底稿文件路徑
-            fileUrl_ap: AP文件路徑
-            fileUrl_previwp_pr: PR前期底稿文件路徑
-            fileUrl_p_pr: PR採購底稿文件路徑
+            fileUrl_ap: AP invoice文件路徑
+            fileUrl_previwp_pr: 前期PR底稿文件路徑
+            fileUrl_p_pr: 採購PR底稿文件路徑
             
         Returns:
             None
         """
         try:
-            self.logger.info(f"開始處理PO數據: {file_name}")
+            self.logger.info(f"開始處理SPX PO數據: {file_name}")
             
-            # 導入原始數據
-            df, date, m = self.importer.import_rawdata_POonly(fileUrl, file_name)
+            # 準備文件信息字典 - SPX特有的文件結構
+            file_info = {
+                'raw_po': fileUrl,
+                'previous': fileUrl_previwp if fileUrl_previwp else None,
+                'procurement_po': fileUrl_p if fileUrl_p else None,
+                'ap_invoice': fileUrl_ap if fileUrl_ap else None,
+                'previous_pr': fileUrl_previwp_pr if fileUrl_previwp_pr else None,
+                'procurement_pr': fileUrl_p_pr if fileUrl_p_pr else None
+            }
             
-            # 導入參考數據; 用SPT的ref檔案參照會計科目和負債科目
+            # 創建並發導入器
+            async_importer = AsyncDataImporter()
+            
+            # 準備並發導入任務
+            file_types = []
+            file_paths = []
+            file_names = {}
+            
+            for file_type, file_path in file_info.items():
+                if file_path:
+                    file_types.append(file_type)
+                    file_paths.append(file_path)
+                    file_names[file_type] = os.path.basename(file_path)
+            
+            # 並發導入所有文件
+            import_results = async_importer.concurrent_read_files(
+                file_types, 
+                file_paths, 
+                file_names=file_names,
+                config={'certificate_path': self.config.get('CREDENTIALS', 'certificate_path'),
+                        'scopes': self.config.get_list('CREDENTIALS', 'scopes')},
+                ap_columns=self.config.get_list('SPX', 'ap_columns')
+            )
+            
+            # 檢測並處理原始PO數據
+            if 'raw_po' in import_results:
+                raw_po_result = import_results['raw_po']
+                if isinstance(raw_po_result, tuple) and len(raw_po_result) == 3:
+                    df, date, m = raw_po_result
+                else:
+                    self.logger.error("原始PO數據格式不正確")
+                    raise ValueError("原始PO數據格式不正確")
+            else:
+                self.logger.error("無法導入原始PO數據")
+                raise ValueError("無法導入原始PO數據")
+            
+            # 導入參考數據 - 用SPT的ref檔案參照會計科目和負債科目
             ref_key = 'SPT'
             ref_ac, ref_liability = self.importer.import_reference_data(ref_key)
 
+            # 過濾SPX產品代碼
             df = self.fillter_spx_product_code(df)
             
             # 添加必要列
             df, m = self.add_cols(df, m)
             
-            # 處理AP invoice
-            if fileUrl_ap:
-                df_ap = self.importer.import_ap_invoice(fileUrl_ap, self.config.get_list('SPX', 'ap_columns'))
-                df = self.get_period_from_ap_invoice(df, df_ap, date)
+            # 處理AP invoice - SPX特有邏輯
+            if 'ap_invoice' in import_results:
+                ap_invoice_result = import_results['ap_invoice']
+                if self._is_valid_data(ap_invoice_result):
+                    df_ap = ap_invoice_result
+                    df = self.get_period_from_ap_invoice(df, df_ap, date)
+                    self.logger.info("成功處理AP發票數據")
+                else:
+                    self.logger.warning("AP發票數據為空或無效")
             
-            # 處理前期底稿
-            if fileUrl_previwp:
-                previous_wp = self.importer.import_previous_wp(fileUrl_previwp)
-                previous_wp_pr = self.importer.import_previous_wp(fileUrl_previwp_pr)
+            # 處理前期底稿(PO和PR)
+            previous_wp = None
+            previous_wp_pr = None
+            
+            if 'previous' in import_results:
+                previous_result = import_results['previous']
+                if self._is_valid_data(previous_result):
+                    previous_wp = previous_result
+            
+            if 'previous_pr' in import_results:
+                previous_pr_result = import_results['previous_pr']
+                if self._is_valid_data(previous_pr_result):
+                    previous_wp_pr = previous_pr_result
+            
+            if previous_wp is not None and previous_wp_pr is not None:
                 df = self.judge_previous(df, previous_wp, m, previous_wp_pr)
+                self.logger.info("成功處理前期底稿(PO和PR)")
+            else:
+                self.logger.warning("前期底稿(PO或PR)為空或無效")
             
-            # 處理採購底稿
-            if fileUrl_p:
-                procurement = self.importer.import_procurement_PO(fileUrl_p)
-                procurement_pr = self.importer.import_procurement(fileUrl_p_pr)
+            # 處理採購底稿(PO和PR)
+            procurement = None
+            procurement_pr = None
+            
+            if 'procurement_po' in import_results:
+                procurement_result = import_results['procurement_po']
+                if self._is_valid_data(procurement_result):
+                    procurement = procurement_result
+            
+            if 'procurement_pr' in import_results:
+                procurement_pr_result = import_results['procurement_pr']
+                if self._is_valid_data(procurement_pr_result):
+                    procurement_pr = procurement_pr_result
+            
+            if procurement is not None and procurement_pr is not None:
                 df = self.judge_procurement(df, procurement, procurement_pr)
+                self.logger.info("成功處理採購底稿(PO和PR)")
+            else:
+                self.logger.warning("採購底稿(PO或PR)為空或無效")
             
             # 處理日期邏輯
             df = self.get_logic_date(df)
             
-            # 處理
-            # TODO
-            """
-            1.get AP invoice
-            2.get GL date from AP invoice
-            3.give status, 前期入FA, 摘要內有押金\保證金\Deposit\找零金
-            4.give status, GL調整
-            5.give status, 關單
-            """
+            # 獲取關單數據
             df_spx_closing = self.get_closing_note()
             df = self.give_status_stage_1(df, df_spx_closing)
             df = self.erm(df, date, ref_ac, ref_liability)
@@ -1474,8 +1658,82 @@ class SpxPOProcessor(BasePOProcessor):
             # 導出文件
             self.export_file(df, date, 'PO')
             
-            self.logger.info(f"成功完成PO數據處理: {file_name}")
-
+            self.logger.info(f"成功完成SPX PO數據處理: {file_name}")
+            
         except Exception as e:
-            self.logger.error(f"處理PO數據時出錯: {str(e)}", exc_info=True)
-            raise ValueError("處理PO數據時出錯")
+            self.logger.error(f"處理SPX PO數據時出錯: {str(e)}", exc_info=True)
+            raise ValueError(f"處理SPX PO數據時出錯: {str(e)}")
+
+    def _is_valid_data(self, data) -> bool:
+        """檢查數據是否有效
+        
+        Args:
+            data: 要檢查的數據
+            
+        Returns:
+            bool: 數據是否有效
+        """
+        try:
+            if data is None:
+                return False
+            
+            # 檢查 DataFrame
+            if isinstance(data, pd.DataFrame):
+                return not data.empty
+            
+            # 檢查 Series
+            if isinstance(data, pd.Series):
+                return not data.empty
+            
+            # 檢查列表或元組
+            if isinstance(data, (list, tuple)):
+                return len(data) > 0
+            
+            # 檢查字典
+            if isinstance(data, dict):
+                return len(data) > 0
+            
+            # 其他情況，假設非None即有效
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"檢查數據有效性時出錯: {str(e)}", exc_info=True)
+            return False
+        
+    def concurrent_spx_process(self, file_paths: Dict[str, str]) -> None:
+        """SPX PO 並發處理主流程
+        
+        Args:
+            file_paths: 文件路徑字典，包含所有需要處理的文件路徑
+                {
+                    'po_file': PO原始數據文件路徑,
+                    'po_file_name': PO原始數據文件名,
+                    'previous_wp': 前期底稿文件路徑,
+                    'procurement': 採購底稿文件路徑,
+                    'ap_invoice': AP發票文件路徑,
+                    'previous_wp_pr': 前期PR底稿文件路徑,
+                    'procurement_pr': 採購PR底稿文件路徑
+                }
+        
+        Returns:
+            None
+        """
+        try:
+            self.logger.info(f"開始並發處理SPX PO數據: {file_paths.get('po_file_name', 'Unknown')}")
+            
+            # 調用process方法處理
+            self.process(
+                fileUrl=file_paths.get('po_file', ''),
+                file_name=file_paths.get('po_file_name', ''),
+                fileUrl_previwp=file_paths.get('previous_wp', None),
+                fileUrl_p=file_paths.get('procurement', None),
+                fileUrl_ap=file_paths.get('ap_invoice', None),
+                fileUrl_previwp_pr=file_paths.get('previous_wp_pr', None),
+                fileUrl_p_pr=file_paths.get('procurement_pr', None)
+            )
+            
+            self.logger.info("成功完成SPX PO並發處理")
+            
+        except Exception as e:
+            self.logger.error(f"SPX PO並發處理時出錯: {str(e)}", exc_info=True)
+            raise ValueError(f"SPX PO並發處理時出錯: {str(e)}")

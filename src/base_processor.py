@@ -1,10 +1,11 @@
+import os
 import pandas as pd
 import numpy as np
 from typing import Tuple, List, Dict, Optional, Union, Any
 from datetime import datetime
 
 # 導入優化後的工具類
-from utils import Utils, Logger, ConfigManager, DataImporter
+from utils import Utils, Logger, ConfigManager, DataImporter, AsyncDataImporter
 
 
 class BaseDataProcessor:
@@ -416,3 +417,46 @@ class BaseDataProcessor:
         mask = (~df[column].isna())
         necessary_columns = [key_col, column]
         return df.loc[mask, necessary_columns].set_index(key_col).to_dict()[column]
+
+    def concurrent_import_files(self, file_info: Dict[str, str]) -> Dict[str, Any]:
+        """並發導入多個文件
+        
+        Args:
+            file_info: 文件信息字典，例如 {'raw': 'raw_file_path', 'closing': 'closing_file_path'}
+            
+        Returns:
+            Dict[str, Any]: 導入結果字典
+        """
+        try:
+            self.logger.info(f"開始並發導入文件: {list(file_info.keys())}")
+            
+            # 創建並發導入器
+            importer = AsyncDataImporter()
+            
+            # 構建文件類型和路徑列表
+            file_types = []
+            file_paths = []
+            file_names = {}
+            
+            for file_type, file_path in file_info.items():
+                if file_path:
+                    file_types.append(file_type)
+                    file_paths.append(file_path)
+                    file_names[file_type] = os.path.basename(file_path)
+            
+            # 並發導入文件
+            results = importer.concurrent_read_files(
+                file_types, 
+                file_paths, 
+                file_names=file_names,
+                config={'certificate_path': self.config.get('CREDENTIALS', 'certificate_path'),
+                        'scopes': self.config.get_list('CREDENTIALS', 'scopes')},
+                ap_columns=self.config.get_list('SPX', 'ap_columns')
+            )
+            
+            self.logger.info(f"並發導入文件完成: {list(results.keys())}")
+            return results
+            
+        except Exception as e:
+            self.logger.error(f"並發導入文件時出錯: {str(e)}", exc_info=True)
+            return {}

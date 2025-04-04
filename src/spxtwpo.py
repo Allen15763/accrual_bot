@@ -61,17 +61,29 @@ class SPXTW_PO(SpxPOProcessor):
 
 if __name__ == "__main__":
     test_processor = SPXTW_PO()
-    file_name = "202502_purchase_order.xlsx"
-    file_path = r"C:\SEA\MOB PRPO re\SPX未結模組\raw_test\202502_purchase_order_reERM.xlsx"
-    file_path_p = r"C:\SEA\MOB PRPO re\SPX未結模組\raw_test\採購底稿_PO.xlsx"
-    file_path_p_pr = r"C:\SEA\MOB PRPO re\SPX未結模組\raw_test\採購底稿_PR.xlsx"
-    file_path_previwp = r"C:\SEA\MOB PRPO re\SPX未結模組\raw_test\PO_for前期載入.xlsx"
-    file_path_previwp_pr = r"C:\SEA\MOB PRPO re\SPX未結模組\raw_test\PR_for前期載入.xlsx"
-    file_path_ap = r"C:\SEA\MOB PRPO re\SPX未結模組\raw_test\AP_Invoice_Match_Monitoring_Ext_202502.xlsx"
+    # file_name = "202503_purchase_order.csv"
+    # file_path = r"C:\SEA\MOB PRPO re\SPX未結模組\sec_test\202503_purchase_order.csv"
+    # file_path_p = r"C:\SEA\MOB PRPO re\SPX未結模組\sec_test\202503_PO_PQ.xlsx"
+    # file_path_p_pr = r"C:\SEA\MOB PRPO re\SPX未結模組\sec_test\202503_PR_PQ.xlsx"
+    # file_path_previwp = r"C:\SEA\MOB PRPO re\SPX未結模組\sec_test\202502_PO_FN.xlsx"
+    # file_path_previwp_pr = r"C:\SEA\MOB PRPO re\SPX未結模組\sec_test\202502_PR_FN.xlsx"
+    # file_path_ap = r"C:\SEA\MOB PRPO re\SPX未結模組\sec_test\AP_Invoice_Match_Monitoring_Ext_202503.xlsx"
 
-    # 採購用: PO + 自己的底稿 + (關單)OPTIONAL; test NA     4/5差關單 採購在SPT作業 這邊無須採購路徑
-    # test_processor.mode_5(file_path, file_name, file_path_p)
+    # # 採購用: PO + 自己的底稿 + (關單)OPTIONAL; test NA     4/5差關單 採購在SPT作業 這邊無須採購路徑
+    # # test_processor.mode_5(file_path, file_name, file_path_p)
 
-    # 會計用: PO + 自己的底稿 + 採購; test  pass
-    test_processor.mode_1(file_path, file_name, file_path_previwp, file_path_p, file_path_ap, 
-                          file_path_previwp_pr, file_path_p_pr)
+    # # 會計用: PO + 自己的底稿 + 採購; test  pass
+    # test_processor.mode_1(file_path, file_name, file_path_previwp, file_path_p, file_path_ap, 
+    #                       file_path_previwp_pr, file_path_p_pr)
+    
+    # # 使用 concurrent_spx_process 方法
+    file_paths = {
+        'po_file': r"C:\SEA\MOB PRPO re\SPX未結模組\raw_test\202502_purchase_order_reERM.xlsx",
+        'po_file_name': "202502_purchase_order.xlsx",
+        'previous_wp': r"C:\SEA\MOB PRPO re\SPX未結模組\raw_test\PO_for前期載入.xlsx",
+        'procurement': r"C:\SEA\MOB PRPO re\SPX未結模組\raw_test\採購底稿_PO.xlsx",
+        'ap_invoice': r"C:\SEA\MOB PRPO re\SPX未結模組\raw_test\AP_Invoice_Match_Monitoring_Ext_202502.xlsx",
+        'previous_wp_pr': r"C:\SEA\MOB PRPO re\SPX未結模組\raw_test\PR_for前期載入.xlsx",
+        'procurement_pr': r"C:\SEA\MOB PRPO re\SPX未結模組\raw_test\採購底稿_PR.xlsx"
+    }
+    test_processor.concurrent_spx_process(file_paths)

@@ -2,7 +2,7 @@ import os
 import sys
 import logging
 import configparser
-from typing import Tuple, List, Dict, Optional, Union, Any
+from typing import Tuple, List, Dict, Optional, Union, Any, Callable
 
 import pandas as pd
 import numpy as np
@@ -251,7 +251,7 @@ class DataImporter:
             Tuple[pd.DataFrame, int]: 數據框和年月值
         """
         try:
-            self.logger.info(f"正在導入數據文件: {name}")
+            self.logger.info(f"正在導入PR數據文件: {name}")
             
             if name.lower().endswith('.csv'):
                 df = pd.read_csv(url, header=0, dtype=str, encoding='utf-8-sig')
@@ -271,7 +271,7 @@ class DataImporter:
                 self.logger.warning(f"無法從文件名 {name} 獲取年月值，使用默認值0")
                 ym = 0
                 
-            self.logger.info(f"成功導入數據, 形狀: {df.shape}")
+            self.logger.info(f"成功導入PR數據, 形狀: {df.shape}")
             return df, ym
             
         except Exception as e:
@@ -354,7 +354,7 @@ class DataImporter:
             pd.DataFrame: 採購底稿數據
         """
         try:
-            self.logger.info(f"正在導入採購底稿: {url}")
+            self.logger.info(f"正在導入採購底稿(PR): {url}")
             
             if url.lower().endswith('.csv'):
                 df = pd.read_csv(url, header=0, dtype=str, encoding='utf-8-sig')
@@ -364,7 +364,7 @@ class DataImporter:
             df.encoding = 'big5'
             df['PR Line'] = df['PR#'].astype(str) + "-" + df['Line#'].astype(str)
             
-            self.logger.info(f"成功導入採購底稿, 形狀: {df.shape}")
+            self.logger.info(f"成功導入採購底稿(PR), 形狀: {df.shape}")
             return df
             
         except Exception as e:
@@ -714,6 +714,266 @@ class Utils:
         """導入關單清單(PO)"""
         return DataImporter().import_closing_list_PO(url)
 
+
+import concurrent.futures
+
+
+class AsyncDataImporter(DataImporter):
+    """支持並發讀取的數據導入器，繼承自DataImporter，保留原有功能"""
+    
+    def __init__(self):
+        super().__init__()
+        self.max_workers = 5  # 預設並行處理線程數
+    
+    def set_max_workers(self, max_workers: int):
+        """設置最大工作線程數"""
+        if max_workers > 0:
+            self.max_workers = max_workers
+        else:
+            self.logger.warning(f"無效的工作線程數: {max_workers}，使用預設值: {self.max_workers}")
+    
+    def concurrent_import(self, import_tasks: List[Tuple[Callable, List, Dict]]) -> List[Any]:
+        """並發執行多個導入任務
+        
+        Args:
+            import_tasks: 導入任務列表，每個元素是一個元組 (import_func, args, kwargs)
+            
+        Returns:
+            List[Any]: 導入結果列表，順序與導入任務列表相同
+        """
+        try:
+            self.logger.info(f"開始並發執行 {len(import_tasks)} 個導入任務")
+            results = [None] * len(import_tasks)
+            
+            with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(import_tasks), 
+                                                                       self.max_workers)) as executor:
+                # 提交所有任務
+                futures = []
+                for i, (import_func, args, kwargs) in enumerate(import_tasks):
+                    future = executor.submit(import_func, *args, **kwargs)
+                    futures.append((i, future))
+                
+                # 處理所有任務結果
+                name_1 = 'import_rawdata_POonly'
+                name_2 = 'import_rawdata'
+                for i, future in futures:
+                    try:
+                        result = future.result()
+                        # 確保特定函數的返回類型一致性
+                        if import_func.__name__ == name_1 and isinstance(result, tuple) and len(result) == 3:
+                            # import_rawdata_POonly的結果是(df, ym, m)
+                            results[i] = result
+                        elif import_func.__name__ == name_2 and isinstance(result, tuple) and len(result) == 2:
+                            # import_rawdata的結果是(df, ym)
+                            results[i] = result
+                        else:
+                            # 其他函數的結果直接保存
+                            results[i] = result
+                        self.logger.debug(f"任務 {i} 執行成功: {import_func.__name__}")
+                    except Exception as e:
+                        self.logger.error(f"任務 {i} 執行出錯: {str(e)}", exc_info=True)
+                        results[i] = None
+            
+            succeeded = sum(1 for v in results if v is not None)
+            self.logger.info(f"並發執行完成，成功執行 {succeeded}/{len(import_tasks)} 個任務")
+            return results
+            
+        except Exception as e:
+            self.logger.error(f"並發執行導入任務時出錯: {str(e)}", exc_info=True)
+            raise
+    
+    def concurrent_read_files(self, file_types: List[str], file_paths: List[str], **kwargs) -> Dict[str, Any]:
+        """並發讀取多個文件
+        
+        Args:
+            file_types: 文件類型列表，例如 ['raw', 'closing', 'previous', 'procurement']
+            file_paths: 文件路徑列表，順序與文件類型列表相同
+            **kwargs: 其他參數，包括：
+                - file_names (Dict[str, str]): 文件名映射
+                - config (Dict): SPX關單清單的配置
+                - ap_columns (List[str]): AP發票的列名
+            
+        Returns:
+            Dict[str, Any]: 讀取結果字典，鍵是文件類型，值是讀取結果
+        """
+        try:
+            self.logger.info(f"開始並發讀取 {len(file_paths)} 個文件")
+            
+            if len(file_types) != len(file_paths):
+                raise ValueError("文件類型列表和文件路徑列表長度不一致")
+            
+            # 根據文件類型選擇導入方法
+            import_tasks = []
+            for i, (file_type, file_path) in enumerate(zip(file_types, file_paths)):
+                file_name = kwargs.get('file_names', {}).get(file_type, os.path.basename(file_path))
+                
+                if file_type == 'raw':
+                    import_func = self.import_rawdata
+                    import_tasks.append((import_func, [file_path, file_name], {}))
+                elif file_type == 'raw_po':
+                    import_func = self.import_rawdata_POonly
+                    import_tasks.append((import_func, [file_path, file_name], {}))
+                elif file_type == 'closing':
+                    import_func = self.import_closing_list
+                    import_tasks.append((import_func, [file_path], {}))
+                elif file_type == 'closing_po':
+                    import_func = self.import_closing_list_PO
+                    import_tasks.append((import_func, [file_path], {}))
+                elif file_type == 'previous':
+                    import_func = self.import_previous_wp
+                    import_tasks.append((import_func, [file_path], {}))
+                elif file_type == 'previous_pr':
+                    import_func = self.import_previous_wp
+                    import_tasks.append((import_func, [file_path], {}))
+                elif file_type == 'procurement_pr':
+                    import_func = self.import_procurement
+                    import_tasks.append((import_func, [file_path], {}))
+                elif file_type == 'procurement_po':
+                    import_func = self.import_procurement_PO
+                    import_tasks.append((import_func, [file_path], {}))
+                elif file_type == 'spx_closing':
+                    import_func = self.import_spx_closing_list
+                    import_tasks.append((import_func, [kwargs.get('config', {})], {}))
+                elif file_type == 'ap_invoice':
+                    import_func = self.import_ap_invoice
+                    import_tasks.append((import_func, [file_path, kwargs.get('ap_columns', [])], {}))
+                else:
+                    self.logger.warning(f"未知的文件類型: {file_type}")
+                    continue
+            
+            # 並發執行導入任務
+            results = self.concurrent_import(import_tasks)
+            
+            # 構建結果字典
+            result_dict = {}
+            for i, file_type in enumerate(file_types):
+                if i < len(results):
+                    result_dict[file_type] = results[i]
+            
+            return result_dict
+            
+        except Exception as e:
+            self.logger.error(f"並發讀取文件時出錯: {str(e)}", exc_info=True)
+            raise
+
+    def batch_import_reference_data(self, entity_types: List[str]) -> Dict[str, Tuple[pd.DataFrame, pd.DataFrame]]:
+        """並發導入多個實體的參考數據
+        
+        Args:
+            entity_types: 實體類型列表，例如 ['MOB', 'SPT']
+            
+        Returns:
+            Dict[str, Tuple[pd.DataFrame, pd.DataFrame]]: 參考數據字典，鍵是實體類型，值是(參考數據, 負債參考數據)的元組
+        """
+        try:
+            self.logger.info(f"開始並發導入 {len(entity_types)} 個實體的參考數據")
+            
+            import_tasks = []
+            for entity_type in entity_types:
+                import_tasks.append((self.import_reference_data, [entity_type], {}))
+            
+            results = self.concurrent_import(import_tasks)
+            
+            result_dict = {}
+            for i, entity_type in enumerate(entity_types):
+                if i < len(results) and results[i] is not None:
+                    result_dict[entity_type] = results[i]
+            
+            return result_dict
+            
+        except Exception as e:
+            self.logger.error(f"並發導入參考數據時出錯: {str(e)}", exc_info=True)
+            raise
+
+    def optimize_pandas_read(self, file_path: str, is_excel: bool = True, **kwargs) -> pd.DataFrame:
+        """優化pandas讀取文件的方法
+        
+        Args:
+            file_path: 文件路徑
+            is_excel: 是否為Excel文件，若為False則視為CSV
+            **kwargs: 傳遞給pd.read_excel或pd.read_csv的參數
+            
+        Returns:
+            pd.DataFrame: 讀取的數據框
+        """
+        try:
+            # 預設參數
+            if is_excel:
+                default_kwargs = {
+                    'dtype': str,
+                    'engine': 'openpyxl'  # 使用openpyxl引擎以便更好的內存管理
+                }
+            else:
+                default_kwargs = {
+                    'dtype': str, 
+                    'encoding': 'utf-8-sig',
+                    'header': 0
+                }
+            
+            # 合併參數
+            for k, v in default_kwargs.items():
+                if k not in kwargs:
+                    kwargs[k] = v
+            
+            # 讀取文件
+            df = pd.read_excel(file_path, **kwargs) if is_excel else pd.read_csv(file_path, **kwargs)
+            
+            return df
+            
+        except Exception as e:
+            self.logger.error(f"優化讀取文件時出錯: {str(e)}", exc_info=True)
+            raise
+
+class AsyncGoogleSheetsBase(GoogleSheetsBase):
+    """支持並發讀取的Google Sheets基類"""
+    
+    def __init__(self, config: Dict[str, Any]):
+        super().__init__(config)
+        self.max_workers = 5  # 預設工作線程數
+    
+    def concurrent_get_data(self, queries: List[Tuple[str, str, Optional[str], bool]]) -> List[pd.DataFrame]:
+        """並發讀取多個Google Sheets數據
+        
+        Args:
+            queries: 查詢列表，每個元素是一個元組 (spreadsheet_id, year_month, range_value, skip_header)
+            
+        Returns:
+            List[pd.DataFrame]: 數據框列表，順序與查詢列表相同
+        """
+        try:
+            logger = Logger().get_logger(__name__)
+            logger.info(f"開始並發讀取 {len(queries)} 個Google Sheets數據")
+            
+            results = [None] * len(queries)
+            
+            with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(queries), self.max_workers)) as executor:
+                futures = []
+                
+                for i, (spreadsheet_id, year_month, range_value, skip_header) in enumerate(queries):
+                    future = executor.submit(
+                        self.getData, 
+                        spreadsheet_id, 
+                        year_month, 
+                        range_value, 
+                        skip_header
+                    )
+                    futures.append((i, future))
+                
+                for i, future in futures:
+                    try:
+                        results[i] = future.result()
+                        logger.debug(f"查詢 {i} 執行成功")
+                    except Exception as e:
+                        logger.error(f"查詢 {i} 執行出錯: {str(e)}", exc_info=True)
+                        results[i] = pd.DataFrame()
+            
+            succeeded = sum(1 for v in results if not v.empty)
+            logger.info(f"並發讀取完成，成功讀取 {succeeded}/{len(queries)} 個Google Sheets數據")
+            return results
+            
+        except Exception as e:
+            Logger().get_logger(__name__).error(f"並發讀取Google Sheets數據時出錯: {str(e)}", exc_info=True)
+            return [pd.DataFrame()] * len(queries)
 
 if __name__ == "__main__":
     # 測試代碼

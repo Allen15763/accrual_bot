@@ -181,4 +181,4 @@ if __name__ == "__main__":
     # test_processor.mode_5(file_path, file_name, file_path_p)
 
     # 會計用: PO + 自己的底稿 + 採購; test  pass
-    # test_processor.mode_2(file_path, file_name, file_path_previwp, file_path_p)
+    test_processor.mode_2(file_path, file_name, file_path_previwp, file_path_p)
