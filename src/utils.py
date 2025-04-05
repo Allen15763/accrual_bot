@@ -2,6 +2,9 @@ import os
 import sys
 import logging
 import configparser
+import threading
+import concurrent.futures
+import time
 from typing import Tuple, List, Dict, Optional, Union, Any, Callable
 
 import pandas as pd
@@ -714,9 +717,44 @@ class Utils:
         """導入關單清單(PO)"""
         return DataImporter().import_closing_list_PO(url)
 
-
-import concurrent.futures
-
+class RetryableTask:
+    def __init__(self, func, args, kwargs, max_retries=3, retry_delay=1.0, 
+                 retryable_exceptions=(ConnectionError, TimeoutError)):
+        self.func = func
+        self.args = args
+        self.kwargs = kwargs
+        self.max_retries = max_retries
+        self.retry_delay = retry_delay
+        self.retryable_exceptions = retryable_exceptions
+        
+    def execute(self):
+        """執行任務，支持重試邏輯"""
+        retries = 0
+        last_exception = None
+        
+        while retries <= self.max_retries:
+            try:
+                return self.func(*self.args, **self.kwargs)
+            except self.retryable_exceptions as e:
+                # 可重試的異常
+                retries += 1
+                last_exception = e
+                if retries <= self.max_retries:
+                    # 指數退避策略
+                    sleep_time = self.retry_delay * (2 ** (retries - 1))
+                    logging.warning(f"任務失敗，將在 {sleep_time:.2f} 秒後重試 (第 {retries} 次): {str(e)}")
+                    time.sleep(sleep_time)
+                else:
+                    # 達到最大重試次數
+                    break
+            except Exception as e:
+                # 不可重試的異常立即失敗
+                logging.error(f"任務發生不可重試的錯誤: {str(e)}", exc_info=True)
+                raise
+        
+        # 重試失敗，拋出最後一個異常
+        if last_exception:
+            raise RuntimeError(f"重試 {self.max_retries} 次後任務仍失敗: {str(last_exception)}") from last_exception
 
 class AsyncDataImporter(DataImporter):
     """支持並發讀取的數據導入器，繼承自DataImporter，保留原有功能"""
@@ -724,6 +762,7 @@ class AsyncDataImporter(DataImporter):
     def __init__(self):
         super().__init__()
         self.max_workers = 5  # 預設並行處理線程數
+        self._lock = threading.Lock()  # 添加鎖對象
     
     def set_max_workers(self, max_workers: int):
         """設置最大工作線程數"""
@@ -732,8 +771,8 @@ class AsyncDataImporter(DataImporter):
         else:
             self.logger.warning(f"無效的工作線程數: {max_workers}，使用預設值: {self.max_workers}")
     
-    def concurrent_import(self, import_tasks: List[Tuple[Callable, List, Dict]]) -> List[Any]:
-        """並發執行多個導入任務
+    def concurrent_import(self, import_tasks: List[Tuple[Callable, List, Dict]]) -> Tuple[List[Any], List[Tuple[int, str]]]:
+        """並發執行多個導入任務，保留特定函數的返回值處理邏輯
         
         Args:
             import_tasks: 導入任務列表，每個元素是一個元組 (import_func, args, kwargs)
@@ -744,39 +783,48 @@ class AsyncDataImporter(DataImporter):
         try:
             self.logger.info(f"開始並發執行 {len(import_tasks)} 個導入任務")
             results = [None] * len(import_tasks)
+            error_tasks = []  # 記錄失敗的任務
             
-            with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(import_tasks), 
-                                                                       self.max_workers)) as executor:
+            # 特定函數名稱，用於類型檢查
+            name_import_po_only = 'import_rawdata_POonly'
+            name_import_raw = 'import_rawdata'
+            
+            with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(import_tasks), self.max_workers)) as executor:
                 # 提交所有任務
                 futures = []
                 for i, (import_func, args, kwargs) in enumerate(import_tasks):
-                    future = executor.submit(import_func, *args, **kwargs)
-                    futures.append((i, future))
+                    task = RetryableTask(import_func, args, kwargs)
+                    future = executor.submit(task.execute)
+                    futures.append((i, future, import_func.__name__))
                 
                 # 處理所有任務結果
-                name_1 = 'import_rawdata_POonly'
-                name_2 = 'import_rawdata'
-                for i, future in futures:
+                for i, future, func_name in futures:
                     try:
-                        result = future.result()
-                        # 確保特定函數的返回類型一致性
-                        if import_func.__name__ == name_1 and isinstance(result, tuple) and len(result) == 3:
-                            # import_rawdata_POonly的結果是(df, ym, m)
-                            results[i] = result
-                        elif import_func.__name__ == name_2 and isinstance(result, tuple) and len(result) == 2:
-                            # import_rawdata的結果是(df, ym)
-                            results[i] = result
-                        else:
-                            # 其他函數的結果直接保存
-                            results[i] = result
-                        self.logger.debug(f"任務 {i} 執行成功: {import_func.__name__}")
+                        with self._lock:  # 加鎖保護共享資源
+                            result = future.result()
+                            
+                            # 保留原有的特定函數返回類型處理邏輯
+                            if func_name == name_import_po_only and isinstance(result, tuple) and len(result) == 3:
+                                # import_rawdata_POonly的結果是(df, ym, m)
+                                results[i] = result
+                            elif func_name == name_import_raw and isinstance(result, tuple) and len(result) == 2:
+                                # import_rawdata的結果是(df, ym)
+                                results[i] = result
+                            else:
+                                # 其他函數的結果直接保存
+                                results[i] = result
+                                
+                            self.logger.debug(f"任務 {i} ({func_name}) 執行成功")
+                            
                     except Exception as e:
-                        self.logger.error(f"任務 {i} 執行出錯: {str(e)}", exc_info=True)
-                        results[i] = None
+                        with self._lock:
+                            self.logger.error(f"任務 {i} ({func_name}) 執行出錯: {str(e)}", exc_info=True)
+                            results[i] = None
+                            error_tasks.append((i, str(e)))  # 記錄失敗任務
             
             succeeded = sum(1 for v in results if v is not None)
             self.logger.info(f"並發執行完成，成功執行 {succeeded}/{len(import_tasks)} 個任務")
-            return results
+            return results, error_tasks
             
         except Exception as e:
             self.logger.error(f"並發執行導入任務時出錯: {str(e)}", exc_info=True)
@@ -842,7 +890,13 @@ class AsyncDataImporter(DataImporter):
                     continue
             
             # 並發執行導入任務
-            results = self.concurrent_import(import_tasks)
+            results, error_tasks = self.concurrent_import(import_tasks)
+
+            # 提供詳細錯誤報告
+            if error_tasks:
+                error_report = "\n".join([f"- 文件類型 '{file_types[task_id]}': {error}" 
+                                         for task_id, error in error_tasks])
+                self.logger.warning(f"部分文件讀取失敗:\n{error_report}")
             
             # 構建結果字典
             result_dict = {}
@@ -872,7 +926,7 @@ class AsyncDataImporter(DataImporter):
             for entity_type in entity_types:
                 import_tasks.append((self.import_reference_data, [entity_type], {}))
             
-            results = self.concurrent_import(import_tasks)
+            results, error_tasks = self.concurrent_import(import_tasks)
             
             result_dict = {}
             for i, entity_type in enumerate(entity_types):
