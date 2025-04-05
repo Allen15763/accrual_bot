@@ -771,7 +771,9 @@ class AsyncDataImporter(DataImporter):
         else:
             self.logger.warning(f"無效的工作線程數: {max_workers}，使用預設值: {self.max_workers}")
     
-    def concurrent_import(self, import_tasks: List[Tuple[Callable, List, Dict]]) -> Tuple[List[Any], List[Tuple[int, str]]]:
+    def concurrent_import(self, 
+                          import_tasks: List[Tuple[Callable, List, Dict]]
+                          ) -> Tuple[List[Any], List[Tuple[int, str]]]:
         """並發執行多個導入任務，保留特定函數的返回值處理邏輯
         
         Args:
@@ -789,7 +791,8 @@ class AsyncDataImporter(DataImporter):
             name_import_po_only = 'import_rawdata_POonly'
             name_import_raw = 'import_rawdata'
             
-            with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(import_tasks), self.max_workers)) as executor:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(import_tasks), 
+                                                                       self.max_workers)) as executor:
                 # 提交所有任務
                 futures = []
                 for i, (import_func, args, kwargs) in enumerate(import_tasks):

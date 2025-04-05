@@ -1,14 +1,11 @@
 import sys
 import os
-import time
 import re
 import logging
 import traceback
 from datetime import datetime
-from typing import Dict, List, Tuple, Optional, Any, Union
 
 import pandas as pd
-import numpy as np
 from PyQt5.QtCore import Qt, QObject, pyqtSignal, pyqtSlot
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QMainWindow, QVBoxLayout, QHBoxLayout, 
@@ -24,7 +21,6 @@ from spttwpo import SPTTW_PO
 from spttwpr import SPTTW_PR
 from mobtwpr import MOBTW_PR
 from mobtwpo import MOBTW_PO
-from spxtwpo import SPXTW_PO
 from hris_dup import HRISDuplicateChecker
 from upload_form import get_aggregation_twd, get_aggregation_foreign, get_entries
 from utils import Logger, ReconEntryAmt
@@ -180,7 +176,7 @@ class Main(QWidget):
         
         # 實體選擇下拉框
         self.entitySelect = QComboBox(self)
-        entities = ['MOBA_PR', 'MOBA_PO', 'SPT_PR', 'SPT_PO', 'SPX_PR', 'SPX_PO']
+        entities = ['MOBA_PR', 'MOBA_PO', 'SPT_PR', 'SPT_PO']
         for name in entities:
             self.entitySelect.addItem(name)
         
@@ -618,7 +614,6 @@ class Main(QWidget):
                 if not self.had_error:
                     self.updateStatus("SPT PO處理完成")
                     QMessageBox.information(self, "完成", "SPT PO處理完成")
-            # TODO: 新增SPX PO PR模組
             else:
                 self.logger.warning("無法確定處理模式")
                 self.updateStatus("錯誤: 無法確定處理模式", error=True)
@@ -774,32 +769,6 @@ class Main(QWidget):
             self.updateStatus("錯誤: 處理SPT PO時出錯", error=True)
             self.had_error = True
             QMessageBox.critical(self, "錯誤", f"處理SPT PO時出錯:\n{str(e)}")
-    
-    def _process_spx_po(self, items):
-        """處理SPX PO數據"""
-        try:
-            processor = SPXTW_PO()
-
-            # 構建文件路徑字典
-            file_paths = {
-                'po_file': self.fileUrl,
-                'po_file_name': self.file_name,
-                'previous_wp': getattr(self, 'fileUrl_previwp', None) if '前期底稿' in items else None,
-                'procurement': getattr(self, 'fileUrl_p', None) if '採購底稿' in items else None,
-                'ap_invoice': getattr(self, 'fileUrl_ap', None) if 'AP發票' in items else None,
-                'previous_wp_pr': getattr(self, 'fileUrl_previwp_pr', None) if '前期PR底稿' in items else None,
-                'procurement_pr': getattr(self, 'fileUrl_p_pr', None) if '採購PR底稿' in items else None
-            }
-            
-            # 使用並發處理接口
-            processor.concurrent_spx_process(file_paths)
-            self.logger.info("SPX PO處理完成")
-            
-        except Exception as e:
-            self.logger.error(f"處理SPX PO時出錯: {str(e)}", exc_info=True)
-            self.updateStatus("錯誤: 處理SPX PO時出錯", error=True)
-            self.had_error = True
-            QMessageBox.critical(self, "錯誤", f"處理SPX PO時出錯:\n{str(e)}")
 
     def deleteImportFile(self):
         """刪除已導入的文件"""
@@ -1154,7 +1123,7 @@ class SPXTabWidget(QWidget):
     def __init__(self, parent=None):
         """初始化SPX模組tab介面"""
         super(SPXTabWidget, self).__init__(parent)
-        self.parent = parent  # 存儲主窗口引用，用於訪問日誌等功能
+        self.parent = parent  # 存儲主窗口引用(Main class)，用於訪問日誌等功能(調用Main.logger.info運用)
         self.file_paths = {}  # 存儲所有文件路徑
         # 定義文件類型映射，作為類屬性以便在所有方法中使用
         self.file_types = [
@@ -1222,7 +1191,7 @@ class SPXTabWidget(QWidget):
         # 處理人員
         process_layout.addWidget(QLabel("處理人員:"), 1, 0)
         self.user_input = QLineEdit()
-        self.user_input.setPlaceholderText("例如: Lynn")
+        self.user_input.setPlaceholderText("例如: Blaire")
         process_layout.addWidget(self.user_input, 1, 1)
         
         process_group.setLayout(process_layout)
@@ -1262,10 +1231,11 @@ class SPXTabWidget(QWidget):
             "2. 填寫處理參數\n"
             "3. 點擊「處理並產生結果」\n"
             "4. 結果將自動保存\n\n"
-            "TBC"
+            "TBC:PR, Upload Form\n"
         )
         tips_content.setWordWrap(True)
-        tips_content.setStyleSheet("background-color:#93FF93;color:#000080;padding:10px;border-radius:5px;")
+        # tips_content.setStyleSheet("background-color:#93FF93;color:#000080;padding:10px;border-radius:5px;")
+        tips_content.setStyleSheet("color:#000080;padding:10px;border-radius:5px;")
         
         # 狀態欄
         self.status_label = QLabel("狀態: 準備就緒")
