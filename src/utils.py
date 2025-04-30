@@ -804,6 +804,9 @@ class AsyncDataImporter(DataImporter):
                 for i, future, func_name in futures:
                     try:
                         with self._lock:  # 加鎖保護共享資源
+                            """
+                            results list是在主線程執行，不會有資源競爭問題。這邊加鎖屬防禦性措施。
+                            """
                             result = future.result()
                             
                             # 保留原有的特定函數返回類型處理邏輯

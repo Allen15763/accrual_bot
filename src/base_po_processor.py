@@ -802,7 +802,7 @@ class BasePOProcessor(BaseDataProcessor):
             # 添加必要列
             df, m = self.add_cols(df, m)
             
-            # 處理關單清單 - 安全地檢查
+            # 處理關單清單 - 安全性檢查
             if 'closing_po' in import_results:
                 closing_result = import_results['closing_po']
                 # 檢查是否為None或空列表
@@ -813,7 +813,7 @@ class BasePOProcessor(BaseDataProcessor):
                 else:
                     self.logger.warning("關單清單為空或無效")
             
-            # 處理前期底稿 - 安全地檢查
+            # 處理前期底稿 - 安全性檢查
             if 'previous' in import_results:
                 previous_result = import_results['previous']
                 # 檢查是否為None或空DataFrame
@@ -824,7 +824,7 @@ class BasePOProcessor(BaseDataProcessor):
                 else:
                     self.logger.warning("前期底稿為空或無效")
             
-            # 處理採購底稿 - 安全地檢查
+            # 處理採購底稿 - 安全性檢查
             if 'procurement_po' in import_results:
                 procurement_result = import_results['procurement_po']
                 # 檢查是否為None或空DataFrame
