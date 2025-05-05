@@ -64,13 +64,13 @@ if __name__ == "__main__":
     import time
     start_time = time.time()
     print('Start time:', time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(start_time)))
-    file_name = "202503_purchase_order.csv"
-    file_path = r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\sec_test\202503_purchase_order.csv"
-    file_path_p = r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\sec_test\202503_PO_PQ.xlsx"
-    file_path_p_pr = r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\sec_test\202503_PR_PQ.xlsx"
-    file_path_previwp = r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\sec_test\202502_PO_FN.xlsx"
-    file_path_previwp_pr = r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\sec_test\202502_PR_FN.xlsx"
-    file_path_ap = r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\sec_test\AP_Invoice_Match_Monitoring_Ext_202503.xlsx"
+    file_name = "202504_purchase_order.csv"
+    file_path = r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202504\202504_purchase_order.csv"
+    file_path_p = r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202504\202504_PO_PQ.xlsx"
+    file_path_p_pr = r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202504\202504_PR_PQ.xlsx"
+    file_path_previwp = r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202504\202503_PO_FN.xlsx"
+    file_path_previwp_pr = r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202504\202503_PR_FN.xlsx"
+    file_path_ap = r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202504\AP_Invoice_Match_Monitoring_Ext_202504.xlsx"
 
     # 採購用: PO + 自己的底稿 + (關單)OPTIONAL; test NA     4/5差關單 採購在SPT作業 這邊無須採購路徑
     # test_processor.mode_5(file_path, file_name, file_path_p)

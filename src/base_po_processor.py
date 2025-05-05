@@ -1133,7 +1133,7 @@ class SpxPOProcessor(BasePOProcessor):
             df['Remarked by 上月 FN PR'] = self.convert_date_format_in_remark(df['Remarked by 上月 FN PR'])
             
             # 條件1：摘要中有押金/保證金/Deposit/找零金，且不是 FA 相關科目
-            cond1 = df['Item Description'].str.contains('(?i)押金|保證金|Deposit|找零金', na=False)
+            cond1 = df['Item Description'].str.contains('(?i)押金|保證金|Deposit|找零金|定存', na=False)
             is_fa = df['GL#'] == self.config.get('FA_ACCOUNTS', 'spx')
             cond2 = df['Item Description'].str.contains('(?i)繳費機訂金', na=False)  # 繳費機訂金屬FA，避免前端選錯加強過濾
             df.loc[cond1 & ~is_fa & ~cond2, 'PO狀態'] = '摘要內有押金/保證金/Deposit/找零金'
@@ -1620,6 +1620,8 @@ class SpxPOProcessor(BasePOProcessor):
             
             if previous_wp is not None and previous_wp_pr is not None:
                 df = self.judge_previous(df, previous_wp, m, previous_wp_pr)
+                map_dict = self.get_mapping_dict(previous_wp, 'PO Line', 'memo')
+                df['memo'] = df['PO Line'].map(map_dict)
                 self.logger.info("成功處理前期底稿(PO和PR)")
             else:
                 self.logger.warning("前期底稿(PO或PR)為空或無效")
@@ -1640,6 +1642,11 @@ class SpxPOProcessor(BasePOProcessor):
             
             if procurement is not None and procurement_pr is not None:
                 df = self.judge_procurement(df, procurement, procurement_pr)
+                # 會計使用:該欄位用於後續狀態判斷，故不可以為null
+                if df['Remarked by Procurement'].isna().sum() == df.shape[0]:
+                    error_str = "參照採購底稿的Remarked by Procurement錯誤。e.g. null value"
+                    self.logger.error(f"{error_str}", exc_info=True)
+                    raise ValueError("參照採購底稿的Remarked by Procurement錯誤。e.g. null value")
                 self.logger.info("成功處理採購底稿(PO和PR)")
             else:
                 self.logger.warning("採購底稿(PO或PR)為空或無效")
