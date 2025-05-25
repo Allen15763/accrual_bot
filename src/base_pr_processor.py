@@ -2,8 +2,8 @@ import pandas as pd
 import numpy as np
 from typing import Tuple, List, Dict, Optional, Union, Any
 
-from base_processor import BaseDataProcessor
-from utils import Utils, Logger
+from .base_processor import BaseDataProcessor
+from .utils import Logger
 
 
 class BasePRProcessor(BaseDataProcessor):

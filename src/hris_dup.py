@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 from typing import Tuple
 
-from utils import Logger
+from .utils import Logger
 
 
 class HRISDuplicateChecker:

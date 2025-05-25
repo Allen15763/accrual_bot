@@ -5,7 +5,7 @@ from typing import Tuple, List, Dict, Optional, Union, Any
 from datetime import datetime
 
 # 導入優化後的工具類
-from utils import Utils, Logger, ConfigManager, DataImporter, AsyncDataImporter
+from .utils import Utils, Logger, ConfigManager, DataImporter, AsyncDataImporter
 
 
 class BaseDataProcessor:

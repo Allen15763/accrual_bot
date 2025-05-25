@@ -10,7 +10,7 @@ import pandas as pd
 from pandas import DataFrame, Series
 import numpy as np
 
-from utils import Logger, ConfigManager
+from .utils import Logger, ConfigManager
 
 
 # 忽略警告

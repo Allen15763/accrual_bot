@@ -3,8 +3,8 @@ import pandas as pd
 import numpy as np
 from typing import Tuple, List, Dict, Optional, Union, Any
 
-from base_processor import BaseDataProcessor
-from utils import Utils, Logger, AsyncDataImporter, AsyncGoogleSheetsBase
+from .base_processor import BaseDataProcessor
+from .utils import Utils, Logger, AsyncDataImporter, AsyncGoogleSheetsBase
 
 
 class BasePOProcessor(BaseDataProcessor):

@@ -2,8 +2,8 @@ import pandas as pd
 import numpy as np
 from typing import Tuple, Optional, List, Dict, Any
 
-from base_pr_processor import BasePRProcessor
-from utils import Logger
+from .base_pr_processor import BasePRProcessor
+from .utils import Logger
 
 
 class SPTTW_PR(BasePRProcessor):
