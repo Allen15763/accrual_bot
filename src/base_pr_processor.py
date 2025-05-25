@@ -345,77 +345,53 @@ class BasePRProcessor(BaseDataProcessor):
     
     def process(self, fileUrl: str, file_name: str, 
                 fileUrl_p: str = None, fileUrl_c: str = None, 
-                fileUrl_previwp: str = None) -> None:
+                fileUrl_previwp: str = None) -> str: # <--- Return type changed to str
         """處理PR數據的主流程
         
         Args:
             fileUrl: PR原始數據文件路徑
             file_name: PR原始數據文件名
-            fileUrl_p: 採購底稿文件路徑
-            fileUrl_c: 關單清單文件路徑
-            fileUrl_previwp: 前期底稿文件路徑
+            fileUrl_p: 採購底稿文件路徑 (optional)
+            fileUrl_c: 關單清單文件路徑 (optional)
+            fileUrl_previwp: 前期底稿文件路徑 (optional)
             
         Returns:
-            None
+            str: The filename of the exported Excel report.
         """
         try:
             self.logger.info(f"開始處理PR數據: {file_name}")
             
-            # 導入原始數據
             df, date = self.importer.import_rawdata(fileUrl, file_name)
-            
-            # 導入參考數據
             ref_key = 'SPT' if self.entity_type == 'SPT' else 'MOB'
             ref_ac, ref_liability = self.importer.import_reference_data(ref_key)
             
-            # 添加必要列
             df = self.add_cols(df)
             
-            # 處理採購底稿
             if fileUrl_p:
                 df_procu = self.importer.import_procurement(fileUrl_p)
                 df = self.process_with_procurement(df, df_procu)
-            
-            # 處理關單清單
             if fileUrl_c:
                 mapping_list = self.importer.import_closing_list(fileUrl_c)
                 df = self.process_with_closing_list(df, mapping_list)
-            
-            # 處理前期底稿
             if fileUrl_previwp:
                 previous_wp = self.importer.import_previous_wp(fileUrl_previwp)
                 df = self.process_with_previous(df, previous_wp)
             
-            # 處理特殊情況
             df = self.process_special_cases(df)
-            
-            # 設置檔案日期
             df['檔案日期'] = date
-            
-            # 解析日期並評估狀態
             df = self.parse_date_from_description(df)
             df = self.evaluate_status_based_on_dates(df, 'PR狀態')
-            
-            # 更新估計入帳標識
             df = self.update_estimation_based_on_status(df, 'PR狀態')
-            
-            # 判斷科目代碼
             df = self.judge_ac_code(df)
-            
-            # 處理SPT特有邏輯
-            df = self.process_spt_specific(df)
-            
-            # 判斷其他欄位
+            df = self.process_spt_specific(df) # Handles entity_type check internally
             df = self.judge_cols(df, ref_ac, ref_liability)
-            
-            # 格式化數據
             df = self.reformate(df)
             
-            # 導出文件
-            self.export_file(df, date, 'PR')
+            output_filename = self.export_file(df, date, 'PR') # Capture returned filename
             
-            self.logger.info(f"成功完成PR數據處理: {file_name}")
+            self.logger.info(f"成功完成PR數據處理: {file_name}, 輸出文件: {output_filename}")
+            return output_filename # <--- Return filename
             
         except Exception as e:
             self.logger.error(f"處理PR數據時出錯: {str(e)}", exc_info=True)
-            raise ValueError("處理PR數據時出錯")
+            raise ValueError(f"處理PR數據時出錯: {str(e)}") # Re-raise to be caught by worker

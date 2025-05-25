@@ -385,7 +385,7 @@ class BaseDataProcessor:
             self.logger.error(f"判斷欄位值時出錯: {str(e)}", exc_info=True)
             raise ValueError("判斷欄位值時出錯")
     
-    def export_file(self, df: pd.DataFrame, date: int, file_prefix: str) -> None:
+    def export_file(self, df: pd.DataFrame, date: int, file_prefix: str) -> str: # Return type changed to str
         """導出文件
         
         Args:
@@ -394,7 +394,7 @@ class BaseDataProcessor:
             file_prefix: 文件前綴
             
         Returns:
-            None
+            str: The generated file name.
         """
         try:
             df = df.replace('<NA>', np.nan)
@@ -404,13 +404,17 @@ class BaseDataProcessor:
             try:
                 df.to_excel(file_name, index=False, encoding='utf-8-sig', engine='xlsxwriter')
                 self.logger.info(f"成功導出文件: {file_name}")
-            except Exception as e:
+            except Exception as e: # Fallback if encoding fails
+                self.logger.warning(f"Export with utf-8-sig encoding failed ({e}), trying without encoding.")
                 df.to_excel(file_name, index=False, engine='xlsxwriter')
                 self.logger.info(f"成功導出文件(無encoding): {file_name}")
-                
+            
+            return file_name # Added return statement
+
         except Exception as e:
             self.logger.error(f"導出文件時出錯: {str(e)}", exc_info=True)
-            raise ValueError("導出文件時出錯")
+            # Ensure consistent error handling, re-raise to be caught by worker
+            raise ValueError(f"導出文件時出錯: {str(e)}")
         
     def get_mapping_dict(self, df: pd.DataFrame, key_col: str, column: str) -> Dict[str, Any]:
         """獲取映射字典"""
