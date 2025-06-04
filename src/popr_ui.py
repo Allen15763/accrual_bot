@@ -1536,13 +1536,13 @@ class SPXTabWidget(QWidget):
             if hasattr(self.parent, 'logger'):
                 self.parent.logger.info(f"開始生成上傳表單: {entity}, {period}")
             
-            from upload_form import get_aggregation_twd, get_entries
+            from upload_form_spx import get_aggregation_spx, get_spx_entries
             
             # 獲取聚合數據
-            dfs = get_aggregation_twd(po_file_path, period_str, is_mob=False)
+            dfs = get_aggregation_spx(po_file_path, period_str, currency)
             
             # 生成上傳表單
-            result = get_entries(dfs, entity, period, accounting_date, category, user, "TWD")
+            result = get_spx_entries(dfs, entity, period, ac_date, cate, accountant, currency)
             
             # 保存結果
             output_file = f'Upload Form-{entity}-{period}-TWD.xlsx'
