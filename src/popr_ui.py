@@ -23,6 +23,7 @@ from mobtwpr import MOBTW_PR
 from mobtwpo import MOBTW_PO
 from hris_dup import HRISDuplicateChecker
 from upload_form import get_aggregation_twd, get_aggregation_foreign, get_entries
+from upload_form_spx import get_aggregation_spx, get_spx_entries
 from utils import Logger, ReconEntryAmt
 
 
@@ -889,6 +890,275 @@ class Main(QWidget):
             self.logger.info("SPX模組Tab已初始化")
 
 
+class SPXUploadFormWidget(QDialog):
+    """SPX Upload Form對話框"""
+    
+    def __init__(self, parent=None):
+        """初始化SPX Upload Form對話框"""
+        super().__init__(parent)
+        self.logger = Logger().get_logger(__name__)
+        self.had_error = False  # 標記是否有錯誤發生
+        
+        self.setWindowTitle("SPX Upload Form")
+        self.setFixedSize(400, 350)  # 設置固定大小
+        self.setupUI()
+        self.logger.info("SPX Upload Form對話框已打開")
+    
+    def updateStatus(self, message, error=False):
+        """更新狀態"""
+        if error:
+            self.had_error = True
+            self.statusLabel.setStyleSheet("font-size:10pt; color: red;")
+        else:
+            self.statusLabel.setStyleSheet("font-size:10pt; color: black;")
+            
+        self.statusLabel.setText(f"狀態: {message}")
+    
+    def setupUI(self):
+        """設置UI組件"""
+        # 創建主布局
+        main_layout = QVBoxLayout()
+        
+        # 創建表單布局
+        form_layout = QGridLayout()
+        
+        # Entity (實體)
+        form_layout.addWidget(QLabel("Entity"), 0, 0)
+        self.combo_entity = QComboBox()
+        self.combo_entity.addItem("SPXTW")
+        form_layout.addWidget(self.combo_entity, 0, 1)
+        
+        # Period (期間)
+        form_layout.addWidget(QLabel("Period"), 1, 0)
+        self.line_period = QLineEdit()
+        self.line_period.setPlaceholderText("MAR-25")
+        form_layout.addWidget(self.line_period, 1, 1)
+        
+        # Accounting Date (會計日期)
+        form_layout.addWidget(QLabel("Accounting Date"), 2, 0)
+        self.line_ac_date = QLineEdit()
+        self.line_ac_date.setPlaceholderText("2025/03/31")
+        form_layout.addWidget(self.line_ac_date, 2, 1)
+        
+        # Category (類別)
+        form_layout.addWidget(QLabel("Category"), 3, 0)
+        self.line_cate = QLineEdit()
+        self.line_cate.setPlaceholderText("01 SEA Accrual Expense")
+        self.line_cate.setText('01 SEA Accrual Expense')
+        form_layout.addWidget(self.line_cate, 3, 1)
+        
+        # Accountant (會計人員)
+        form_layout.addWidget(QLabel("Accountant"), 4, 0)
+        self.line_accountant = QLineEdit()
+        self.line_accountant.setPlaceholderText("Blaire")
+        self.line_accountant.setText('Blaire')
+        form_layout.addWidget(self.line_accountant, 4, 1)
+        
+        # Currency (幣別)
+        form_layout.addWidget(QLabel("Currency"), 5, 0)
+        self.combo_currency = QComboBox()
+        currencies = ['TWD', 'USD', 'SGD']
+        for c in currencies:
+            self.combo_currency.addItem(c)
+        form_layout.addWidget(self.combo_currency, 5, 1)
+        
+        # Working Paper (工作底稿)
+        form_layout.addWidget(QLabel("Working Paper"), 6, 0)
+        self.button_get_wp = QPushButton("SELECT WORKING PAPER")
+        self.button_get_wp.clicked.connect(self.get_wp)
+        self.button_get_wp.setStyleSheet("text-align: left; padding: 5px;")
+        form_layout.addWidget(self.button_get_wp, 6, 1)
+        
+        # Process (處理)
+        form_layout.addWidget(QLabel("Process"), 7, 0)
+        self.button_do_upload = QPushButton("GENERATE UPLOAD FORM")
+        self.button_do_upload.clicked.connect(self.process_upload_form)
+        self.button_do_upload.setStyleSheet(
+            "background-color: #4CAF50; color: white; font-weight: bold; "
+            "text-align: left; padding: 8px;"
+        )
+        form_layout.addWidget(self.button_do_upload, 7, 1)
+        
+        # 添加表單布局到主布局
+        main_layout.addLayout(form_layout)
+        
+        # 添加分隔線
+        main_layout.addSpacing(10)
+        
+        # 狀態標籤
+        self.statusLabel = QLabel("狀態: 準備就緒")
+        self.statusLabel.setStyleSheet("font-size:10pt; border-top: 1px solid gray; padding-top: 5px;")
+        main_layout.addWidget(self.statusLabel)
+        
+        # 設置主布局
+        self.setLayout(main_layout)
+    
+    def get_wp(self):
+        """選擇工作底稿文件"""
+        try:
+            self.had_error = False  # 重置錯誤狀態
+            self.updateStatus("選擇工作底稿...")
+            
+            url = QFileDialog.getOpenFileName(
+                self, 'SPX工作底稿',
+                "",
+                "Files(*.xlsm *.xlsx);;EXCEL(*.xlsx *.xlsm)"
+            )
+            
+            if not url[0]:
+                self.logger.info("未選擇工作底稿文件，取消操作")
+                self.updateStatus("準備就緒")
+                return
+                
+            self.fileUrl = url[0]
+            file_name = os.path.basename(self.fileUrl)
+            self.logger.info(f"已選擇SPX工作底稿: {file_name}")
+            
+            # 更新按鈕文字，顯示已選擇文件
+            display_name = file_name if len(file_name) <= 25 else f"{file_name[:22]}..."
+            self.button_get_wp.setText(f"✓ {display_name}")
+            self.button_get_wp.setStyleSheet(
+                "text-align: left; padding: 5px; color: blue; font-weight: bold;"
+            )
+            self.updateStatus(f"已選擇 {file_name}")
+            
+            # 嘗試從文件名自動填充期間
+            self._auto_fill_period_from_filename(file_name)
+            
+        except Exception as err:
+            self.logger.error(f"選擇工作底稿時出錯: {str(err)}", exc_info=True)
+            self.updateStatus("選擇工作底稿時出錯", error=True)
+            QMessageBox.critical(self, "錯誤", f"選擇工作底稿時出錯:\n{str(err)}")
+    
+    def _auto_fill_period_from_filename(self, filename):
+        """從文件名自動填充期間"""
+        try:
+            # 嘗試從文件名提取年月 (例如: 202503-SPX-PO-template.xlsm)
+            import re
+            
+            # 查找6位數字 (YYYYMM)
+            pattern = r'(20[2-9][0-9])([0-1][0-9])'
+            match = re.search(pattern, filename)
+            
+            if match and not self.line_period.text():
+                year = match.group(1)
+                month = match.group(2)
+                
+                # 轉換為期間格式
+                month_abbr = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", 
+                              "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
+                month_index = int(month) - 1
+                
+                if 0 <= month_index < 12:
+                    period_display = f"{month_abbr[month_index]}-{year[2:]}"
+                    self.line_period.setText(period_display)
+                    
+                    # 同時填充會計日期
+                    if not self.line_ac_date.text():
+                        import calendar
+                        last_day = calendar.monthrange(int(year), int(month))[1]
+                        ac_date = f"{year}/{month}/{last_day:02d}"
+                        self.line_ac_date.setText(ac_date)
+                        
+                    self.logger.info(f"自動填充期間: {period_display}, 會計日期: {ac_date}")
+                    
+        except Exception as e:
+            # 如果自動填充失敗，不顯示錯誤，只記錄日誌
+            self.logger.debug(f"自動填充期間失敗: {str(e)}")
+    
+    def process_upload_form(self):
+        """處理並生成Upload Form"""
+        try:
+            self.had_error = False  # 重置錯誤狀態
+            self.logger.info("開始生成SPX Upload Form")
+            self.updateStatus("正在生成SPX Upload Form...")
+            
+            # 獲取輸入參數
+            entity = self.combo_entity.currentText()
+            period = self.line_period.text().strip()
+            ac_date = self.line_ac_date.text().strip()
+            cate = self.line_cate.text().strip()
+            accountant = self.line_accountant.text().strip()
+            currency = self.combo_currency.currentText()
+            
+            # 驗證輸入
+            if not hasattr(self, 'fileUrl') or not self.fileUrl:
+                self.updateStatus("未選擇工作底稿", error=True)
+                QMessageBox.warning(self, "警告", "請選擇SPX工作底稿")
+                return
+                
+            if not period:
+                self.updateStatus("未輸入期間", error=True)
+                QMessageBox.warning(self, "警告", "請輸入期間 (例如: MAR-25)")
+                return
+                
+            if not ac_date:
+                self.updateStatus("未輸入會計日期", error=True)
+                QMessageBox.warning(self, "警告", "請輸入會計日期 (例如: 2025/03/31)")
+                return
+            
+            if not accountant:
+                self.updateStatus("未輸入會計人員", error=True)
+                QMessageBox.warning(self, "警告", "請輸入會計人員名稱")
+                return
+            
+            # 解析會計日期
+            try:
+                from datetime import datetime
+                m_date = datetime.strptime(ac_date, '%Y/%m/%d').date()
+                ac_period = datetime.strftime(m_date, '%Y/%m')
+            except ValueError:
+                self.updateStatus("會計日期格式錯誤", error=True)
+                QMessageBox.warning(self, "警告", "會計日期格式錯誤，應為 YYYY/MM/DD")
+                return
+            
+            # 生成SPX Upload Form
+            try:
+                self.logger.info(f"處理 {entity} {currency} SPX表單")
+                
+                # 獲取SPX聚合數據
+                dfs = get_aggregation_spx(self.fileUrl, ac_period, currency)
+                
+                # 檢查聚合數據是否有效
+                if dfs is None or all(df is None for df in dfs):
+                    raise ValueError("聚合數據處理失敗，請檢查輸入文件格式")
+                
+                # 生成條目
+                result = get_spx_entries(dfs, entity, period, ac_date, cate, accountant, currency)
+                
+                # 檢查結果是否有效
+                if result is None or result.empty:
+                    raise ValueError("生成的上傳表單為空，請檢查數據是否符合條件")
+                
+                # 保存結果
+                output_file = f'Upload Form-{entity}-{period}-{currency}.xlsx'
+                result.to_excel(output_file, index=False)
+                
+                self.logger.info(f"已成功生成SPX Upload Form: {output_file}, 總行數: {len(result)}")
+                self.updateStatus("已成功生成SPX Upload Form")
+                
+                # 顯示成功對話框
+                QMessageBox.information(
+                    self, "完成", 
+                    f"SPX Upload Form已生成！\n\n"
+                    f"檔案名稱: {output_file}\n"
+                    f"總行數: {len(result)}\n"
+                    f"幣別: {currency}\n\n"
+                    f"檔案已保存到當前目錄。"
+                )
+                
+            except Exception as e:
+                self.logger.error(f"生成SPX Upload Form時出錯: {str(e)}", exc_info=True)
+                self.updateStatus("生成SPX Upload Form時出錯", error=True)
+                QMessageBox.critical(self, "錯誤", f"生成SPX Upload Form時出錯:\n{str(e)}")
+                return
+                
+        except Exception as err:
+            self.logger.error(f"處理SPX Upload Form時出錯: {str(err)}", exc_info=True)
+            self.updateStatus("處理SPX Upload Form時出錯", error=True)
+            QMessageBox.critical(self, "錯誤", f"處理SPX Upload Form時出錯:\n{str(err)}")
+
+
 class UploadFormWidget(QDialog):
     """Upload Form對話框"""
     
@@ -1219,6 +1489,7 @@ class SPXTabWidget(QWidget):
         
         self.export_btn = QPushButton("匯出上傳表單")
         self.export_btn.clicked.connect(self.export_upload_form)
+        self.export_btn.setStyleSheet("font-size:11pt;font:Bold;padding:8px;")
         
         # 說明文字
         tips_label = QLabel("SPX模組說明:")
@@ -1227,11 +1498,13 @@ class SPXTabWidget(QWidget):
         tips_content = QLabel(
             "此模組用於處理SPX相關的PO/PR數據。\n\n"
             "使用步驟:\n"
-            "1. 上傳各項必要文件(標*為必須)\n"
-            "2. 填寫處理參數\n"
-            "3. 點擊「處理並產生結果」\n"
-            "4. 結果將自動保存\n\n"
-            "TBC:PR, Upload Form\n"
+            "1. 上傳各項必要文件(原始PO數據*、AP發票文件*)\n"
+            "2. 填寫處理參數(財務年月*、處理人員*)\n"
+            "3. 點擊「處理並產生結果」進行數據處理\n"
+            "4. 點擊「匯出上傳表單」生成Upload Form\n"
+            "5. 結果將自動保存\n\n"
+            "註: 標*為必要項目\n"
+            "TBC:PR, Upload Form(外幣)\n"
         )
         tips_content.setWordWrap(True)
         # tips_content.setStyleSheet("background-color:#93FF93;color:#000080;padding:10px;border-radius:5px;")
@@ -1461,100 +1734,24 @@ class SPXTabWidget(QWidget):
     def export_upload_form(self):
         """匯出上傳表單"""
         try:
-            # 檢查必須文件
-            if "po_file" not in self.file_paths:
-                QMessageBox.warning(self, "警告", "請先選擇原始PO數據文件")
-                return
-            
-            # 檢查處理參數
-            period = self.period_input.text()
-            user = self.user_input.text()
-            
-            if not period or not period.isdigit() or len(period) != 6:
-                QMessageBox.warning(self, "警告", "請輸入有效的財務年月 (格式: YYYYMM)")
-                return
-            
-            if not user:
-                QMessageBox.warning(self, "警告", "請輸入處理人員名稱")
-                return
+            # 打開SPX Upload Form對話框
+            sub_widget = SPXUploadFormWidget(self)
+            sub_widget.exec_()
             
             # 更新狀態
-            self.status_label.setText("狀態: 正在匯出上傳表單...")
-            self.status_label.setStyleSheet("font-size:10pt; color: blue;")
-            
-            # 構建參數
-            entity = "SPXTW"
-            year = period[:4]
-            month = period[4:6]
-            period_str = f"{year}-{month}"  # "2025-04" 格式
-            month_abbr = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", 
-                          "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"][int(month) - 1] 
-            period_display = f"{month_abbr}-{year[2:]}"  # "APR-25" 格式
-            accounting_date = f"{year}/{month}/25"  # "2025/04/25" 格式
-            category = "01 SEA Accrual Expense"
-            
-            # 調用上傳表單處理函數
-            self._generate_upload_form(
-                po_file_path=self.file_paths.get("po_file"),
-                entity=entity,
-                period=period_display,
-                period_str=period_str,
-                accounting_date=accounting_date,
-                category=category,
-                user=user
-            )
-            
-            # 更新狀態
-            self.status_label.setText("狀態: 上傳表單已匯出")
-            self.status_label.setStyleSheet("font-size:10pt; color: green;")
+            self.status_label.setText("狀態: 準備就緒")
             
         except Exception as e:
             # 更新狀態並顯示錯誤訊息
-            self.status_label.setText("狀態: 匯出上傳表單出錯")
+            self.status_label.setText("狀態: 打開對話框出錯")
             self.status_label.setStyleSheet("font-size:10pt; color: red;")
             
             # 通知父窗口進行日誌記錄
             if hasattr(self.parent, 'logger'):
-                self.parent.logger.error(f"匯出上傳表單時出錯: {str(e)}", exc_info=True)
+                self.parent.logger.error(f"打開SPX Upload Form對話框時出錯: {str(e)}", exc_info=True)
             
-            QMessageBox.critical(self, "錯誤", f"匯出上傳表單時出錯:\n{str(e)}")
-    
-    def _generate_upload_form(self, po_file_path, entity, period, period_str, accounting_date, category, user):
-        """生成上傳表單
-        
-        Args:
-            po_file_path: PO文件路徑
-            entity: 實體名稱
-            period: 期間顯示格式 (如 "APR-25")
-            period_str: 期間字符串格式 (如 "2025-04")
-            accounting_date: 會計日期 (如 "2025/04/25")
-            category: 類別
-            user: 處理人員
-        """
-        try:
-            # 通知父窗口進行日誌記錄
-            if hasattr(self.parent, 'logger'):
-                self.parent.logger.info(f"開始生成上傳表單: {entity}, {period}")
-            
-            from upload_form_spx import get_aggregation_spx, get_spx_entries
-            
-            # 獲取聚合數據
-            dfs = get_aggregation_spx(po_file_path, period_str, currency)
-            
-            # 生成上傳表單
-            result = get_spx_entries(dfs, entity, period, ac_date, cate, accountant, currency)
-            
-            # 保存結果
-            output_file = f'Upload Form-{entity}-{period}-TWD.xlsx'
-            result.to_excel(output_file, index=False)
-            
-            # 顯示成功訊息
-            QMessageBox.information(self, "完成", f"上傳表單已生成：{output_file}")
-            
-        except Exception as e:
-            if hasattr(self.parent, 'logger'):
-                self.parent.logger.error(f"生成上傳表單時出錯: {str(e)}", exc_info=True)
-            raise
+            QMessageBox.critical(self, "錯誤", f"打開SPX Upload Form對話框時出錯:\n{str(e)}")
+
 
 def main():
     """主函數"""
