@@ -808,7 +808,9 @@ def rename_cols_spx(df: DataFrame, dr: bool = True) -> DataFrame:
         rename_map = {
             "Account code": 'ACCOUNT',
             'Product code': 'PRODUCT',
+            'Product code.1': 'PRODUCT',
             'Region': 'REGION',
+            'Region_c': 'REGION',
             'Dep.': 'DEPARTMENT',
             'Accr. Amount': 'Debit',
             'desc': 'Line Description',
@@ -982,7 +984,7 @@ if __name__ == "__main__":
         test_path = r'C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\UploadForm檢視用\SPTTW-202504-Purchase Order-Accrued-SPX_Review.1.xlsx'
         
         # 測試參數
-        entity = 'SPXTW'
+        entity = 'SPTTW'
         period = 'APR-25'
         ac_date = '2025/04/30'
         cate = '01 SEA Accrual Expense'

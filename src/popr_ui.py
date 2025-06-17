@@ -925,7 +925,7 @@ class SPXUploadFormWidget(QDialog):
         # Entity (實體)
         form_layout.addWidget(QLabel("Entity"), 0, 0)
         self.combo_entity = QComboBox()
-        self.combo_entity.addItem("SPXTW")
+        self.combo_entity.addItem("SPTTW")
         form_layout.addWidget(self.combo_entity, 0, 1)
         
         # Period (期間)
