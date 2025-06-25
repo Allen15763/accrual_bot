@@ -1393,14 +1393,17 @@ class SPXTabWidget(QWidget):
     def __init__(self, parent=None):
         """初始化SPX模組tab介面"""
         super(SPXTabWidget, self).__init__(parent)
-        self.parent = parent  # 存儲主窗口引用(Main class)，用於訪問日誌等功能(調用Main.logger.info運用)
+        self.parent = parent  # 存儲主窗口引用(Main class)，用於訪問日誌等功能
         self.file_paths = {}  # 存儲所有文件路徑
         # 定義文件類型映射，作為類屬性以便在所有方法中使用
-        self.file_types = [
+        self.file_types_po = [
             ("po_file", "原始PO數據"),
             ("previous_wp", "前期底稿(PO)"),
             ("procurement", "採購底稿(PO)"),
             ("ap_invoice", "AP發票文件"),
+        ]
+        self.file_types_pr = [
+            ("pr_file", "原始PR數據"),
             ("previous_wp_pr", "前期PR底稿"),
             ("procurement_pr", "採購PR底稿")
         ]
@@ -1420,33 +1423,30 @@ class SPXTabWidget(QWidget):
         main_layout.addLayout(right_layout, 40)
         
         # === 左側部分 ===
+        # 處理類型選擇
+        type_group = QGroupBox("處理類型")
+        type_layout = QHBoxLayout()
+        
+        self.process_type_combo = QComboBox()
+        self.process_type_combo.addItems(["SPX PO", "SPX PR", "SPX PO+PR"])
+        self.process_type_combo.currentTextChanged.connect(self.on_process_type_changed)
+        
+        type_layout.addWidget(QLabel("選擇處理類型:"))
+        type_layout.addWidget(self.process_type_combo)
+        type_group.setLayout(type_layout)
+        
         # 文件上傳區域
         upload_group = QGroupBox("文件上傳")
-        grid_layout = QGridLayout()
+        self.upload_grid_layout = QGridLayout()
         
         # 上傳按鈕和標籤
         self.buttons = {}
         self.labels = {}
         
-        # 使用類屬性 self.file_types
-        for row, (file_key, file_label) in enumerate(self.file_types):
-            # 標籤
-            label = QLabel(f"{file_label}:")
-            grid_layout.addWidget(label, row, 0)
-            
-            # 顯示文件名的標籤
-            file_name_label = QLabel("未選擇文件")
-            file_name_label.setStyleSheet("color: gray;")
-            grid_layout.addWidget(file_name_label, row, 1)
-            self.labels[file_key] = file_name_label
-            
-            # 上傳按鈕
-            upload_btn = QPushButton("選擇文件")
-            upload_btn.clicked.connect(lambda checked, k=file_key, label=file_label: self.select_file(k, label))
-            grid_layout.addWidget(upload_btn, row, 2)
-            self.buttons[file_key] = upload_btn
+        # 初始化顯示PO相關文件
+        self.update_file_upload_ui()
         
-        upload_group.setLayout(grid_layout)
+        upload_group.setLayout(self.upload_grid_layout)
         
         # 批次處理參數
         process_group = QGroupBox("處理參數")
@@ -1473,6 +1473,7 @@ class SPXTabWidget(QWidget):
         file_list_label.setAlignment(Qt.AlignCenter)
         
         # 將元素添加到左側布局
+        left_layout.addWidget(type_group)
         left_layout.addWidget(upload_group)
         left_layout.addWidget(process_group)
         left_layout.addWidget(file_list_label)
@@ -1495,20 +1496,10 @@ class SPXTabWidget(QWidget):
         tips_label = QLabel("SPX模組說明:")
         tips_label.setStyleSheet("font-size:11pt;font:Bold;")
         
-        tips_content = QLabel(
-            "此模組用於處理SPX相關的PO/PR數據。\n\n"
-            "使用步驟:\n"
-            "1. 上傳各項必要文件(原始PO數據*、AP發票文件*)\n"
-            "2. 填寫處理參數(財務年月*、處理人員*)\n"
-            "3. 點擊「處理並產生結果」進行數據處理\n"
-            "4. 點擊「匯出上傳表單」生成Upload Form\n"
-            "5. 結果將自動保存\n\n"
-            "註: 標*為必要項目\n"
-            "TBC:PR, Upload Form(外幣)\n"
-        )
-        tips_content.setWordWrap(True)
-        # tips_content.setStyleSheet("background-color:#93FF93;color:#000080;padding:10px;border-radius:5px;")
-        tips_content.setStyleSheet("color:#000080;padding:10px;border-radius:5px;")
+        self.tips_content = QLabel()
+        self.tips_content.setWordWrap(True)
+        self.tips_content.setStyleSheet("color:#000080;padding:10px;border-radius:5px;")
+        self.update_tips()
         
         # 狀態欄
         self.status_label = QLabel("狀態: 準備就緒")
@@ -1520,9 +1511,97 @@ class SPXTabWidget(QWidget):
         right_layout.addWidget(self.export_btn)
         right_layout.addSpacing(20)
         right_layout.addWidget(tips_label)
-        right_layout.addWidget(tips_content)
+        right_layout.addWidget(self.tips_content)
         right_layout.addStretch()
         right_layout.addWidget(self.status_label)
+    
+    def on_process_type_changed(self, text):
+        """處理類型改變時的處理"""
+        self.clear_all_files()
+        self.update_file_upload_ui()
+        self.update_tips()
+        
+        # 通知父窗口進行日誌記錄
+        if hasattr(self.parent, 'logger'):
+            self.parent.logger.info(f"SPX處理類型切換為: {text}")
+    
+    def update_file_upload_ui(self):
+        """根據選擇的處理類型更新文件上傳UI"""
+        # 清除現有的UI元素
+        for i in reversed(range(self.upload_grid_layout.count())): 
+            self.upload_grid_layout.itemAt(i).widget().setParent(None)
+        
+        self.buttons.clear()
+        self.labels.clear()
+        
+        # 根據處理類型決定顯示哪些文件選項
+        process_type = self.process_type_combo.currentText()
+        
+        if process_type == "SPX PO":
+            file_types = self.file_types_po
+        elif process_type == "SPX PR":
+            file_types = self.file_types_pr
+        else:  # SPX PO+PR
+            file_types = self.file_types_po + self.file_types_pr
+        
+        # 創建新的文件上傳UI
+        for row, (file_key, file_label) in enumerate(file_types):
+            # 標籤
+            label = QLabel(f"{file_label}:")
+            self.upload_grid_layout.addWidget(label, row, 0)
+            
+            # 顯示文件名的標籤
+            file_name_label = QLabel("未選擇文件")
+            file_name_label.setStyleSheet("color: gray;")
+            self.upload_grid_layout.addWidget(file_name_label, row, 1)
+            self.labels[file_key] = file_name_label
+            
+            # 上傳按鈕
+            upload_btn = QPushButton("選擇文件")
+            upload_btn.clicked.connect(lambda checked, k=file_key, label=file_label: self.select_file(k, label))
+            self.upload_grid_layout.addWidget(upload_btn, row, 2)
+            self.buttons[file_key] = upload_btn
+    
+    def update_tips(self):
+        """更新說明文字"""
+        process_type = self.process_type_combo.currentText()
+        
+        if process_type == "SPX PO":
+            tips_text = (
+                "此模組用於處理SPX的PO數據。\n\n"
+                "使用步驟:\n"
+                "1. 上傳各項必要文件(原始PO數據*、AP發票文件*)\n"
+                "2. 填寫處理參數(財務年月*、處理人員*)\n"
+                "3. 點擊「處理並產生結果」進行數據處理\n"
+                "4. 點擊「匯出上傳表單」生成Upload Form\n"
+                "5. 結果將自動保存\n\n"
+                "註: 標*為必要項目"
+            )
+        elif process_type == "SPX PR":
+            tips_text = (
+                "此模組用於處理SPX的PR數據。\n\n"
+                "使用步驟:\n"
+                "1. 上傳各項必要文件(原始PR數據*)\n"
+                "2. 可選上傳前期底稿和採購底稿\n"
+                "3. 填寫處理參數(財務年月*、處理人員*)\n"
+                "4. 點擊「處理並產生結果」進行數據處理\n"
+                "5. 結果將自動保存\n\n"
+                "註: 標*為必要項目"
+            )
+        else:  # SPX PO+PR
+            tips_text = (
+                "此模組用於同時處理SPX的PO和PR數據。\n\n"
+                "使用步驟:\n"
+                "1. 上傳PO相關文件(原始PO數據*、AP發票*)\n"
+                "2. 上傳PR相關文件(原始PR數據*)\n"
+                "3. 可選上傳各項底稿\n"
+                "4. 填寫處理參數(財務年月*、處理人員*)\n"
+                "5. 點擊「處理並產生結果」進行數據處理\n"
+                "6. 結果將自動保存\n\n"
+                "註: 標*為必要項目"
+            )
+        
+        self.tips_content.setText(tips_text)
     
     def select_file(self, file_key, file_label):
         """選擇文件
@@ -1572,7 +1651,7 @@ class SPXTabWidget(QWidget):
             self.status_label.setText(f"狀態: 已選擇 {file_label}")
             
             # 如果是主文件，嘗試填充年月字段
-            if file_key == "po_file" and not self.period_input.text():
+            if file_key in ["po_file", "pr_file"] and not self.period_input.text():
                 try:
                     # 從文件名提取年月 (假設格式為 YYYYMM_其他內容.csv)
                     year_month = file_name[:6]
@@ -1599,14 +1678,22 @@ class SPXTabWidget(QWidget):
     def process_files(self):
         """處理文件"""
         try:
+            process_type = self.process_type_combo.currentText()
+            
             # 檢查必須文件
-            required_files = ["po_file", "ap_invoice"]
+            if process_type == "SPX PO":
+                required_files = ["po_file", "ap_invoice"]
+            elif process_type == "SPX PR":
+                required_files = ["pr_file"]
+            else:  # SPX PO+PR
+                required_files = ["po_file", "ap_invoice", "pr_file"]
+            
             missing_files = [file_key for file_key in required_files if file_key not in self.file_paths]
             
             if missing_files:
                 # 建立文件類型映射字典
-                file_type_dict = dict(self.file_types)
-                missing_labels = [file_type_dict.get(file_key, file_key) for file_key in missing_files]
+                all_file_types = dict(self.file_types_po + self.file_types_pr)
+                missing_labels = [all_file_types.get(file_key, file_key) for file_key in missing_files]
 
                 QMessageBox.warning(self, "警告", f"缺少必要文件: {', '.join(missing_labels)}")
                 return
