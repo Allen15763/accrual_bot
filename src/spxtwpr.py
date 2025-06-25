@@ -14,7 +14,7 @@ class SPXTW_PR(SpxPRProcessor):
         super().__init__("SPX")
         self.logger = Logger().get_logger(self.__class__.__name__)
     
-    def mode_1(self, fileUrl: str, file_name: str, fileUrl_previwp_pr: str, fileUrl_p_pr: str):
+    def mode_1(self, fileUrl: str, file_name: str, fileUrl_p_pr: str, fileUrl_previwp_pr: str):
         """模式1：處理原始數據+前期底稿+採購底稿
         
         Args:
@@ -28,7 +28,7 @@ class SPXTW_PR(SpxPRProcessor):
         """
         try:
             self.logger.info(f"SPXTW PR 模式1: {file_name}")
-            self.process(fileUrl, file_name, fileUrl_previwp_pr, fileUrl_p_pr)
+            self.process(fileUrl, file_name, fileUrl_p_pr, fileUrl_previwp_pr)
         except Exception as e:
             self.logger.error(f"SPXTW PR 模式1處理時出錯: {str(e)}", exc_info=True)
             raise

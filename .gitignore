@@ -1,3 +1,9 @@
+Pipfile
+Pipfile.lock
+*.md
+note_pip_google API.txt
+static/
+processing_worker.py
 downloads/
 output/
 other_temp/

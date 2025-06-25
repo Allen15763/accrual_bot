@@ -1393,7 +1393,7 @@ class SPXTabWidget(QWidget):
     def __init__(self, parent=None):
         """初始化SPX模組tab介面"""
         super(SPXTabWidget, self).__init__(parent)
-        self.parent = parent  # 存儲主窗口引用(Main class)，用於訪問日誌等功能
+        self.parent = parent  # 存儲主窗口引用(Main class)，用於訪問日誌等功能(調用Main.logger.info運用)
         self.file_paths = {}  # 存儲所有文件路徑
         # 定義文件類型映射，作為類屬性以便在所有方法中使用
         self.file_types_po = [
@@ -1401,6 +1401,8 @@ class SPXTabWidget(QWidget):
             ("previous_wp", "前期底稿(PO)"),
             ("procurement", "採購底稿(PO)"),
             ("ap_invoice", "AP發票文件"),
+            ("previous_wp_pr", "前期PR底稿"),
+            ("procurement_pr", "採購PR底稿")
         ]
         self.file_types_pr = [
             ("pr_file", "原始PR數據"),
@@ -1542,7 +1544,7 @@ class SPXTabWidget(QWidget):
         elif process_type == "SPX PR":
             file_types = self.file_types_pr
         else:  # SPX PO+PR
-            file_types = self.file_types_po + self.file_types_pr
+            file_types = self.file_types_po + [("pr_file", "原始PR數據")]
         
         # 創建新的文件上傳UI
         for row, (file_key, file_label) in enumerate(file_types):
@@ -1570,30 +1572,28 @@ class SPXTabWidget(QWidget):
             tips_text = (
                 "此模組用於處理SPX的PO數據。\n\n"
                 "使用步驟:\n"
-                "1. 上傳各項必要文件(原始PO數據*、AP發票文件*)\n"
+                "1. 上傳各項必要文件(原始PO數據*、AP發票文件*、前期會計底稿PR/PO*、採購底稿PR/PO*)\n"
                 "2. 填寫處理參數(財務年月*、處理人員*)\n"
                 "3. 點擊「處理並產生結果」進行數據處理\n"
-                "4. 點擊「匯出上傳表單」生成Upload Form\n"
-                "5. 結果將自動保存\n\n"
+                "4. 結果將自動保存\n\n"
                 "註: 標*為必要項目"
             )
         elif process_type == "SPX PR":
             tips_text = (
                 "此模組用於處理SPX的PR數據。\n\n"
                 "使用步驟:\n"
-                "1. 上傳各項必要文件(原始PR數據*)\n"
-                "2. 可選上傳前期底稿和採購底稿\n"
-                "3. 填寫處理參數(財務年月*、處理人員*)\n"
-                "4. 點擊「處理並產生結果」進行數據處理\n"
-                "5. 結果將自動保存\n\n"
+                "1. 上傳各項必要文件(原始PR數據*、前期會計底稿PR*、採購底稿PR*)\n"
+                "2. 填寫處理參數(財務年月*、處理人員*)\n"
+                "3. 點擊「處理並產生結果」進行數據處理\n"
+                "4. 結果將自動保存\n\n"
                 "註: 標*為必要項目"
             )
         else:  # SPX PO+PR
             tips_text = (
                 "此模組用於同時處理SPX的PO和PR數據。\n\n"
                 "使用步驟:\n"
-                "1. 上傳PO相關文件(原始PO數據*、AP發票*)\n"
-                "2. 上傳PR相關文件(原始PR數據*)\n"
+                "1. 上傳PO相關文件\n"
+                "2. 上傳PR相關文件\n"
                 "3. 可選上傳各項底稿\n"
                 "4. 填寫處理參數(財務年月*、處理人員*)\n"
                 "5. 點擊「處理並產生結果」進行數據處理\n"
@@ -1682,11 +1682,13 @@ class SPXTabWidget(QWidget):
             
             # 檢查必須文件
             if process_type == "SPX PO":
-                required_files = ["po_file", "ap_invoice"]
+                required_files = ["po_file", "ap_invoice", "previous_wp", "procurement", 
+                                  "previous_wp_pr", "procurement_pr"]
             elif process_type == "SPX PR":
-                required_files = ["pr_file"]
+                required_files = ["pr_file", "previous_wp_pr", "procurement_pr"]
             else:  # SPX PO+PR
-                required_files = ["po_file", "ap_invoice", "pr_file"]
+                required_files = ["po_file", "ap_invoice", "pr_file", 
+                                  "previous_wp", "procurement", "previous_wp_pr", "procurement_pr"]
             
             missing_files = [file_key for file_key in required_files if file_key not in self.file_paths]
             
@@ -1714,29 +1716,21 @@ class SPXTabWidget(QWidget):
             self.status_label.setText("狀態: 處理中...")
             self.status_label.setStyleSheet("font-size:10pt; color: blue;")
             
-            # 準備文件路徑參數
-            po_file_path = self.file_paths.get("po_file")
-            po_file_name = os.path.basename(po_file_path)
-            
-            # 構建處理參數字典
-            processing_params = {
-                'po_file': po_file_path,
-                'po_file_name': po_file_name,
-                'previous_wp': self.file_paths.get("previous_wp"),
-                'procurement': self.file_paths.get("procurement"),
-                'ap_invoice': self.file_paths.get("ap_invoice"),
-                'previous_wp_pr': self.file_paths.get("previous_wp_pr"),
-                'procurement_pr': self.file_paths.get("procurement_pr"),
-                'period': period,
-                'user': user
-            }
-            
-            # 調用處理函數 - 這裡連接到主程序的SPX處理邏輯
-            self._process_spx_data(processing_params)
+            # 根據處理類型調用不同的處理方法
+            if process_type == "SPX PO":
+                self._process_spx_po_data()
+            elif process_type == "SPX PR":
+                self._process_spx_pr_data()
+            else:  # SPX PO+PR
+                self._process_spx_po_data()
+                self._process_spx_pr_data()
             
             # 更新狀態
             self.status_label.setText("狀態: 處理完成!")
             self.status_label.setStyleSheet("font-size:10pt; color: green;")
+            
+            # 顯示成功訊息
+            QMessageBox.information(self, "完成", f"{process_type}數據處理完成！")
             
         except Exception as e:
             # 更新狀態並顯示錯誤訊息
@@ -1749,41 +1743,69 @@ class SPXTabWidget(QWidget):
             
             QMessageBox.critical(self, "錯誤", f"處理文件時出錯:\n{str(e)}")
     
-    def _process_spx_data(self, params):
-        """處理SPX數據
-        
-        Args:
-            params: 處理參數字典
-        """
-        # 這個方法將連接到主程序的SPX處理邏輯
-        # 在實際整合時，這裡會調用SPXTW_PO的處理方法
-        
+    def _process_spx_po_data(self):
+        """處理SPX PO數據"""
         try:
             # 通知父窗口進行日誌記錄
             if hasattr(self.parent, 'logger'):
-                self.parent.logger.info(f"開始處理SPX數據: {params['po_file_name']}")
+                self.parent.logger.info("開始處理SPX PO數據")
             
             # 實例化SPXTW_PO並處理數據
             from spxtwpo import SPXTW_PO
             processor = SPXTW_PO()
             
-            # 使用並發處理方法
+            # 準備文件路徑參數
+            po_file_path = self.file_paths.get("po_file")
+            po_file_name = os.path.basename(po_file_path)
+            
+            # 調用處理方法
             processor.process(
-                fileUrl=params['po_file'],
-                file_name=params['po_file_name'],
-                fileUrl_previwp=params['previous_wp'],
-                fileUrl_p=params['procurement'],
-                fileUrl_ap=params['ap_invoice'],
-                fileUrl_previwp_pr=params['previous_wp_pr'],
-                fileUrl_p_pr=params['procurement_pr']
+                fileUrl=po_file_path,
+                file_name=po_file_name,
+                fileUrl_previwp=self.file_paths.get("previous_wp"),
+                fileUrl_p=self.file_paths.get("procurement"),
+                fileUrl_ap=self.file_paths.get("ap_invoice"),
+                fileUrl_previwp_pr=self.file_paths.get("previous_wp_pr"),
+                fileUrl_p_pr=self.file_paths.get("procurement_pr")
             )
             
-            # 顯示成功訊息
-            QMessageBox.information(self, "完成", "SPX數據處理完成！")
+            if hasattr(self.parent, 'logger'):
+                self.parent.logger.info("SPX PO數據處理完成")
             
         except Exception as e:
             if hasattr(self.parent, 'logger'):
-                self.parent.logger.error(f"處理SPX數據時出錯: {str(e)}", exc_info=True)
+                self.parent.logger.error(f"處理SPX PO數據時出錯: {str(e)}", exc_info=True)
+            raise
+    
+    def _process_spx_pr_data(self):
+        """處理SPX PR數據"""
+        try:
+            # 通知父窗口進行日誌記錄
+            if hasattr(self.parent, 'logger'):
+                self.parent.logger.info("開始處理SPX PR數據")
+            
+            # 實例化SPXTW_PR並處理數據
+            from spxtwpr import SPXTW_PR
+            processor = SPXTW_PR()
+            
+            # 準備文件路徑參數
+            pr_file_path = self.file_paths.get("pr_file")
+            pr_file_name = os.path.basename(pr_file_path)
+            
+            # 調用mode_1方法
+            processor.mode_1(
+                fileUrl=pr_file_path,
+                file_name=pr_file_name,
+                fileUrl_p_pr=self.file_paths.get("procurement_pr"),
+                fileUrl_previwp_pr=self.file_paths.get("previous_wp_pr")
+            )
+            
+            if hasattr(self.parent, 'logger'):
+                self.parent.logger.info("SPX PR數據處理完成")
+            
+        except Exception as e:
+            if hasattr(self.parent, 'logger'):
+                self.parent.logger.error(f"處理SPX PR數據時出錯: {str(e)}", exc_info=True)
             raise
     
     def clear_all_files(self):
@@ -1800,12 +1822,17 @@ class SPXTabWidget(QWidget):
             # 清除文件列表
             self.file_list.clear()
             
+            # 清除輸入框
+            self.period_input.clear()
+            self.user_input.clear()
+            
             # 更新狀態
-            self.status_label.setText("狀態: 已清除所有文件")
+            self.status_label.setText("狀態: 準備就緒")
+            self.status_label.setStyleSheet("font-size:10pt;")
             
             # 通知父窗口進行日誌記錄
             if hasattr(self.parent, 'logger'):
-                self.parent.logger.info("已清除所有SPX文件")
+                self.parent.logger.info("已清除所有文件")
             
         except Exception as e:
             # 更新狀態並顯示錯誤訊息
@@ -1819,26 +1846,18 @@ class SPXTabWidget(QWidget):
             QMessageBox.critical(self, "錯誤", f"清除文件時出錯:\n{str(e)}")
     
     def export_upload_form(self):
-        """匯出上傳表單"""
+        """匯出上傳表單 - 打開SPX Upload Form對話框"""
         try:
             # 打開SPX Upload Form對話框
-            sub_widget = SPXUploadFormWidget(self)
-            sub_widget.exec_()
-            
-            # 更新狀態
-            self.status_label.setText("狀態: 準備就緒")
+            upload_form_dialog = SPXUploadFormWidget(self)
+            upload_form_dialog.exec_()
             
         except Exception as e:
-            # 更新狀態並顯示錯誤訊息
-            self.status_label.setText("狀態: 打開對話框出錯")
-            self.status_label.setStyleSheet("font-size:10pt; color: red;")
-            
             # 通知父窗口進行日誌記錄
             if hasattr(self.parent, 'logger'):
-                self.parent.logger.error(f"打開SPX Upload Form對話框時出錯: {str(e)}", exc_info=True)
+                self.parent.logger.error(f"匯出上傳表單時出錯: {str(e)}", exc_info=True)
             
-            QMessageBox.critical(self, "錯誤", f"打開SPX Upload Form對話框時出錯:\n{str(e)}")
-
+            QMessageBox.critical(self, "錯誤", f"匯出上傳表單時出錯:\n{str(e)}")
 
 def main():
     """主函數"""
