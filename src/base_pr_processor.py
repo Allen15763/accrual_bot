@@ -487,7 +487,7 @@ class SpxPRProcessor(BaseDataProcessor):
             raise ValueError("添加列時出錯")
     
     def fillter_spx_product_code(self, df: pd.DataFrame) -> pd.DataFrame:
-        return df.loc[df['Product Code'].str.contains('(?i)LG_SPX_OWN'), :].reset_index(drop=True)
+        return df.loc[df['Product Code'].str.contains('(?i)LG_SPX'), :].reset_index(drop=True)
     
     @override
     def _determine_sm_status(self, df: pd.DataFrame) -> pd.Series:

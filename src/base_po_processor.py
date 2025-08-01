@@ -906,7 +906,7 @@ class SpxPOProcessor(BasePOProcessor):
         self.logger = Logger().get_logger(self.__class__.__name__)
 
     def fillter_spx_product_code(self, df: pd.DataFrame) -> pd.DataFrame:
-        return df.loc[df['Product Code'].str.contains('(?i)LG_SPX_OWN'), :].reset_index(drop=True)
+        return df.loc[df['Product Code'].str.contains('(?i)LG_SPX'), :].reset_index(drop=True)
 
     def add_cols(self, df: pd.DataFrame, m: int) -> Tuple[pd.DataFrame, int]:
         # 先執行父類別的邏輯
