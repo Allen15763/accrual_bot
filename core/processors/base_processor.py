@@ -128,7 +128,7 @@ class BaseDataProcessor:
             raise ValueError("日期格式化時出錯")
     
     def format_numeric_columns_safely(self, df: pd.DataFrame, int_cols: List[str], 
-                                    float_cols: List[str]) -> pd.DataFrame:
+                                      float_cols: List[str]) -> pd.DataFrame:
         """
         安全地格式化數值列，包括千分位
         
@@ -210,9 +210,9 @@ class BaseDataProcessor:
                 end_dates = pd.Series([0] * len(df_copy), index=df_copy.index)
             
             expected_month = df_copy.get('Expected Received Month_轉換格式', 
-                                       pd.Series([0] * len(df_copy), index=df_copy.index))
+                                         pd.Series([0] * len(df_copy), index=df_copy.index))
             file_date = df_copy.get('檔案日期', 
-                                  pd.Series([0] * len(df_copy), index=df_copy.index))
+                                    pd.Series([0] * len(df_copy), index=df_copy.index))
             
             conditions = [
                 # 條件1：格式錯誤
@@ -279,7 +279,7 @@ class BaseDataProcessor:
             
             # 根據採購備註更新
             not_accrued = ['不預估', '未完成', 'Payroll', '待關單', '未完成ERM', 
-                          '格式錯誤', 'error(Description Period is out of ERM)']
+                           '格式錯誤', 'error(Description Period is out of ERM)']
             
             mask_procurement_completed = (
                 (df_copy['是否估計入帳'].isna() | (df_copy['是否估計入帳'] == 'nan')) & 
@@ -362,7 +362,8 @@ class BaseDataProcessor:
             
             # 應用條件
             result.loc[condition1] = '000'
-            result.loc[condition2 & ~condition1] = df_copy.loc[condition2 & ~condition1, 'Department'].astype(str).str[:3]
+            result.loc[condition2 & ~condition1] = \
+                df_copy.loc[condition2 & ~condition1, 'Department'].astype(str).str[:3]
             result.loc[condition3] = '000'
             
             return result
@@ -390,7 +391,7 @@ class BaseDataProcessor:
             return {}
     
     def export_file(self, df: pd.DataFrame, date: int, file_prefix: str, 
-                   output_dir: str = None) -> None:
+                    output_dir: str = None) -> None:
         """
         導出文件
         
@@ -417,7 +418,7 @@ class BaseDataProcessor:
             
             # 確保文件名唯一
             file_path = get_unique_filename(os.path.dirname(file_path) or '.', 
-                                          os.path.basename(file_path))
+                                            os.path.basename(file_path))
             
             self.logger.info(f"正在導出文件: {file_path}")
             

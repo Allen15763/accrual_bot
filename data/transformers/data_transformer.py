@@ -11,9 +11,19 @@ from datetime import datetime
 
 from .date_transformer import DateTransformer
 from .format_transformer import FormatTransformer
-from ...core.models.data_models import POData, PRData, EntityType, ProcessingType
-from ...utils.logging import Logger
+try:
+    from ...core.models.data_models import POData, PRData, EntityType, ProcessingType
+    from ...utils.logging import Logger
+except ImportError:
+    import sys
+    from pathlib import Path
+    # 添加accrual_bot目錄到sys.path
+    current_dir = Path(__file__).parent.parent.parent
+    if str(current_dir) not in sys.path:
+        sys.path.insert(0, str(current_dir))
 
+    from core.models.data_models import POData, PRData, EntityType, ProcessingType
+    from utils.logging import Logger
 
 class DataTransformer:
     """數據轉換器主類別"""
@@ -305,8 +315,8 @@ class DataTransformer:
         return fa_mapping.get(self.entity_type, [])
     
     def apply_business_rules(self, df: pd.DataFrame, 
-                           processing_type: ProcessingType,
-                           custom_rules: Optional[Dict[str, Any]] = None) -> pd.DataFrame:
+                             processing_type: ProcessingType,
+                             custom_rules: Optional[Dict[str, Any]] = None) -> pd.DataFrame:
         """應用業務規則
         
         Args:
@@ -326,7 +336,7 @@ class DataTransformer:
             return df
     
     def validate_transformed_data(self, df: pd.DataFrame, 
-                                processing_type: ProcessingType) -> Dict[str, Any]:
+                                  processing_type: ProcessingType) -> Dict[str, Any]:
         """驗證轉換後的數據
         
         Args:
@@ -384,8 +394,8 @@ def transform_pr_data(df: pd.DataFrame, entity_type: EntityType = EntityType.MOB
 
 
 def apply_business_rules(df: pd.DataFrame, 
-                        processing_type: ProcessingType,
-                        entity_type: EntityType = EntityType.MOB) -> pd.DataFrame:
+                         processing_type: ProcessingType,
+                         entity_type: EntityType = EntityType.MOB) -> pd.DataFrame:
     """應用業務規則的便捷函數"""
     transformer = DataTransformer(entity_type)
     return transformer.apply_business_rules(df, processing_type)

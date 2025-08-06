@@ -9,7 +9,17 @@ import pandas as pd
 import numpy as np
 from typing import Union, Optional, Dict, List, Any
 from decimal import Decimal, InvalidOperation
-from ...utils.logging import Logger
+try:
+    from ...utils.logging import Logger
+except ImportError:
+    import sys
+    from pathlib import Path
+    # 添加accrual_bot目錄到sys.path
+    current_dir = Path(__file__).parent.parent.parent
+    if str(current_dir) not in sys.path:
+        sys.path.insert(0, str(current_dir))
+    
+    from utils.logging import Logger
 
 
 class FormatTransformer:
@@ -75,10 +85,10 @@ class FormatTransformer:
         return text
     
     def format_currency(self, amount: Union[str, int, float], 
-                       currency: str = 'TWD',
-                       decimal_places: int = 2,
-                       include_symbol: bool = True,
-                       thousands_separator: bool = True) -> str:
+                        currency: str = 'TWD',
+                        decimal_places: int = 2,
+                        include_symbol: bool = True,
+                        thousands_separator: bool = True) -> str:
         """格式化貨幣金額
         
         Args:
@@ -254,7 +264,7 @@ class FormatTransformer:
             return None
     
     def transform_dataframe_formats(self, df: pd.DataFrame, 
-                                  format_config: Dict[str, Dict[str, Any]]) -> pd.DataFrame:
+                                    format_config: Dict[str, Dict[str, Any]]) -> pd.DataFrame:
         """批量轉換DataFrame格式
         
         Args:
@@ -301,7 +311,7 @@ class FormatTransformer:
         return df_copy
     
     def validate_numeric_columns(self, df: pd.DataFrame, 
-                               numeric_columns: List[str]) -> Dict[str, Dict[str, Any]]:
+                                 numeric_columns: List[str]) -> Dict[str, Dict[str, Any]]:
         """驗證數字列的數據品質
         
         Args:

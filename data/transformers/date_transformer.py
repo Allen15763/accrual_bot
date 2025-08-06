@@ -9,7 +9,18 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, date
 from typing import Optional, Union, List, Dict, Any
-from ...utils.logging import Logger
+
+try:
+    from ...utils.logging import Logger
+except ImportError:
+    import sys
+    from pathlib import Path
+    # 添加accrual_bot目錄到sys.path
+    current_dir = Path(__file__).parent.parent.parent
+    if str(current_dir) not in sys.path:
+        sys.path.insert(0, str(current_dir))
+
+    from utils.logging import Logger
 
 
 class DateTransformer:
@@ -61,7 +72,7 @@ class DateTransformer:
             parsed = pd.to_datetime(date_str, errors='coerce')
             if pd.notna(parsed):
                 return parsed.to_pydatetime()
-        except:
+        except Exception as err:
             pass
         
         # 使用正則表達式模式匹配
@@ -158,8 +169,8 @@ class DateTransformer:
             return str(date_obj)
     
     def validate_date_range(self, date_obj: Optional[datetime], 
-                          min_date: Optional[datetime] = None,
-                          max_date: Optional[datetime] = None) -> bool:
+                            min_date: Optional[datetime] = None,
+                            max_date: Optional[datetime] = None) -> bool:
         """驗證日期是否在指定範圍內
         
         Args:
@@ -182,8 +193,8 @@ class DateTransformer:
         return True
     
     def transform_dataframe_dates(self, df: pd.DataFrame, 
-                                date_columns: List[str],
-                                output_format: str = "%Y-%m-%d") -> pd.DataFrame:
+                                  date_columns: List[str],
+                                  output_format: str = "%Y-%m-%d") -> pd.DataFrame:
         """轉換DataFrame中的日期列
         
         Args:
@@ -257,8 +268,8 @@ def format_date_for_export(date_obj: Optional[datetime], format_str: str = "%Y-%
 
 
 def validate_date_range(date_obj: Optional[datetime], 
-                       min_date: Optional[datetime] = None,
-                       max_date: Optional[datetime] = None) -> bool:
+                        min_date: Optional[datetime] = None,
+                        max_date: Optional[datetime] = None) -> bool:
     """驗證日期範圍的便捷函數"""
     transformer = DateTransformer()
     return transformer.validate_date_range(date_obj, min_date, max_date)

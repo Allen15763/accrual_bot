@@ -11,8 +11,18 @@ from typing import Dict, List, Optional, Any, Union
 from pathlib import Path
 from datetime import datetime
 
-from ...core.models.config_models import ExportConfig
-from ...utils.logging import Logger
+try:
+    from ...core.models.config_models import ExportConfig
+    from ...utils.logging import Logger
+except ImportError:
+    import sys
+    # 添加accrual_bot目錄到sys.path
+    current_dir = Path(__file__).parent.parent.parent
+    if str(current_dir) not in sys.path:
+        sys.path.insert(0, str(current_dir))
+    
+    from core.models.config_models import ExportConfig
+    from utils.logging import Logger
 
 
 class BaseExporter(ABC):
@@ -132,8 +142,8 @@ class BaseExporter(ABC):
         }
     
     def export_multiple_sheets(self, 
-                             data_dict: Dict[str, pd.DataFrame], 
-                             output_path: Optional[str] = None) -> str:
+                               data_dict: Dict[str, pd.DataFrame], 
+                               output_path: Optional[str] = None) -> str:
         """
         匯出多個工作表（對於支援的格式）
         

@@ -21,8 +21,19 @@ except ImportError:
     EXCEL_AVAILABLE = False
 
 from .base_exporter import BaseExporter
-from ...core.models.config_models import ExportConfig
-from ...utils.logging import Logger
+
+try:
+    from ...core.models.config_models import ExportConfig
+    from ...utils.logging import Logger
+except ImportError:
+    import sys
+    # 添加accrual_bot目錄到sys.path
+    current_dir = Path(__file__).parent.parent.parent
+    if str(current_dir) not in sys.path:
+        sys.path.insert(0, str(current_dir))
+
+    from core.models.config_models import ExportConfig
+    from utils.logging import Logger
 
 
 @dataclass
@@ -254,7 +265,7 @@ class ExcelExporter(BaseExporter):
                 try:
                     if len(str(cell.value)) > max_length:
                         max_length = len(str(cell.value))
-                except:
+                except Exception as err:
                     pass
             
             # 設定欄寬，有最小和最大限制
@@ -274,8 +285,8 @@ class ExcelExporter(BaseExporter):
                     worksheet.column_dimensions[col_letter].width = width
     
     def export_multiple_sheets(self, 
-                             data_dict: Dict[str, pd.DataFrame], 
-                             output_path: Optional[str] = None) -> str:
+                               data_dict: Dict[str, pd.DataFrame], 
+                               output_path: Optional[str] = None) -> str:
         """
         匯出多工作表Excel檔案
         
@@ -384,8 +395,8 @@ class ExcelExporter(BaseExporter):
 
 
 def export_to_excel(data: Union[pd.DataFrame, Dict[str, pd.DataFrame]], 
-                   output_path: str,
-                   config: Optional[ExportConfig] = None) -> str:
+                    output_path: str,
+                    config: Optional[ExportConfig] = None) -> str:
     """
     匯出到Excel的便捷函數
     
