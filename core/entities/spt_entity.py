@@ -12,8 +12,8 @@ from .base_entity import BaseEntity, EntityProcessor, ProcessingFiles, Processin
 try:
     from ...core.models.data_models import EntityType, ProcessingType, ProcessingResult
     from ...core.models.config_models import EntityConfig, create_default_entity_config
-    from ...core.processors.po_processor import POProcessor
-    from ...core.processors.pr_processor import PRProcessor
+    from ...core.processors.po_processor import BasePOProcessor
+    from ...core.processors.pr_processor import BasePRProcessor
     from ...utils.logging import Logger
 except ImportError:
     import sys
@@ -25,8 +25,8 @@ except ImportError:
         
     from core.models.data_models import EntityType, ProcessingType, ProcessingResult
     from core.models.config_models import EntityConfig, create_default_entity_config
-    from core.processors.po_processor import POProcessor
-    from core.processors.pr_processor import PRProcessor
+    from core.processors.po_processor import BasePOProcessor
+    from core.processors.pr_processor import BasePRProcessor
     from utils.logging import Logger
 
 
@@ -38,7 +38,7 @@ class SPTPOProcessor(EntityProcessor):
         self.logger = Logger().get_logger(__name__)
         
         # 初始化核心處理器
-        self.po_processor = POProcessor(EntityType.SPT)
+        self.po_processor = BasePOProcessor(self.entity_config.entity_type.value)
     
     def process_po(self, files: ProcessingFiles, mode: ProcessingMode) -> ProcessingResult:
         """處理PO數據"""
@@ -125,7 +125,7 @@ class SPTPRProcessor(EntityProcessor):
         self.logger = Logger().get_logger(__name__)
         
         # 初始化核心處理器
-        self.pr_processor = PRProcessor(EntityType.SPT)
+        self.pr_processor = BasePRProcessor(self.entity_config.entity_type.value)
     
     def process_pr(self, files: ProcessingFiles, mode: ProcessingMode) -> ProcessingResult:
         """處理PR數據"""

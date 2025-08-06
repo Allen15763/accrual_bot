@@ -174,21 +174,21 @@ def create_default_entity_config(entity_type: EntityType) -> EntityConfig:
         return EntityConfig(
             entity_type=entity_type,
             entity_name="MOBTW",
-            fa_accounts=["1410", "1411", "1420", "1610", "1640", "1650"],
+            fa_accounts=["199999", "530016", "610303"],
             departments=["HR", "IT", "Finance", "Operations"]
         )
     elif entity_type == EntityType.SPT:
         return EntityConfig(
             entity_type=entity_type,
             entity_name="SPTTW",
-            fa_accounts=["1410", "1420", "1610", "1640", "1650"],
+            fa_accounts=["199999"],
             departments=["HR", "IT", "Finance", "Sales"]
         )
     elif entity_type == EntityType.SPX:
         return EntityConfig(
             entity_type=entity_type,
             entity_name="SPXTW",
-            fa_accounts=["1410", "1420", "1610", "1640", "1650"],
+            fa_accounts=["199999"],
             departments=["HR", "IT", "Finance", "Logistics"],
             special_handling={
                 "enable_spx_processing": True,

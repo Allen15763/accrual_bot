@@ -114,7 +114,7 @@ class SpxProcessor(BasePOProcessor):
             raise ValueError("添加SPX特有欄位時出錯")
     
     def process_spx_previous_workpaper(self, df: pd.DataFrame, previous_wp: pd.DataFrame, 
-                                      month: int, previous_wp_pr: pd.DataFrame = None) -> pd.DataFrame:
+                                       month: int, previous_wp_pr: pd.DataFrame = None) -> pd.DataFrame:
         """
         處理SPX前期底稿（包括PO和PR）
         
@@ -151,7 +151,7 @@ class SpxProcessor(BasePOProcessor):
             raise ValueError("處理SPX前期底稿時出錯")
     
     def process_spx_procurement_workpaper(self, df: pd.DataFrame, procurement: pd.DataFrame, 
-                                         procurement_pr: pd.DataFrame = None) -> pd.DataFrame:
+                                          procurement_pr: pd.DataFrame = None) -> pd.DataFrame:
         """
         處理SPX採購底稿（包括PO和PR）
         
@@ -194,7 +194,7 @@ class SpxProcessor(BasePOProcessor):
             raise ValueError("處理SPX採購底稿時出錯")
     
     def add_gl_date_from_ap_invoice(self, df: pd.DataFrame, ap_invoice_df: pd.DataFrame, 
-                                   file_date: int) -> pd.DataFrame:
+                                    file_date: int) -> pd.DataFrame:
         """
         從AP發票數據中添加GL DATE
         
@@ -396,7 +396,7 @@ class SpxProcessor(BasePOProcessor):
             df.loc[pr_fa_mask, 'PO狀態'] = fa_remarks_pr
     
     def apply_spx_erm_logic(self, df: pd.DataFrame, file_date: int, 
-                           ref_accounts: pd.DataFrame, ref_liability: pd.DataFrame) -> pd.DataFrame:
+                            ref_accounts: pd.DataFrame, ref_liability: pd.DataFrame) -> pd.DataFrame:
         """
         應用SPX ERM邏輯
         
@@ -503,7 +503,7 @@ class SpxProcessor(BasePOProcessor):
         return df
     
     def _set_spx_accounting_fields(self, df: pd.DataFrame, ref_accounts: pd.DataFrame, 
-                                  ref_liability: pd.DataFrame) -> pd.DataFrame:
+                                   ref_liability: pd.DataFrame) -> pd.DataFrame:
         """設置SPX會計相關欄位"""
         mask_accrual = df['是否估計入帳'] == 'Y'
         
