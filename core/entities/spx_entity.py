@@ -8,11 +8,26 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 
 from .base_entity import BaseEntity, EntityProcessor, ProcessingFiles, ProcessingMode
-from core.models.data_models import EntityType, ProcessingType, ProcessingResult
-from core.models.config_models import EntityConfig, create_default_entity_config
-from core.processors.spx_processor import SpxPOProcessor
-from core.processors.pr_processor import PRProcessor
-from utils.logging import Logger
+
+try:
+    from ...core.models.data_models import EntityType, ProcessingType, ProcessingResult
+    from ...core.models.config_models import EntityConfig, create_default_entity_config
+    from ...core.processors.spx_processor import SpxPOProcessor
+    from ...core.processors.pr_processor import PRProcessor
+    from ...utils.logging import Logger
+except ImportError:
+    import sys
+    from pathlib import Path
+    # 添加accrual_bot目錄到sys.path
+    current_dir = Path(__file__).parent.parent.parent
+    if str(current_dir) not in sys.path:
+        sys.path.insert(0, str(current_dir))
+
+    from core.models.data_models import EntityType, ProcessingType, ProcessingResult
+    from core.models.config_models import EntityConfig, create_default_entity_config
+    from core.processors.spx_processor import SpxPOProcessor
+    from core.processors.pr_processor import PRProcessor
+    from utils.logging import Logger
 
 
 class SPXPOProcessor(EntityProcessor):
@@ -229,9 +244,9 @@ class SPXEntity(BaseEntity):
         return "Super Micro Computer SPX Taiwan PO/PR 處理實體（含特殊業務邏輯）"
     
     def process_po_mode_1_spx(self, raw_data_file: str, filename: str,
-                             previous_workpaper: str, procurement_file: str,
-                             ap_invoice_file: str, previous_workpaper_pr: str,
-                             procurement_file_pr: str) -> ProcessingResult:
+                              previous_workpaper: str, procurement_file: str,
+                              ap_invoice_file: str, previous_workpaper_pr: str,
+                              procurement_file_pr: str) -> ProcessingResult:
         """
         SPX特有的PO模式1：包含AP invoice和PR處理
         
@@ -260,7 +275,7 @@ class SPXEntity(BaseEntity):
         return self.po_processor.process_po(files, ProcessingMode.MODE_1)
     
     def process_po_mode_5(self, raw_data_file: str, filename: str,
-                         procurement_file: str, closing_list: Optional[str] = None) -> ProcessingResult:
+                          procurement_file: str, closing_list: Optional[str] = None) -> ProcessingResult:
         """
         SPX採購專用模式：PO + 自己的底稿 + (關單)OPTIONAL
         

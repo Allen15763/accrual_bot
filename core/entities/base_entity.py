@@ -10,9 +10,19 @@ from typing import Dict, List, Optional, Any, Union
 from dataclasses import dataclass
 from pathlib import Path
 
-from ...core.models.data_models import EntityType, ProcessingType, ProcessingResult
-from ...core.models.config_models import ProcessingConfig, EntityConfig
-from ...utils.logging import Logger
+try:
+    from ...core.models.data_models import EntityType, ProcessingType, ProcessingResult
+    from ...core.models.config_models import ProcessingConfig, EntityConfig
+    from ...utils.logging import Logger
+except ImportError:
+    import sys
+    # 添加accrual_bot目錄到sys.path
+    current_dir = Path(__file__).parent.parent.parent
+    if str(current_dir) not in sys.path:
+        sys.path.insert(0, str(current_dir))
+    from core.models.data_models import EntityType, ProcessingType, ProcessingResult
+    from core.models.config_models import ProcessingConfig, EntityConfig
+    from utils.logging import Logger
 
 
 class ProcessingMode(Enum):
@@ -139,8 +149,8 @@ class BaseEntity(ABC):
         return self._pr_processor
     
     def process_po_mode_1(self, raw_data_file: str, filename: str,
-                         previous_workpaper: str, procurement_file: str,
-                         closing_list: str, **kwargs) -> ProcessingResult:
+                          previous_workpaper: str, procurement_file: str,
+                          closing_list: str, **kwargs) -> ProcessingResult:
         """
         PO模式1：處理原始數據+前期底稿+採購底稿+關單清單
         
@@ -166,7 +176,7 @@ class BaseEntity(ABC):
         return self.po_processor.process_po(files, ProcessingMode.MODE_1)
     
     def process_po_mode_2(self, raw_data_file: str, filename: str,
-                         previous_workpaper: str, procurement_file: str, **kwargs) -> ProcessingResult:
+                          previous_workpaper: str, procurement_file: str, **kwargs) -> ProcessingResult:
         """
         PO模式2：處理原始數據+前期底稿+採購底稿
         
@@ -190,7 +200,7 @@ class BaseEntity(ABC):
         return self.po_processor.process_po(files, ProcessingMode.MODE_2)
     
     def process_po_mode_3(self, raw_data_file: str, filename: str,
-                         previous_workpaper: str, **kwargs) -> ProcessingResult:
+                          previous_workpaper: str, **kwargs) -> ProcessingResult:
         """
         PO模式3：處理原始數據+前期底稿
         
@@ -231,7 +241,7 @@ class BaseEntity(ABC):
         return self.po_processor.process_po(files, ProcessingMode.MODE_4)
     
     def process_pr_mode_1(self, raw_data_file: str, filename: str,
-                         previous_workpaper: str, procurement_file: str, **kwargs) -> ProcessingResult:
+                          previous_workpaper: str, procurement_file: str, **kwargs) -> ProcessingResult:
         """
         PR模式1：處理原始數據+前期底稿+採購底稿
         
@@ -255,7 +265,7 @@ class BaseEntity(ABC):
         return self.pr_processor.process_pr(files, ProcessingMode.MODE_1)
     
     def process_pr_mode_2(self, raw_data_file: str, filename: str,
-                         previous_workpaper: str, **kwargs) -> ProcessingResult:
+                          previous_workpaper: str, **kwargs) -> ProcessingResult:
         """
         PR模式2：處理原始數據+前期底稿
         

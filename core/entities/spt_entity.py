@@ -8,11 +8,26 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 
 from .base_entity import BaseEntity, EntityProcessor, ProcessingFiles, ProcessingMode
-from core.models.data_models import EntityType, ProcessingType, ProcessingResult
-from core.models.config_models import EntityConfig, create_default_entity_config
-from core.processors.po_processor import POProcessor
-from core.processors.pr_processor import PRProcessor
-from utils.logging import Logger
+
+try:
+    from ...core.models.data_models import EntityType, ProcessingType, ProcessingResult
+    from ...core.models.config_models import EntityConfig, create_default_entity_config
+    from ...core.processors.po_processor import POProcessor
+    from ...core.processors.pr_processor import PRProcessor
+    from ...utils.logging import Logger
+except ImportError:
+    import sys
+    from pathlib import Path
+    # 添加accrual_bot目錄到sys.path
+    current_dir = Path(__file__).parent.parent.parent
+    if str(current_dir) not in sys.path:
+        sys.path.insert(0, str(current_dir))
+        
+    from core.models.data_models import EntityType, ProcessingType, ProcessingResult
+    from core.models.config_models import EntityConfig, create_default_entity_config
+    from core.processors.po_processor import POProcessor
+    from core.processors.pr_processor import PRProcessor
+    from utils.logging import Logger
 
 
 class SPTPOProcessor(EntityProcessor):

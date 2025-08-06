@@ -11,9 +11,14 @@ from .base_entity import BaseEntity
 from .mob_entity import MOBEntity
 from .spt_entity import SPTEntity
 from .spx_entity import SPXEntity
-from core.models.data_models import EntityType
-from core.models.config_models import EntityConfig, create_default_entity_config
-from utils.logging import Logger
+try:
+    from ...core.models.data_models import EntityType
+    from ...core.models.config_models import EntityConfig, create_default_entity_config
+    from ...utils.logging import Logger
+except ImportError:
+    from core.models.data_models import EntityType
+    from core.models.config_models import EntityConfig, create_default_entity_config
+    from utils.logging import Logger
 
 
 class EntityFactory:
@@ -33,8 +38,8 @@ class EntityFactory:
         self._entity_cache: Dict[str, BaseEntity] = {}
     
     def create_entity(self, entity_type: EntityType, 
-                     config: Optional[EntityConfig] = None,
-                     use_cache: bool = True) -> BaseEntity:
+                      config: Optional[EntityConfig] = None,
+                      use_cache: bool = True) -> BaseEntity:
         """
         創建實體實例
         
@@ -76,7 +81,7 @@ class EntityFactory:
         return entity
     
     def get_entity_by_name(self, entity_name: str, 
-                          config: Optional[EntityConfig] = None) -> BaseEntity:
+                           config: Optional[EntityConfig] = None) -> BaseEntity:
         """
         根據實體名稱創建實體
         
@@ -160,8 +165,8 @@ _factory = EntityFactory()
 
 
 def create_entity(entity_type: EntityType, 
-                 config: Optional[EntityConfig] = None,
-                 use_cache: bool = True) -> BaseEntity:
+                  config: Optional[EntityConfig] = None,
+                  use_cache: bool = True) -> BaseEntity:
     """
     創建實體的便捷函數
     
@@ -177,7 +182,7 @@ def create_entity(entity_type: EntityType,
 
 
 def create_entity_by_name(entity_name: str, 
-                         config: Optional[EntityConfig] = None) -> BaseEntity:
+                          config: Optional[EntityConfig] = None) -> BaseEntity:
     """
     根據名稱創建實體的便捷函數
     
@@ -236,7 +241,7 @@ def detect_entity_type_from_filename(filename: str) -> Optional[EntityType]:
 
 
 def auto_create_entity(filename: str, 
-                      config: Optional[EntityConfig] = None) -> Optional[BaseEntity]:
+                       config: Optional[EntityConfig] = None) -> Optional[BaseEntity]:
     """
     根據檔案名稱自動創建對應的實體
     
