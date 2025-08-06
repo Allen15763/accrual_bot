@@ -67,13 +67,26 @@ class DateTransformer:
         # 字符串處理
         date_str = str(date_str).strip()
         
-        # 嘗試pandas解析
+        # 嘗試pandas解析（適應性處理）
         try:
+            # 先嘗試不指定 dayfirst，讓 pandas 自動判斷
             parsed = pd.to_datetime(date_str, errors='coerce')
             if pd.notna(parsed):
-                return parsed.to_pydatetime()
-        except Exception as err:
-            pass
+                if hasattr(parsed, 'to_pydatetime'):
+                    return parsed.to_pydatetime()
+                else:
+                    return parsed
+        except Exception:
+            # 如果失敗，嘗試指定 dayfirst=True
+            try:
+                parsed = pd.to_datetime(date_str, errors='coerce', dayfirst=True)
+                if pd.notna(parsed):
+                    if hasattr(parsed, 'to_pydatetime'):
+                        return parsed.to_pydatetime()
+                    else:
+                        return parsed
+            except Exception:
+                pass
         
         # 使用正則表達式模式匹配
         for pattern in self.date_patterns:
@@ -102,11 +115,12 @@ class DateTransformer:
             if serial > 59:  # 1900年3月1日之後
                 serial -= 1
             
-            # 計算日期
+            # 計算日期 - 使用timedelta而不是pd.Timedelta
+            from datetime import timedelta
             delta_days = serial - 1  # 調整為從0開始
-            result_date = self.excel_epoch + pd.Timedelta(days=delta_days)
+            result_date = self.excel_epoch + timedelta(days=delta_days)
             
-            return result_date.to_pydatetime()
+            return result_date
         except Exception as e:
             self.logger.warning(f"無法解析Excel序列號 {serial}: {e}")
             return None
