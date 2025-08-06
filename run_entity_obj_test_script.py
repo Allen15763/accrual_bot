@@ -66,10 +66,8 @@ def test_spt_entity():
     print("\n=== 測試SPT實體 ===")
     
     try:
-        from core.entities import create_entity, EntityType
-        
-        # 創建SPT實體
-        spt_entity = create_entity(EntityType.SPT)
+        from core.entities import create_entity_by_name
+        spt_entity = create_entity_by_name('SPT')
         
         print("SPT實體創建成功")
         print(f"實體名稱: {spt_entity.get_entity_name()}")

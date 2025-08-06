@@ -708,9 +708,9 @@ class BasePOProcessor(BaseDataProcessor):
         """讀取原始數據檔案"""
         try:
             if file_path.endswith('.csv'):
-                df = pd.read_csv(file_path, encoding='utf-8')
+                df = pd.read_csv(file_path, encoding='utf-8', dtype=str)
             elif file_path.endswith(('.xlsx', '.xls')):
-                df = pd.read_excel(file_path)
+                df = pd.read_excel(file_path, dtype=str)
             else:
                 raise ValueError(f"不支援的檔案格式: {file_path}")
             
@@ -725,9 +725,9 @@ class BasePOProcessor(BaseDataProcessor):
         """讀取底稿檔案"""
         try:
             if file_path.endswith(('.xlsx', '.xls')):
-                df = pd.read_excel(file_path)
+                df = pd.read_excel(file_path, dtype=str)
             elif file_path.endswith('.csv'):
-                df = pd.read_csv(file_path, encoding='utf-8')
+                df = pd.read_csv(file_path, encoding='utf-8', dtype=str)
             else:
                 raise ValueError(f"不支援的底稿檔案格式: {file_path}")
             
@@ -742,11 +742,11 @@ class BasePOProcessor(BaseDataProcessor):
         """讀取關單清單"""
         try:
             if file_path.endswith(('.xlsx', '.xls')):
-                df = pd.read_excel(file_path)
+                df = pd.read_excel(file_path, dtype=str)
                 # 假設關單清單在第一欄
                 closing_list = df.iloc[:, 0].dropna().astype(str).tolist()
             elif file_path.endswith('.csv'):
-                df = pd.read_csv(file_path)
+                df = pd.read_csv(file_path, dtype=str)
                 closing_list = df.iloc[:, 0].dropna().astype(str).tolist()
             else:
                 raise ValueError(f"不支援的關單清單檔案格式: {file_path}")
