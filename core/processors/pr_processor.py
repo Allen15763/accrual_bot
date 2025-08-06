@@ -276,7 +276,7 @@ class BasePRProcessor(BaseDataProcessor):
             raise ValueError("應用狀態邏輯時出錯")
     
     def set_accounting_fields(self, df: pd.DataFrame, ref_accounts: pd.DataFrame, 
-                             ref_liability: pd.DataFrame) -> pd.DataFrame:
+                              ref_liability: pd.DataFrame) -> pd.DataFrame:
         """
         設置會計相關欄位
         

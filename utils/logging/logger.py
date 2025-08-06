@@ -43,7 +43,7 @@ class Logger:
             # 從配置獲取日誌設定
             log_level = config_manager.get('LOGGING', 'level', 'INFO')
             log_format = config_manager.get('LOGGING', 'format', 
-                                          '%(asctime)s %(levelname)s: %(message)s')
+                                            '%(asctime)s %(levelname)s: %(message)s')
             
             # 設置基本配置
             logging.basicConfig(
@@ -245,14 +245,14 @@ class StructuredLogger:
         level(f"執行{status}: {operation} {details}")
     
     def log_data_processing(self, data_type: str, record_count: int, 
-                           processing_time: float = None, **kwargs) -> None:
+                            processing_time: float = None, **kwargs) -> None:
         """記錄數據處理信息"""
         time_info = f"耗時{processing_time:.2f}秒 " if processing_time else ""
         details = ' '.join([f"{k}={v}" for k, v in kwargs.items()])
         self.logger.info(f"處理{data_type}數據: {record_count}筆記錄 {time_info}{details}")
     
     def log_file_operation(self, operation: str, file_path: str, 
-                          success: bool = True, **kwargs) -> None:
+                           success: bool = True, **kwargs) -> None:
         """記錄檔案操作"""
         status = "成功" if success else "失敗"
         details = ' '.join([f"{k}={v}" for k, v in kwargs.items()])

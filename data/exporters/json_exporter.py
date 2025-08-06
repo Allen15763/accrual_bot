@@ -135,8 +135,8 @@ class JSONExporter(BaseExporter):
         return str(obj)
     
     def export_multiple_sheets(self, 
-                             data_dict: Dict[str, pd.DataFrame], 
-                             output_path: Optional[str] = None) -> str:
+                               data_dict: Dict[str, pd.DataFrame], 
+                               output_path: Optional[str] = None) -> str:
         """
         匯出多工作表為單一JSON檔案
         
@@ -262,9 +262,9 @@ class JSONExporter(BaseExporter):
 
 
 def export_to_json(data: Union[pd.DataFrame, Dict[str, pd.DataFrame]], 
-                  output_path: str,
-                  config: Optional[ExportConfig] = None,
-                  as_array: bool = False) -> str:
+                   output_path: str,
+                   config: Optional[ExportConfig] = None,
+                   as_array: bool = False) -> str:
     """
     匯出到JSON的便捷函數
     

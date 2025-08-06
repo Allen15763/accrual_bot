@@ -69,8 +69,8 @@ class CSVExporter(BaseExporter):
             raise
     
     def export_multiple_sheets(self, 
-                             data_dict: Dict[str, pd.DataFrame], 
-                             output_path: Optional[str] = None) -> str:
+                               data_dict: Dict[str, pd.DataFrame], 
+                               output_path: Optional[str] = None) -> str:
         """
         匯出多個CSV檔案（每個工作表一個檔案）
         
@@ -124,8 +124,8 @@ class CSVExporter(BaseExporter):
 
 
 def export_to_csv(data: pd.DataFrame, 
-                 output_path: str,
-                 config: Optional[ExportConfig] = None) -> str:
+                  output_path: str,
+                  config: Optional[ExportConfig] = None) -> str:
     """
     匯出到CSV的便捷函數
     

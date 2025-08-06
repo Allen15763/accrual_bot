@@ -32,7 +32,7 @@ def clean_nan_values(df: pd.DataFrame, columns: List[str]) -> pd.DataFrame:
 
 
 def safe_string_operation(series: pd.Series, operation: str, pattern: str = None, 
-                         replacement: str = None, **kwargs) -> pd.Series:
+                          replacement: str = None, **kwargs) -> pd.Series:
     """
     安全的字符串操作（處理NaN值）
     
@@ -51,7 +51,7 @@ def safe_string_operation(series: pd.Series, operation: str, pattern: str = None
         str_series = series.astype(str).fillna('')
         
         if operation == 'contains':
-            return str_series.str.contains(pattern, na=False, **kwargs)
+            return str_series.str.contains(pattern, **kwargs)
         elif operation == 'replace':
             return str_series.str.replace(pattern, replacement, **kwargs)
         elif operation == 'extract':
@@ -95,7 +95,7 @@ def format_numeric_with_thousands(value: Union[int, float, str], decimal_places:
 
 
 def format_numeric_columns(df: pd.DataFrame, int_cols: List[str], 
-                          float_cols: List[str]) -> pd.DataFrame:
+                           float_cols: List[str]) -> pd.DataFrame:
     """
     格式化數值列，包括千分位
     
@@ -132,7 +132,7 @@ def format_numeric_columns(df: pd.DataFrame, int_cols: List[str],
 
 
 def parse_date_string(date_str: str, input_format: str = None, 
-                     output_format: str = None) -> Optional[str]:
+                      output_format: str = None) -> Optional[str]:
     """
     解析日期字符串
     
@@ -218,7 +218,7 @@ def extract_date_range_from_description(description: str, patterns: Dict[str, st
 
 
 def convert_date_format_in_string(text: str, from_pattern: str = r'(\d{4})/(\d{2})', 
-                                 to_pattern: str = r'\1\2') -> str:
+                                  to_pattern: str = r'\1\2') -> str:
     """
     轉換字符串中的日期格式
     
@@ -298,7 +298,7 @@ def safe_numeric_operation(series: pd.Series, operation: str, **kwargs) -> pd.Se
 
 
 def create_mapping_dict(df: pd.DataFrame, key_col: str, value_col: str, 
-                       filter_condition: pd.Series = None) -> Dict[Any, Any]:
+                        filter_condition: pd.Series = None) -> Dict[Any, Any]:
     """
     創建映射字典
     
@@ -329,7 +329,7 @@ def create_mapping_dict(df: pd.DataFrame, key_col: str, value_col: str,
 
 
 def apply_mapping_safely(series: pd.Series, mapping_dict: Dict[Any, Any], 
-                        default_value: Any = None) -> pd.Series:
+                         default_value: Any = None) -> pd.Series:
     """
     安全地應用映射字典
     
@@ -348,7 +348,7 @@ def apply_mapping_safely(series: pd.Series, mapping_dict: Dict[Any, Any],
 
 
 def validate_dataframe_columns(df: pd.DataFrame, required_columns: List[str], 
-                              raise_error: bool = True) -> bool:
+                               raise_error: bool = True) -> bool:
     """
     驗證DataFrame是否包含必要的列
     
@@ -402,7 +402,7 @@ def concat_dataframes_safely(dfs: List[pd.DataFrame], **kwargs) -> pd.DataFrame:
 
 
 def parallel_apply(df: pd.DataFrame, func: callable, column: str = None, 
-                  max_workers: int = None, **kwargs) -> pd.Series:
+                   max_workers: int = None, **kwargs) -> pd.Series:
     """
     並行應用函數到DataFrame的列
     
@@ -445,7 +445,7 @@ def parallel_apply(df: pd.DataFrame, func: callable, column: str = None,
 
 
 def memory_efficient_operation(df: pd.DataFrame, operation: callable, 
-                              chunk_size: int = 10000, **kwargs) -> pd.DataFrame:
+                               chunk_size: int = 10000, **kwargs) -> pd.DataFrame:
     """
     記憶體高效的DataFrame操作
     
