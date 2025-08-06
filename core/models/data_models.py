@@ -235,9 +235,9 @@ class ProcessingResult:
             "success_rate": self.success_rate,
             "processing_time": self.processing_time,
             "validation_errors": len([r for r in self.validation_results 
-                                   if r.status == ValidationStatus.INVALID]),
+                                     if r.status == ValidationStatus.INVALID]),
             "validation_warnings": len([r for r in self.validation_results 
-                                     if r.status == ValidationStatus.WARNING]),
+                                       if r.status == ValidationStatus.WARNING]),
             "output_files": self.output_files
         }
 

@@ -73,7 +73,7 @@ class GoogleSheetsImporter(BaseDataImporter):
             raise
     
     def get_sheet_data(self, spreadsheet_id: str, sheet_name: str, 
-                      cell_range: str = None, header_row: bool = True) -> pd.DataFrame:
+                       cell_range: str = None, header_row: bool = True) -> pd.DataFrame:
         """
         從Google Sheets獲取數據
         
@@ -209,7 +209,7 @@ class GoogleSheetsImporter(BaseDataImporter):
             return []
     
     def _get_sheet_data_safe(self, spreadsheet_id: str, sheet_name: str, 
-                            cell_range: str, header_row: bool) -> Optional[pd.DataFrame]:
+                             cell_range: str, header_row: bool) -> Optional[pd.DataFrame]:
         """安全地獲取工作表數據（用於並發處理）"""
         try:
             return self.get_sheet_data(spreadsheet_id, sheet_name, cell_range, header_row)

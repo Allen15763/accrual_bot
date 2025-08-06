@@ -231,7 +231,7 @@ class BasePOProcessor(BaseDataProcessor):
             raise ValueError("處理關單清單時出錯")
     
     def process_previous_workpaper(self, df: pd.DataFrame, previous_wp: pd.DataFrame, 
-                                  month: int) -> pd.DataFrame:
+                                   month: int) -> pd.DataFrame:
         """
         處理前期底稿
         
@@ -402,7 +402,7 @@ class BasePOProcessor(BaseDataProcessor):
             raise ValueError("應用日期邏輯時出錯")
     
     def apply_erm_logic(self, df: pd.DataFrame, file_date: int, 
-                       ref_accounts: pd.DataFrame, ref_liability: pd.DataFrame) -> pd.DataFrame:
+                        ref_accounts: pd.DataFrame, ref_liability: pd.DataFrame) -> pd.DataFrame:
         """
         應用ERM邏輯處理
         
@@ -447,7 +447,7 @@ class BasePOProcessor(BaseDataProcessor):
         return self.update_estimation_based_on_status(df, 'PO狀態')
     
     def _set_accounting_fields(self, df: pd.DataFrame, ref_accounts: pd.DataFrame, 
-                              ref_liability: pd.DataFrame) -> pd.DataFrame:
+                               ref_liability: pd.DataFrame) -> pd.DataFrame:
         """設置會計相關欄位"""
         df_copy = df.copy()
         
@@ -610,3 +610,208 @@ class BasePOProcessor(BaseDataProcessor):
         except Exception as e:
             self.logger.warning(f"重新排列欄位時出錯: {str(e)}")
             return df
+    
+    def process(self, raw_data_file: str, filename: str, 
+                previous_workpaper: Optional[str] = None,
+                procurement_file: Optional[str] = None,
+                closing_list_file: Optional[str] = None,
+                **kwargs):
+        """
+        統一的PO處理入口方法
+        
+        Args:
+            raw_data_file: 原始PO數據檔案路徑
+            filename: 原始數據檔案名稱
+            previous_workpaper: 前期底稿檔案路徑（可選）
+            procurement_file: 採購底稿檔案路徑（可選）
+            closing_list_file: 關單清單檔案路徑（可選）
+            **kwargs: 其他參數
+            
+        Returns:
+            ProcessingResult: 處理結果
+        """
+        try:
+            from ..models.data_models import ProcessingResult
+            
+            start_time = datetime.now()
+            self.logger.info(f"開始處理PO檔案: {filename}")
+            
+            # 1. 讀取原始PO數據
+            df = self._read_raw_data(raw_data_file)
+            if df is None or df.empty:
+                raise ValueError(f"無法讀取或空的原始數據檔案: {raw_data_file}")
+            
+            # 2. 提取月份資訊
+            month = self._extract_month_from_filename(filename)
+            
+            # 3. 添加基本欄位
+            df, previous_month = self.add_basic_columns(df, month)
+            
+            # 4. 處理前期底稿（如果提供）
+            if previous_workpaper:
+                previous_wp_df = self._read_workpaper(previous_workpaper)
+                if previous_wp_df is not None:
+                    df = self.process_previous_workpaper(df, previous_wp_df, month)
+            
+            # 5. 處理採購底稿（如果提供）
+            if procurement_file:
+                procurement_df = self._read_workpaper(procurement_file)
+                if procurement_df is not None:
+                    df = self.process_procurement_workpaper(df, procurement_df)
+            
+            # 6. 處理關單清單（如果提供）
+            if closing_list_file:
+                closing_list = self._read_closing_list(closing_list_file)
+                if closing_list:
+                    df = self.process_closing_list(df, closing_list)
+            
+            # 7. 應用日期邏輯
+            df = self.apply_date_logic(df)
+            
+            # 8. 應用ERM邏輯
+            file_date = self._convert_month_to_file_date(month)
+            df = self.apply_erm_logic(df, file_date, None, None)  # 參考數據可以後續添加
+            
+            # 9. 最終格式化
+            df = self.finalize_data_format(df)
+            
+            # 10. 輸出結果
+            output_file = self._save_output(df, filename)
+            
+            end_time = datetime.now()
+            
+            return ProcessingResult(
+                success=True,
+                message="PO處理完成",
+                processed_data=df,
+                total_records=len(df),
+                processed_records=len(df),
+                start_time=start_time,
+                end_time=end_time,
+                output_files=[output_file] if output_file else []
+            )
+            
+        except Exception as e:
+            end_time = datetime.now()
+            error_msg = f"PO處理失敗: {str(e)}"
+            self.logger.error(error_msg, exc_info=True)
+            
+            return ProcessingResult(
+                success=False,
+                message=error_msg,
+                start_time=start_time,
+                end_time=end_time,
+                errors=[error_msg]
+            )
+    
+    def _read_raw_data(self, file_path: str) -> Optional[pd.DataFrame]:
+        """讀取原始數據檔案"""
+        try:
+            if file_path.endswith('.csv'):
+                df = pd.read_csv(file_path, encoding='utf-8')
+            elif file_path.endswith(('.xlsx', '.xls')):
+                df = pd.read_excel(file_path)
+            else:
+                raise ValueError(f"不支援的檔案格式: {file_path}")
+            
+            self.logger.info(f"成功讀取原始數據: {len(df)} 行")
+            return df
+            
+        except Exception as e:
+            self.logger.error(f"讀取原始數據失敗: {e}")
+            return None
+    
+    def _read_workpaper(self, file_path: str) -> Optional[pd.DataFrame]:
+        """讀取底稿檔案"""
+        try:
+            if file_path.endswith(('.xlsx', '.xls')):
+                df = pd.read_excel(file_path)
+            elif file_path.endswith('.csv'):
+                df = pd.read_csv(file_path, encoding='utf-8')
+            else:
+                raise ValueError(f"不支援的底稿檔案格式: {file_path}")
+            
+            self.logger.info(f"成功讀取底稿檔案: {len(df)} 行")
+            return df
+            
+        except Exception as e:
+            self.logger.error(f"讀取底稿檔案失敗: {e}")
+            return None
+    
+    def _read_closing_list(self, file_path: str) -> List[str]:
+        """讀取關單清單"""
+        try:
+            if file_path.endswith(('.xlsx', '.xls')):
+                df = pd.read_excel(file_path)
+                # 假設關單清單在第一欄
+                closing_list = df.iloc[:, 0].dropna().astype(str).tolist()
+            elif file_path.endswith('.csv'):
+                df = pd.read_csv(file_path)
+                closing_list = df.iloc[:, 0].dropna().astype(str).tolist()
+            else:
+                raise ValueError(f"不支援的關單清單檔案格式: {file_path}")
+            
+            self.logger.info(f"成功讀取關單清單: {len(closing_list)} 項")
+            return closing_list
+            
+        except Exception as e:
+            self.logger.error(f"讀取關單清單失敗: {e}")
+            return []
+    
+    def _extract_month_from_filename(self, filename: str) -> int:
+        """從檔案名稱提取月份"""
+        import re
+        
+        try:
+            # 嘗試從檔案名稱中提取YYYYMM格式的日期
+            match = re.search(r'(\d{6})', filename)
+            if match:
+                date_str = match.group(1)
+                month = int(date_str[4:6])  # 取月份部分
+                return month
+            
+            # 如果沒找到，嘗試其他格式
+            match = re.search(r'(\d{4})(\d{2})', filename)
+            if match:
+                month = int(match.group(2))
+                return month
+            
+            # 預設返回當前月份
+            from datetime import datetime
+            return datetime.now().month
+            
+        except Exception as e:
+            self.logger.warning(f"無法從檔案名稱提取月份: {e}")
+            return datetime.now().month
+    
+    def _convert_month_to_file_date(self, month: int) -> int:
+        """將月份轉換為檔案日期格式"""
+        from datetime import datetime
+        current_year = datetime.now().year
+        return current_year * 100 + month
+    
+    def _save_output(self, df: pd.DataFrame, original_filename: str) -> Optional[str]:
+        """保存輸出檔案"""
+        try:
+            import os
+            
+            # 生成輸出檔案名稱
+            base_name = os.path.splitext(original_filename)[0]
+            output_filename = f"{base_name}_processed_{self.entity_type}.xlsx"
+            
+            # 創建輸出目錄
+            output_dir = "output"
+            if not os.path.exists(output_dir):
+                os.makedirs(output_dir)
+            
+            output_path = os.path.join(output_dir, output_filename)
+            
+            # 保存Excel檔案
+            df.to_excel(output_path, index=False)
+            
+            self.logger.info(f"輸出檔案已保存: {output_path}")
+            return output_path
+            
+        except Exception as e:
+            self.logger.error(f"保存輸出檔案失敗: {e}")
+            return None

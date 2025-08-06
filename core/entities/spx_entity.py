@@ -12,8 +12,8 @@ from .base_entity import BaseEntity, EntityProcessor, ProcessingFiles, Processin
 try:
     from ...core.models.data_models import EntityType, ProcessingType, ProcessingResult
     from ...core.models.config_models import EntityConfig, create_default_entity_config
-    from ...core.processors.spx_processor import SpxProcessor
-    from ...core.processors.pr_processor import BasePRProcessor
+    from ...core.processors.spx_po_processor import SpxPOProcessor
+    from ...core.processors.spx_pr_processor import SpxPRProcessor
     from ...utils.logging import Logger
 except ImportError:
     import sys
@@ -25,8 +25,8 @@ except ImportError:
 
     from core.models.data_models import EntityType, ProcessingType, ProcessingResult
     from core.models.config_models import EntityConfig, create_default_entity_config
-    from core.processors.spx_processor import SpxProcessor
-    from core.processors.pr_processor import BasePRProcessor
+    from core.processors.spx_po_processor import SpxPOProcessor
+    from core.processors.spx_pr_processor import SpxPRProcessor
     from utils.logging import Logger
 
 
@@ -38,7 +38,7 @@ class SPXPOProcessor(EntityProcessor):
         self.logger = Logger().get_logger(__name__)
         
         # 初始化SPX專用處理器
-        self.spx_processor = SpxProcessor()
+        self.spx_po_processor = SpxPOProcessor()
     
     def process_po(self, files: ProcessingFiles, mode: ProcessingMode) -> ProcessingResult:
         """處理PO數據"""
@@ -71,7 +71,7 @@ class SPXPOProcessor(EntityProcessor):
     def _process_mode_1(self, files: ProcessingFiles) -> ProcessingResult:
         """模式1：SPX完整處理流程（包含AP invoice和PR處理）"""
         # SPX模式1需要處理PO + AP invoice + PR
-        return self.spx_processor.process(
+        self.spx_po_processor.process(
             files.raw_data_file,
             files.raw_data_filename,
             files.previous_workpaper,
@@ -80,39 +80,69 @@ class SPXPOProcessor(EntityProcessor):
             files.previous_workpaper_pr,
             files.procurement_file_pr
         )
+        return ProcessingResult(
+            success=True,
+            message="SPX PO模式1處理完成",
+            start_time=datetime.now(),
+            end_time=datetime.now()
+        )
     
     def _process_mode_2(self, files: ProcessingFiles) -> ProcessingResult:
         """模式2：標準處理（無AP invoice）"""
-        return self.spx_processor.process(
+        self.spx_po_processor.process(
             files.raw_data_file,
             files.raw_data_filename,
             files.previous_workpaper,
             files.procurement_file
         )
+        return ProcessingResult(
+            success=True,
+            message="SPX PO模式2處理完成",
+            start_time=datetime.now(),
+            end_time=datetime.now()
+        )
     
     def _process_mode_3(self, files: ProcessingFiles) -> ProcessingResult:
         """模式3：基礎處理"""
-        return self.spx_processor.process(
+        self.spx_po_processor.process(
             files.raw_data_file,
             files.raw_data_filename,
             files.previous_workpaper
         )
+        return ProcessingResult(
+            success=True,
+            message="SPX PO模式3處理完成",
+            start_time=datetime.now(),
+            end_time=datetime.now()
+        )
     
     def _process_mode_4(self, files: ProcessingFiles) -> ProcessingResult:
         """模式4：僅原始數據"""
-        return self.spx_processor.process(
+        self.spx_po_processor.process(
             files.raw_data_file,
             files.raw_data_filename
+        )
+        return ProcessingResult(
+            success=True,
+            message="SPX PO模式4處理完成",
+            start_time=datetime.now(),
+            end_time=datetime.now()
         )
     
     def _process_mode_5(self, files: ProcessingFiles) -> ProcessingResult:
         """模式5：SPX採購專用模式"""
         # 採購用模式：PO + 自己的底稿 + (關單)OPTIONAL
-        return self.spx_processor.process_procurement_mode(
+        self.spx_po_processor.process(
             files.raw_data_file,
             files.raw_data_filename,
-            files.procurement_file,
-            files.closing_list
+            files.previous_workpaper,
+            files.procurement_file
+        )
+        return ProcessingResult(
+            success=True,
+            message="SPX PO模式5處理完成",
+            start_time=datetime.now(),
+            end_time=datetime.now()
         )
     
     def process_concurrent_spx(self, file_paths: Dict[str, str]) -> ProcessingResult:
@@ -154,8 +184,8 @@ class SPXPRProcessor(EntityProcessor):
         self.entity_config = entity_config
         self.logger = Logger().get_logger(__name__)
         
-        # 初始化核心處理器
-        self.pr_processor = BasePRProcessor(self.entity_config.entity_type.value)
+        # 初始化SPX專用PR處理器
+        self.spx_pr_processor = SpxPRProcessor()
     
     def process_pr(self, files: ProcessingFiles, mode: ProcessingMode) -> ProcessingResult:
         """處理PR數據"""
@@ -181,19 +211,32 @@ class SPXPRProcessor(EntityProcessor):
     
     def _process_mode_1(self, files: ProcessingFiles) -> ProcessingResult:
         """模式1：完整處理流程"""
-        return self.pr_processor.process(
+        self.spx_pr_processor.process(
             files.raw_data_file,
             files.raw_data_filename,
-            files.previous_workpaper,
-            files.procurement_file
+            files.procurement_file,
+            files.previous_workpaper
+        )
+        return ProcessingResult(
+            success=True,
+            message="SPX PR模式1處理完成",
+            start_time=datetime.now(),
+            end_time=datetime.now()
         )
     
     def _process_mode_2(self, files: ProcessingFiles) -> ProcessingResult:
         """模式2：基礎處理"""
-        return self.pr_processor.process(
+        self.spx_pr_processor.process(
             files.raw_data_file,
             files.raw_data_filename,
+            None,  # 無採購底稿
             files.previous_workpaper
+        )
+        return ProcessingResult(
+            success=True,
+            message="SPX PR模式2處理完成",
+            start_time=datetime.now(),
+            end_time=datetime.now()
         )
     
     def process_po(self, files: ProcessingFiles, mode: ProcessingMode) -> ProcessingResult:
@@ -272,7 +315,7 @@ class SPXEntity(BaseEntity):
             procurement_file_pr=procurement_file_pr
         )
         
-        return self.po_processor.process_po(files, ProcessingMode.MODE_1)
+        return self._po_processor.process_po(files, ProcessingMode.MODE_1)
     
     def process_po_mode_5(self, raw_data_file: str, filename: str,
                           procurement_file: str, closing_list: Optional[str] = None) -> ProcessingResult:
@@ -295,7 +338,7 @@ class SPXEntity(BaseEntity):
             closing_list=closing_list
         )
         
-        return self.po_processor.process_po(files, ProcessingMode.MODE_5)
+        return self._po_processor.process_po(files, ProcessingMode.MODE_5)
     
     def concurrent_spx_process(self, file_paths: Dict[str, str]) -> ProcessingResult:
         """
@@ -314,7 +357,22 @@ class SPXEntity(BaseEntity):
         Returns:
             ProcessingResult: 處理結果
         """
-        return self.po_processor.process_concurrent_spx(file_paths)
+        try:
+            self._po_processor.process_concurrent_spx(file_paths)
+            return ProcessingResult(
+                success=True,
+                message="SPX並發處理完成",
+                start_time=datetime.now(),
+                end_time=datetime.now()
+            )
+        except Exception as e:
+            self.logger.error(f"SPX並發處理失敗: {e}")
+            return ProcessingResult(
+                success=False,
+                message=f"並發處理失敗: {str(e)}",
+                start_time=datetime.now(),
+                end_time=datetime.now()
+            )
     
     def validate_spx_specific_requirements(self, files: ProcessingFiles, mode: ProcessingMode) -> bool:
         """驗證SPX特有的需求"""

@@ -50,6 +50,8 @@ class BaseDataProcessor:
         self._load_entity_config()
         
         self.logger.info(f"初始化 {self.entity_type} 數據處理器")
+
+        self.config_manager = config_manager
     
     def _load_entity_config(self) -> None:
         """加載實體特定的配置"""

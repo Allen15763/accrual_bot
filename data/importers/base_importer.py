@@ -20,7 +20,6 @@ try:
 except ImportError:
     # 如果相對導入失敗，使用絕對導入
     import sys
-    from pathlib import Path
     
     # 添加accrual_bot目錄到sys.path
     current_dir = Path(__file__).parent.parent.parent
@@ -45,7 +44,7 @@ class BaseDataImporter:
         self.logger.info("初始化基礎數據導入器")
     
     def import_file(self, file_path: str, sheet_name: Optional[Union[str, int]] = None,
-                   encoding: str = 'utf-8', **kwargs) -> pd.DataFrame:
+                    encoding: str = 'utf-8', **kwargs) -> pd.DataFrame:
         """
         導入單個檔案
         
@@ -87,7 +86,7 @@ class BaseDataImporter:
             raise
     
     def _import_excel(self, file_path: str, sheet_name: Optional[Union[str, int]] = None,
-                     **kwargs) -> pd.DataFrame:
+                      **kwargs) -> pd.DataFrame:
         """導入Excel檔案"""
         try:
             # 設置預設參數
@@ -142,7 +141,7 @@ class BaseDataImporter:
             raise ValueError(f"無法使用任何編碼格式讀取檔案: {file_path}")
     
     def import_multiple_files(self, file_paths: List[str], 
-                             file_configs: Dict[str, Dict] = None) -> Dict[str, pd.DataFrame]:
+                              file_configs: Dict[str, Dict] = None) -> Dict[str, pd.DataFrame]:
         """
         導入多個檔案
         
@@ -187,7 +186,7 @@ class BaseDataImporter:
             return {}
     
     def concurrent_import_files(self, file_paths: List[str], 
-                               file_configs: Dict[str, Dict] = None) -> Dict[str, pd.DataFrame]:
+                                file_configs: Dict[str, Dict] = None) -> Dict[str, pd.DataFrame]:
         """
         並發導入多個檔案
         
@@ -302,7 +301,7 @@ class BaseDataImporter:
             return None, None
     
     def validate_dataframe(self, df: pd.DataFrame, required_columns: List[str] = None,
-                          min_rows: int = 0) -> bool:
+                           min_rows: int = 0) -> bool:
         """
         驗證DataFrame的有效性
         

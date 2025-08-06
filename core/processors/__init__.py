@@ -6,11 +6,13 @@
 from .base_processor import BaseDataProcessor
 from .po_processor import BasePOProcessor
 from .pr_processor import BasePRProcessor
-from .spx_processor import SpxProcessor
+from .spx_po_processor import SpxPOProcessor
+from .spx_pr_processor import SpxPRProcessor
 
 __all__ = [
     'BaseDataProcessor',
     'BasePOProcessor', 
     'BasePRProcessor',
-    'SpxProcessor'
+    'SpxPOProcessor',
+    'SpxPRProcessor'
 ]

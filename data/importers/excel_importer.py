@@ -16,7 +16,6 @@ try:
 except ImportError:
     # 如果相對導入失敗，使用絕對導入
     import sys
-    from pathlib import Path
     
     # 添加accrual_bot目錄到sys.path
     current_dir = Path(__file__).parent.parent.parent
@@ -38,7 +37,7 @@ class ExcelImporter(BaseDataImporter):
         self.logger.info("初始化Excel專用導入器")
     
     def import_excel_with_preprocessing(self, file_path: str, 
-                                      preprocessing_config: Dict[str, Any] = None) -> Tuple[pd.DataFrame, int, int]:
+                                        preprocessing_config: Dict[str, Any] = None) -> Tuple[pd.DataFrame, int, int]:
         """
         導入Excel檔案並進行預處理，提取日期和月份信息
         
@@ -85,7 +84,7 @@ class ExcelImporter(BaseDataImporter):
         try:
             # 尋找可能包含日期的欄位
             date_columns = [col for col in df.columns if any(keyword in str(col).lower() 
-                          for keyword in ['date', '日期', 'month', '月份', 'period', '期間'])]
+                            for keyword in ['date', '日期', 'month', '月份', 'period', '期間'])]
             
             for col in date_columns:
                 if col in df.columns:
@@ -188,7 +187,7 @@ class ExcelImporter(BaseDataImporter):
             return {}
     
     def import_multiple_sheets(self, file_path: str, 
-                              sheet_configs: Dict[str, Dict] = None) -> Dict[str, pd.DataFrame]:
+                               sheet_configs: Dict[str, Dict] = None) -> Dict[str, pd.DataFrame]:
         """
         從單個Excel檔案導入多個工作表
         
@@ -240,7 +239,7 @@ class ExcelImporter(BaseDataImporter):
             return {}
     
     def import_with_data_validation(self, file_path: str, 
-                                   validation_rules: Dict[str, Any] = None) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+                                    validation_rules: Dict[str, Any] = None) -> Tuple[pd.DataFrame, Dict[str, Any]]:
         """
         導入Excel檔案並進行數據驗證
         
@@ -316,7 +315,8 @@ class ExcelImporter(BaseDataImporter):
             return {'is_valid': False, 'errors': [str(e)], 'warnings': [], 'statistics': {}}
     
     def concurrent_import_excel_files(self, file_paths: List[str], 
-                                     preprocessing_configs: Dict[str, Dict] = None) -> Dict[str, Tuple[pd.DataFrame, int, int]]:
+                                      preprocessing_configs: Dict[str, Dict] = None
+                                      ) -> Dict[str, Tuple[pd.DataFrame, int, int]]:
         """
         並發導入多個Excel檔案並進行預處理
         
@@ -374,7 +374,7 @@ class ExcelImporter(BaseDataImporter):
             return {}
     
     def _import_excel_safe(self, file_path: str, file_name: str, 
-                          config: Dict) -> Optional[Tuple[pd.DataFrame, int, int]]:
+                           config: Dict) -> Optional[Tuple[pd.DataFrame, int, int]]:
         """安全地導入Excel檔案（用於並發處理）"""
         try:
             return self.import_excel_with_preprocessing(file_path, config)
