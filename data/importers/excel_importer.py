@@ -10,8 +10,21 @@ from typing import List, Dict, Tuple, Optional, Union, Any
 import openpyxl
 from openpyxl import load_workbook
 
-from .base_importer import BaseDataImporter
-from ...utils import get_logger, validate_file_path
+try:
+    from .base_importer import BaseDataImporter
+    from ...utils import get_logger, validate_file_path
+except ImportError:
+    # 如果相對導入失敗，使用絕對導入
+    import sys
+    from pathlib import Path
+    
+    # 添加accrual_bot目錄到sys.path
+    current_dir = Path(__file__).parent.parent.parent
+    if str(current_dir) not in sys.path:
+        sys.path.insert(0, str(current_dir))  
+    
+    from data.importers.base_importer import BaseDataImporter
+    from utils import get_logger, validate_file_path
 
 
 class ExcelImporter(BaseDataImporter):

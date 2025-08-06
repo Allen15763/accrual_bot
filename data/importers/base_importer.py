@@ -12,10 +12,25 @@ import concurrent.futures
 import threading
 import time
 
-from ...utils import (
-    get_logger, validate_file_path, is_excel_file, is_csv_file,
-    get_file_extension, CONCURRENT_SETTINGS
-)
+try:
+    from ...utils import (
+        get_logger, validate_file_path, is_excel_file, is_csv_file,
+        get_file_extension, CONCURRENT_SETTINGS
+    )
+except ImportError:
+    # 如果相對導入失敗，使用絕對導入
+    import sys
+    from pathlib import Path
+    
+    # 添加accrual_bot目錄到sys.path
+    current_dir = Path(__file__).parent.parent.parent
+    if str(current_dir) not in sys.path:
+        sys.path.insert(0, str(current_dir))
+    
+    from utils import (
+        get_logger, validate_file_path, is_excel_file, is_csv_file,
+        get_file_extension, CONCURRENT_SETTINGS
+    )
 
 
 class BaseDataImporter:

@@ -9,11 +9,28 @@ import numpy as np
 from typing import Tuple, List, Dict, Optional, Union, Any
 from datetime import datetime
 
-from ...utils import (
-    config_manager, get_logger, clean_nan_values, format_numeric_columns,
-    parse_date_string, extract_date_range_from_description, create_mapping_dict,
-    safe_string_operation, DEFAULT_DATE_RANGE, EXCEL_FORMAT, get_unique_filename
-)
+try:
+    # 從 accrual_bot/core/processors/ 到 accrual_bot/utils/ 需要向上兩層
+    from ...utils import (
+        config_manager, get_logger, clean_nan_values, format_numeric_columns,
+        parse_date_string, extract_date_range_from_description, create_mapping_dict,
+        safe_string_operation, DEFAULT_DATE_RANGE, EXCEL_FORMAT, get_unique_filename
+    )
+except ImportError:
+    # 如果相對導入失敗，使用絕對導入
+    import sys
+    from pathlib import Path
+    
+    # 添加accrual_bot目錄到sys.path
+    current_dir = Path(__file__).parent.parent.parent
+    if str(current_dir) not in sys.path:
+        sys.path.insert(0, str(current_dir))
+    
+    from utils import (
+        config_manager, get_logger, clean_nan_values, format_numeric_columns,
+        parse_date_string, extract_date_range_from_description, create_mapping_dict,
+        safe_string_operation, DEFAULT_DATE_RANGE, EXCEL_FORMAT, get_unique_filename
+    )
 
 
 class BaseDataProcessor:

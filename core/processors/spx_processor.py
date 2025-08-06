@@ -8,12 +8,29 @@ import numpy as np
 from typing import Tuple, List, Dict, Optional, Union, Any
 import re
 
-from .po_processor import BasePOProcessor
-from ...utils import (
-    get_logger, safe_string_operation, convert_date_format_in_string,
-    extract_pattern_from_string, create_mapping_dict, apply_mapping_safely,
-    SPX_CONSTANTS
-)
+try:
+    from .po_processor import BasePOProcessor
+    from ...utils import (
+        get_logger, safe_string_operation, convert_date_format_in_string,
+        extract_pattern_from_string, create_mapping_dict, apply_mapping_safely,
+        SPX_CONSTANTS
+    )
+except ImportError:
+    # 如果相對導入失敗，使用絕對導入
+    import sys
+    from pathlib import Path
+    
+    # 添加accrual_bot目錄到sys.path
+    current_dir = Path(__file__).parent.parent.parent
+    if str(current_dir) not in sys.path:
+        sys.path.insert(0, str(current_dir))
+    
+    from core.processors.po_processor import BasePOProcessor
+    from utils import (
+        get_logger, safe_string_operation, convert_date_format_in_string,
+        extract_pattern_from_string, create_mapping_dict, apply_mapping_safely,
+        SPX_CONSTANTS
+    )
 
 
 class SpxProcessor(BasePOProcessor):
