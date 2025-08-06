@@ -1,5 +1,6 @@
 Pipfile
 Pipfile.lock
+test_*.py
 *.md
 note_pip_google API.txt
 static/
