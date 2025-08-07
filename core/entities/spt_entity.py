@@ -33,9 +33,10 @@ except ImportError:
 class SPTPOProcessor(EntityProcessor):
     """SPT PO處理器"""
     
-    def __init__(self, entity_config: EntityConfig):
+    def __init__(self, entity_config: EntityConfig, shared_logger=None):
         self.entity_config = entity_config
-        self.logger = Logger().get_logger(__name__)
+        # 使用共享的logger以避免重複創建
+        self.logger = shared_logger or Logger().get_logger('spt_entity')
         
         # 初始化核心處理器
         self.po_processor = BasePOProcessor(self.entity_config.entity_type.value)
@@ -120,9 +121,10 @@ class SPTPOProcessor(EntityProcessor):
 class SPTPRProcessor(EntityProcessor):
     """SPT PR處理器"""
     
-    def __init__(self, entity_config: EntityConfig):
+    def __init__(self, entity_config: EntityConfig, shared_logger=None):
         self.entity_config = entity_config
-        self.logger = Logger().get_logger(__name__)
+        # 使用共享的logger以避免重複創建
+        self.logger = shared_logger or Logger().get_logger('spt_entity')
         
         # 初始化核心處理器
         self.pr_processor = BasePRProcessor(self.entity_config.entity_type.value)
@@ -186,6 +188,8 @@ class SPTEntity(BaseEntity):
     
     def __init__(self, config: Optional[EntityConfig] = None):
         super().__init__(EntityType.SPT, config)
+        # 為整個SPT實體創建統一的logger
+        self.logger = Logger().get_logger('spt_entity')
         self._initialize_processors()
     
     def _create_default_config(self) -> EntityConfig:
@@ -194,8 +198,9 @@ class SPTEntity(BaseEntity):
     
     def _initialize_processors(self):
         """初始化處理器"""
-        self._po_processor = SPTPOProcessor(self.config)
-        self._pr_processor = SPTPRProcessor(self.config)
+        # 將共享的logger傳給處理器
+        self._po_processor = SPTPOProcessor(self.config, self.logger)
+        self._pr_processor = SPTPRProcessor(self.config, self.logger)
     
     def get_entity_name(self) -> str:
         """獲取實體名稱"""

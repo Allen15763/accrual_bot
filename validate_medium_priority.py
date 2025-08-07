@@ -11,6 +11,10 @@ import tempfile
 import os
 import json
 
+# 導入日誌系統
+from utils.logging import get_logger
+logger = get_logger('validate_medium_priority')
+
 def test_basic_functionality():
     """測試基本功能"""
     print("🧪 驗證基本功能...")

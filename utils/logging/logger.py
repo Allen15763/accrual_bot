@@ -51,20 +51,29 @@ class Logger:
         except Exception as e:
             # 如果設置失敗，使用預設配置
             self._setup_fallback_logger()
-            print(f"日誌設置失敗，使用預設配置: {e}")
+            # 使用fallback logger記錄錯誤（避免print）
+            import sys
+            sys.stderr.write(f"日誌設置失敗，使用預設配置: {e}\n")
     
     def _setup_root_logger(self, log_level: str, log_format: str) -> None:
         """設置根日誌記錄器"""
-        root_logger = logging.getLogger('accrual_bot')
-        root_logger.setLevel(getattr(logging, log_level.upper(), logging.INFO))
-        
-        # 清除現有的處理器以避免重複
-        for handler in root_logger.handlers[:]:
-            root_logger.removeHandler(handler)
-            handler.close()
-        
-        # 阻止傳播到父logger以避免重複輸出
-        root_logger.propagate = False
+        # 只在需要時創建root logger（減少重複創建）
+        if 'root' not in self._loggers:
+            root_logger = logging.getLogger('accrual_bot')
+            root_logger.setLevel(getattr(logging, log_level.upper(), logging.INFO))
+            
+            # 清除現有的處理器以避免重複
+            for handler in root_logger.handlers[:]:
+                root_logger.removeHandler(handler)
+                handler.close()
+            
+            # 阻止傳播到父logger以避免重複輸出
+            root_logger.propagate = False
+            
+            # 儲存logger實例
+            self._loggers['root'] = root_logger
+        else:
+            root_logger = self._loggers['root']
         
         # 控制台處理器
         console_handler = logging.StreamHandler(sys.stdout)
@@ -80,9 +89,9 @@ class Logger:
             try:
                 self._setup_file_handler(root_logger, log_path, log_format)
             except Exception as e:
-                print(f"設置檔案日誌處理器失敗: {e}")
-        
-        self._loggers['root'] = root_logger
+                # 避免print，使用stderr記錄錯誤
+                import sys
+                sys.stderr.write(f"設置檔案日誌處理器失敗: {e}\n")
     
     def _setup_file_handler(self, logger: logging.Logger, log_path: str, log_format: str) -> None:
         """設置檔案處理器"""
@@ -105,7 +114,9 @@ class Logger:
             self._handlers['file'] = file_handler
             
         except Exception as e:
-            print(f"創建檔案處理器失敗: {e}")
+            # 避免print，使用stderr記錄錯誤
+            import sys
+            sys.stderr.write(f"創建檔案處理器失敗: {e}\n")
     
     def get_logger(self, name: Optional[str] = None) -> logging.Logger:
         """
@@ -122,8 +133,10 @@ class Logger:
         
         if name not in self._loggers:
             if name == 'root':
-                # 直接返回已創建的root logger
-                return self._loggers.get('root', logging.getLogger('accrual_bot'))
+                # 直接返回已創建的root logger，如果不存在則創建基本的
+                if 'root' not in self._loggers:
+                    self._loggers['root'] = logging.getLogger('accrual_bot')
+                return self._loggers['root']
             else:
                 # 創建子記錄器，但不添加處理器（使用繼承機制）
                 logger = logging.getLogger(f'accrual_bot.{name}')
@@ -200,26 +213,28 @@ class Logger:
     
     def _setup_fallback_logger(self) -> None:
         """設置備用的簡單日誌配置"""
-        root_logger = logging.getLogger('accrual_bot')
-        root_logger.setLevel(logging.INFO)
-        
-        # 清除現有處理器
-        for handler in root_logger.handlers[:]:
-            root_logger.removeHandler(handler)
-            handler.close()
-        
-        root_logger.propagate = False
-        
-        # 創建簡單的控制台處理器
-        console_handler = logging.StreamHandler(sys.stdout)
-        console_handler.setLevel(logging.INFO)
-        formatter = logging.Formatter('%(asctime)s %(levelname)s: %(message)s', 
-                                      datefmt='%Y-%m-%d %H:%M:%S')
-        console_handler.setFormatter(formatter)
-        root_logger.addHandler(console_handler)
-        
-        self._loggers['root'] = root_logger
-        self._handlers['console'] = console_handler
+        # 避免重複創建，先檢查是否已存在
+        if 'root' not in self._loggers:
+            root_logger = logging.getLogger('accrual_bot')
+            root_logger.setLevel(logging.INFO)
+            
+            # 清除現有處理器
+            for handler in root_logger.handlers[:]:
+                root_logger.removeHandler(handler)
+                handler.close()
+            
+            root_logger.propagate = False
+            
+            # 創建簡單的控制台處理器
+            console_handler = logging.StreamHandler(sys.stdout)
+            console_handler.setLevel(logging.INFO)
+            formatter = logging.Formatter('%(asctime)s %(levelname)s: %(message)s', 
+                                          datefmt='%Y-%m-%d %H:%M:%S')
+            console_handler.setFormatter(formatter)
+            root_logger.addHandler(console_handler)
+            
+            self._loggers['root'] = root_logger
+            self._handlers['console'] = console_handler
     
     def cleanup(self) -> None:
         """清理日誌資源"""
@@ -228,7 +243,9 @@ class Logger:
             try:
                 handler.close()
             except Exception as e:
-                print(f"關閉日誌處理器失敗: {e}")
+                # 避免print，使用stderr記錄錯誤
+                import sys
+                sys.stderr.write(f"關閉日誌處理器失敗: {e}\n")
         
         # 清空字典
         self._handlers.clear()

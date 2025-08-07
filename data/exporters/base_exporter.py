@@ -174,8 +174,9 @@ class BaseExporter(ABC):
 class MultiFormatExporter:
     """多格式匯出器"""
     
-    def __init__(self):
-        self.logger = Logger().get_logger(__name__)
+    def __init__(self, shared_logger=None):
+        # 使用共享的logger以避免重複創建
+        self.logger = shared_logger or Logger().get_logger('base_exporter')
         self._exporters = {}
     
     def register_exporter(self, format_name: str, exporter_class: type):
@@ -224,8 +225,9 @@ class MultiFormatExporter:
         return list(self._exporters.keys())
 
 
-# 預設的多格式匯出器實例
-_default_exporter = MultiFormatExporter()
+# 預設的多格式匯出器實例（使用統一的logger）
+_shared_logger = Logger().get_logger('base_exporter')
+_default_exporter = MultiFormatExporter(_shared_logger)
 
 def get_default_exporter() -> MultiFormatExporter:
     """獲取預設的多格式匯出器"""
