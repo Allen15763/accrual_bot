@@ -12,8 +12,8 @@ from .base_entity import BaseEntity, EntityProcessor, ProcessingFiles, Processin
 try:
     from ...core.models.data_models import EntityType, ProcessingType, ProcessingResult
     from ...core.models.config_models import EntityConfig, create_default_entity_config
-    from ...core.processors.po_processor import BasePOProcessor
-    from ...core.processors.pr_processor import BasePRProcessor
+    from ...core.processors.mob_po_processor import MobPOProcessor
+    from ...core.processors.mob_pr_processor import MobPRProcessor
     from ...utils.logging import Logger
 except ImportError:
     import sys
@@ -25,8 +25,8 @@ except ImportError:
 
     from core.models.data_models import EntityType, ProcessingType, ProcessingResult
     from core.models.config_models import EntityConfig, create_default_entity_config
-    from core.processors.po_processor import BasePOProcessor
-    from core.processors.pr_processor import BasePRProcessor
+    from core.processors.mob_po_processor import MobPOProcessor
+    from core.processors.mob_pr_processor import MobPRProcessor
     from utils.logging import Logger
 
 
@@ -38,8 +38,8 @@ class MOBPOProcessor(EntityProcessor):
         # 使用共享的logger以避免重複創建
         self.logger = shared_logger or Logger().get_logger('mob_entity')
         
-        # 初始化核心處理器
-        self.po_processor = BasePOProcessor(self.entity_config.entity_type.value)
+        # 初始化MOB專用處理器
+        self.po_processor = MobPOProcessor()
     
     def process_po(self, files: ProcessingFiles, mode: ProcessingMode) -> ProcessingResult:
         """處理PO數據"""
@@ -102,18 +102,18 @@ class MOBPOProcessor(EntityProcessor):
         )
     
     def process_pr(self, files: ProcessingFiles, mode: ProcessingMode) -> ProcessingResult:
-        """MOB PO處理器不處理PR"""
-        raise NotImplementedError("PO處理器不處理PR數據")
+        """處理PR數據（MOB PO不支援）"""
+        return ProcessingResult(
+            success=False,
+            message="MOB PO處理器不支援PR處理",
+            start_time=datetime.now(),
+            end_time=datetime.now()
+        )
     
     def get_supported_modes(self, processing_type: ProcessingType) -> List[ProcessingMode]:
         """獲取支援的處理模式"""
         if processing_type == ProcessingType.PO:
-            return [
-                ProcessingMode.MODE_1,
-                ProcessingMode.MODE_2,
-                ProcessingMode.MODE_3,
-                ProcessingMode.MODE_4
-            ]
+            return [ProcessingMode.MODE_1, ProcessingMode.MODE_2, ProcessingMode.MODE_3, ProcessingMode.MODE_4]
         else:
             return []
 
@@ -126,8 +126,8 @@ class MOBPRProcessor(EntityProcessor):
         # 使用共享的logger以避免重複創建
         self.logger = shared_logger or Logger().get_logger('mob_entity')
         
-        # 初始化核心處理器
-        self.pr_processor = BasePRProcessor(self.entity_config.entity_type.value)
+        # 初始化MOB專用處理器
+        self.pr_processor = MobPRProcessor()
     
     def process_pr(self, files: ProcessingFiles, mode: ProcessingMode) -> ProcessingResult:
         """處理PR數據"""
@@ -169,27 +169,27 @@ class MOBPRProcessor(EntityProcessor):
         )
     
     def process_po(self, files: ProcessingFiles, mode: ProcessingMode) -> ProcessingResult:
-        """MOB PR處理器不處理PO"""
-        raise NotImplementedError("PR處理器不處理PO數據")
+        """處理PO數據（MOB PR不支援）"""
+        return ProcessingResult(
+            success=False,
+            message="MOB PR處理器不支援PO處理",
+            start_time=datetime.now(),
+            end_time=datetime.now()
+        )
     
     def get_supported_modes(self, processing_type: ProcessingType) -> List[ProcessingMode]:
         """獲取支援的處理模式"""
         if processing_type == ProcessingType.PR:
-            return [
-                ProcessingMode.MODE_1,
-                ProcessingMode.MODE_2
-            ]
+            return [ProcessingMode.MODE_1, ProcessingMode.MODE_2]
         else:
             return []
 
 
 class MOBEntity(BaseEntity):
-    """MOB實體"""
+    """MOB業務實體"""
     
     def __init__(self, config: Optional[EntityConfig] = None):
         super().__init__(EntityType.MOB, config)
-        # 為整個MOB實體創建統一的logger
-        self.logger = Logger().get_logger('mob_entity')
         self._initialize_processors()
     
     def _create_default_config(self) -> EntityConfig:
@@ -208,7 +208,7 @@ class MOBEntity(BaseEntity):
     
     def get_entity_description(self) -> str:
         """獲取實體描述"""
-        return "Mobileye Taiwan PO/PR 處理實體"
+        return "Moba Taiwan PO/PR 處理實體"
     
     def validate_mob_specific_requirements(self, files: ProcessingFiles, mode: ProcessingMode) -> bool:
         """驗證MOB特有的需求"""

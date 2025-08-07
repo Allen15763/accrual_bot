@@ -216,32 +216,84 @@ class BaseDataProcessor:
             file_date = df_copy.get('檔案日期', 
                                     pd.Series([0] * len(df_copy), index=df_copy.index))
             
-            conditions = [
-                # 條件1：格式錯誤
-                (df_copy['YMs of Item Description'] == DEFAULT_DATE_RANGE) & na_mask,
+            if 'Received Quantity' in df_copy.columns:
+                # for PO
+                conditions = [
+                    # 條件1：格式錯誤
+                    (df_copy['YMs of Item Description'] == DEFAULT_DATE_RANGE) & na_mask,
+                    
+                    # 條件2：已完成（日期在範圍內且預期接收月已過, EQ=RQ, EBA=0）
+                    (expected_month.between(start_dates, end_dates, inclusive='both') & 
+                     (expected_month <= file_date)) & na_mask &
+                    (df_copy['Entry Quantity'] == df_copy['Received Quantity']) &
+                    (df_copy['Entry Billed Amount'].astype(float) == 0),
+
+                    # 全付完，未關單（日期在範圍內且預期接收月已過, EQ=RQ, EBA!=0, EA-EBA=0）
+                    (expected_month.between(start_dates, end_dates, inclusive='both') & 
+                     (expected_month <= file_date)) & na_mask &
+                    (df_copy['Entry Quantity'] == df_copy['Received Quantity']) &
+                    (df_copy['Entry Billed Amount'].astype(float) != 0) &
+                    (df_copy['Entry Amount'].astype(float) - df_copy['Entry Billed Amount'].astype(float) == 0),
+
+                    # 已完成但有未付款部分（日期在範圍內且預期接收月已過, EQ=RQ, EBA!=0, EA-EBA!=0）
+                    (expected_month.between(start_dates, end_dates, inclusive='both') & 
+                     (expected_month <= file_date)) & na_mask &
+                    (df_copy['Entry Quantity'] == df_copy['Received Quantity']) &
+                    (df_copy['Entry Billed Amount'].astype(float) != 0) &
+                    (df_copy['Entry Amount'].astype(float) - df_copy['Entry Billed Amount'].astype(float) != 0),
+
+                    # 需檢查收貨（日期在範圍內且預期接收月已過, EQ!=RQ）
+                    (expected_month.between(start_dates, end_dates, inclusive='both') & 
+                     (expected_month <= file_date)) & na_mask &
+                    (df_copy['Entry Quantity'] != df_copy['Received Quantity']),
+                    
+                    # 條件3：未完成（日期在範圍內但預期接收月尚未到）
+                    (expected_month.between(start_dates, end_dates, inclusive='both') & 
+                     (expected_month > file_date)) & na_mask
+                ]
                 
-                # 條件2：已完成（日期在範圍內且預期接收月已過）
-                (expected_month.between(start_dates, end_dates, inclusive='both') & 
-                 (expected_month <= file_date)) & na_mask,
+                choices = ['格式錯誤', '已完成', '全付完，未關單', '已完成但有未付款部分', 'Check收貨',
+                           '未完成']
                 
-                # 條件3：未完成（日期在範圍內但預期接收月尚未到）
-                (expected_month.between(start_dates, end_dates, inclusive='both') & 
-                 (expected_month > file_date)) & na_mask
-            ]
-            
-            choices = ['格式錯誤', '已完成', '未完成']
-            
-            # 應用條件
-            df_copy[status_col] = np.select(
-                conditions, 
-                choices, 
-                default=df_copy[status_col]
-            )
-            
-            # 處理其他情況
-            df_copy[status_col] = df_copy[status_col].fillna('error(Description Period is out of ERM)')
-            
-            return df_copy
+                # 應用條件
+                df_copy[status_col] = np.select(
+                    conditions, 
+                    choices, 
+                    default=df_copy[status_col]
+                )
+                
+                # 處理其他情況
+                df_copy[status_col] = df_copy[status_col].fillna('error(Description Period is out of ERM)')
+                
+                return df_copy
+            else:
+                # for PR
+                conditions = [
+                    # 條件1：格式錯誤
+                    (df_copy['YMs of Item Description'] == DEFAULT_DATE_RANGE) & na_mask,
+                    
+                    # 條件2：已完成（日期在範圍內且預期接收月已過, EQ=RQ, EBA=0）
+                    (expected_month.between(start_dates, end_dates, inclusive='both') & 
+                     (expected_month <= file_date)) & na_mask,
+
+                    # 條件3：未完成（日期在範圍內但預期接收月尚未到）
+                    (expected_month.between(start_dates, end_dates, inclusive='both') & 
+                     (expected_month > file_date)) & na_mask
+                ]
+                
+                choices = ['格式錯誤', '已完成', '未完成']
+                
+                # 應用條件
+                df_copy[status_col] = np.select(
+                    conditions, 
+                    choices, 
+                    default=df_copy[status_col]
+                )
+                
+                # 處理其他情況
+                df_copy[status_col] = df_copy[status_col].fillna('error(Description Period is out of ERM)')
+                
+                return df_copy
             
         except Exception as e:
             self.logger.error(f"根據日期評估狀態時出錯: {str(e)}", exc_info=True)

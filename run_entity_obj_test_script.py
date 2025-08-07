@@ -50,13 +50,45 @@ def test_mob_entity():
         logger.info(f"實體描述: {mob_entity.get_entity_description()}")
 
         # 如何使用mob_entity開始處理底稿流程 --> 部分測試
+        """
+        process_po_mode_2  ok
+        """
         # TODO
-        mob_entity.process_po_mode_2(
-            test_files['raw_data'],
-            os.path.basename(test_files['raw_data']),
-            test_files['previous_wp'],
-            test_files['procurement']
-        )
+        # mob_entity.process_po_mode_2(
+        #     test_files['raw_data'],
+        #     os.path.basename(test_files['raw_data']),
+        #     test_files['previous_wp'],
+        #     test_files['procurement']
+        # )
+        # mob_entity.process_po_mode_3(
+        #     test_files['raw_data'],
+        #     os.path.basename(test_files['raw_data']),
+        #     test_files['previous_wp'],
+        # )
+        # mob_entity.process_po_mode_4(
+        #     test_files['raw_data'],
+        #     os.path.basename(test_files['raw_data']),
+        # )
+
+        """
+        PR test, all pass
+        """
+        # test_files = {
+        #     'raw_data': r"C:\SEA\Accrual\prpo_bot\resources\頂一下\202503\MOBA\raw\202503_purchase_request_20250204_151339.csv",
+        #     'previous_wp': r"C:\SEA\Accrual\prpo_bot\resources\頂一下\202503\MOBA\raw\PR_for前期載入.xlsx",
+        #     'procurement': r"C:\SEA\Accrual\prpo_bot\resources\頂一下\202503\MOBA\raw\採購底稿PR.xlsx",
+        # }
+        # mob_entity.process_pr_mode_1(
+        #     test_files['raw_data'],
+        #     os.path.basename(test_files['raw_data']),
+        #     test_files['previous_wp'],
+        #     test_files['procurement']
+        # )
+        # mob_entity.process_pr_mode_2(
+        #     test_files['raw_data'],
+        #     os.path.basename(test_files['raw_data']),
+        #     test_files['previous_wp'],
+        # )
         
         return True
         
@@ -71,10 +103,45 @@ def test_spt_entity():
     try:
         from core.entities import create_entity_by_name
         spt_entity = create_entity_by_name('SPT')
+
+        # from core.entities import create_entity
+        # from core.models.data_models import EntityType
+        # spt_entity = create_entity(EntityType.SPT)
         
         logger.info("SPT實體創建成功")
         logger.info(f"實體名稱: {spt_entity.get_entity_name()}")
         logger.info(f"實體描述: {spt_entity.get_entity_description()}")
+
+        # 測試資料路徑 (請根據實際情況調整)
+        test_files = {
+            'raw_data': r"C:\SEA\Accrual\prpo_bot\resources\頂一下\202503\SPT\raw\202503_purchase_order_20250704_100921.csv",
+            'previous_wp': r"C:\SEA\Accrual\prpo_bot\resources\頂一下\202503\SPT\raw\PO_for前期載入.xlsx",
+            'procurement': r"C:\SEA\Accrual\prpo_bot\resources\頂一下\202503\SPT\raw\採購底稿PO_未結PO 202503 SPTTW.xlsx",
+            # 'closing_list': r"C:\SEA\Accrual\prpo_bot\resources\頂一下\202503\SPT\raw\mob_closing.xlsx"
+        }
+
+        # spt_entity.process_po_mode_2(
+        #     test_files['raw_data'],
+        #     os.path.basename(test_files['raw_data']),
+        #     test_files['previous_wp'],
+        #     test_files['procurement']
+        # )
+
+
+        # 測試資料路徑 (請根據實際情況調整)
+        test_files = {
+            'raw_data': r"C:\SEA\Accrual\prpo_bot\resources\頂一下\202503\SPT\raw\202503_purchase_request_20250704_100735.csv",
+            'previous_wp': r"C:\SEA\Accrual\prpo_bot\resources\頂一下\202503\SPT\raw\PR_for前期載入.xlsx",
+            'procurement': r"C:\SEA\Accrual\prpo_bot\resources\頂一下\202503\SPT\raw\未結PO 202503 SPTTW.xlsx",
+            # 'closing_list': r"C:\SEA\Accrual\prpo_bot\resources\頂一下\202503\SPT\raw\mob_closing.xlsx"
+        }
+
+        spt_entity.process_pr_mode_1(
+            test_files['raw_data'],
+            os.path.basename(test_files['raw_data']),
+            test_files['previous_wp'],
+            test_files['procurement']
+        )
         
         return True
         

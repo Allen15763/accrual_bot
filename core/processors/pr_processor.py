@@ -144,10 +144,9 @@ class BasePRProcessor(BaseDataProcessor):
                 (df['GL#'].astype(str) == '650003') | (df['GL#'].astype(str) == '450014'), 
                 "Y", "N"
             )
-    
+        
     def process_with_procurement(self, df: pd.DataFrame, procurement_df: pd.DataFrame) -> pd.DataFrame:
-        """
-        處理採購底稿
+        """處理採購底稿
         
         Args:
             df: PR數據框
@@ -157,33 +156,29 @@ class BasePRProcessor(BaseDataProcessor):
             pd.DataFrame: 處理後的數據框
         """
         try:
-            if procurement_df is None or procurement_df.empty:
-                self.logger.info("採購底稿為空，跳過處理")
-                return df
-            
             df_copy = df.copy()
-            
             # 獲取採購底稿中的Remarked by Procurement
-            if 'PR Line' in df_copy.columns:
-                procurement_mapping = create_mapping_dict(
-                    procurement_df, 'PR Line', 'Remarked by Procurement'
-                )
-                df_copy['Remarked by Procurement'] = apply_mapping_safely(
-                    df_copy['PR Line'], procurement_mapping
-                )
-                
-                # 獲取Noted by Procurement
-                noted_mapping = create_mapping_dict(
-                    procurement_df, 'PR Line', 'Noted by Procurement'
-                )
-                df_copy['Noted by Procurement'] = apply_mapping_safely(
-                    df_copy['PR Line'], noted_mapping
-                )
+            map_dict = self.get_mapping_dict(procurement_df, 'PR Line', 'Remarked by Procurement')
+            df_copy['Remarked by Procurement'] = df_copy['PR Line'].map(map_dict)
             
-            # 設置FN備註為採購備註
+            # 獲取採購底稿中的Noted by Procurement
+            map_dict = self.get_mapping_dict(procurement_df, 'PR Line', 'Noted by Procurement')
+            df_copy['Noted by Procurement'] = df_copy['PR Line'].map(map_dict)
+            
+            # 設置FN備註
             df_copy['Remarked by FN'] = df_copy['Remarked by Procurement']
             
-            self.logger.info("成功處理採購底稿")
+            # 尋找不在採購底稿中的PR
+            pr_list = df_copy['PR Line'].tolist()
+            procurement_list = procurement_df['PR Line'].tolist()
+            outer_list = [pr for pr in pr_list if pr not in procurement_list]
+            
+            # 標記錯誤
+            mask_payroll = df_copy['PR Line'].isin(outer_list) & df_copy['EBS Task'].str.contains("(?i)Payroll")
+            
+            df_copy.loc[mask_payroll, 'PR狀態'] = "not in Procurement/Payroll"
+            
+            self.logger.info(f"成功處理採購底稿，找到 {len(outer_list)} 個不在採購底稿中的PR")
             return df_copy
             
         except Exception as e:
@@ -191,8 +186,7 @@ class BasePRProcessor(BaseDataProcessor):
             raise ValueError("處理採購底稿時出錯")
     
     def process_previous_workpaper(self, df: pd.DataFrame, previous_wp: pd.DataFrame) -> pd.DataFrame:
-        """
-        處理前期底稿
+        """處理前期底稿
         
         Args:
             df: PR數據框
@@ -202,26 +196,24 @@ class BasePRProcessor(BaseDataProcessor):
             pd.DataFrame: 處理後的數據框
         """
         try:
-            if previous_wp is None or previous_wp.empty:
-                self.logger.info("前期底稿為空，跳過處理")
-                return df
-            
-            df_copy = df.copy()
-            
+            # 重命名前期底稿中的列
+            previous_wp = previous_wp.rename(
+                columns={
+                    'Remarked by FN': 'Remarked by FN_l',
+                    'Remarked by Procurement': 'Remark by PR Team_l'
+                }
+            )
             # 獲取前期FN備註
-            if 'PR Line' in df_copy.columns:
-                fn_mapping = create_mapping_dict(previous_wp, 'PR Line', 'Remarked by FN')
-                df_copy['Remarked by 上月 FN'] = apply_mapping_safely(
-                    df_copy['PR Line'], fn_mapping
-                )
+            map_dict = self.get_mapping_dict(previous_wp, 'PR Line', 'Remarked by FN_l')
+            df['Remarked by 上月 FN'] = df['PR Line'].map(map_dict)
             
             self.logger.info("成功處理前期底稿")
-            return df_copy
+            return df
             
         except Exception as e:
             self.logger.error(f"處理前期底稿時出錯: {str(e)}", exc_info=True)
             raise ValueError("處理前期底稿時出錯")
-    
+
     def apply_date_logic(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         應用日期邏輯處理
@@ -293,6 +285,7 @@ class BasePRProcessor(BaseDataProcessor):
             
             # 設置Account code
             df_copy = self.judge_ac_code(df_copy)
+            df_copy = self.process_spt_specific(df_copy)
             
             # 設置Account Name
             if ref_accounts is not None and not ref_accounts.empty:
@@ -441,9 +434,9 @@ class BasePRProcessor(BaseDataProcessor):
                 last_month_col = df.pop('Remarked by 上月 FN')
                 df.insert(fn_index, 'Remarked by 上月 FN', last_month_col)
             
-            # 移動PR狀態到是否估計入帳前面
-            if 'PR狀態' in df.columns and '是否估計入帳' in df.columns:
-                accrual_index = df.columns.get_loc('是否估計入帳')
+            # 移動PR狀態到Remarked by 上月 FN後面
+            if 'PR狀態' in df.columns and 'Remarked by 上月 FN' in df.columns:
+                accrual_index = df.columns.get_loc('Remarked by 上月 FN') + 1
                 pr_status_col = df.pop('PR狀態')
                 df.insert(accrual_index, 'PR狀態', pr_status_col)
             
@@ -451,3 +444,113 @@ class BasePRProcessor(BaseDataProcessor):
         except Exception as e:
             self.logger.warning(f"重新排列PR欄位時出錯: {str(e)}")
             return df
+
+    def process_special_cases(self, df: pd.DataFrame) -> pd.DataFrame:
+        """處理特殊情況
+        
+        Args:
+            df: PR數據框
+            
+        Returns:
+            pd.DataFrame: 處理後的數據框
+        """
+        try:
+            # 處理Payroll
+            mask_payroll = (df['PR狀態'].isna() | (df['PR狀態'] == 'nan')) & df['EBS Task'].str.contains("(?i)Payroll")
+            df.loc[mask_payroll, 'PR狀態'] = "Payroll"
+            df.loc[df['EBS Task'].str.contains("(?i)Payroll"), '是否估計入帳'] = "N"
+            
+            # PR Task = Payroll --> Remarked by FN=Payroll
+            df.loc[df['EBS Task'].str.contains("(?i)Payroll"), 'Remarked by FN'] = 'Payroll'
+            
+            # 處理分潤合作
+            mask_profit = (df['PR狀態'].isna() | (df['PR狀態'] == 'nan')) & df['Item Description'].str.contains("蝦幣兌換|分潤合作")
+            df.loc[mask_profit, 'PR狀態'] = "不預估"
+            df.loc[df['PR狀態'] == '不預估', '是否估計入帳'] = "N"
+            
+            self.logger.info("成功處理特殊情況")
+            return df
+            
+        except Exception as e:
+            self.logger.error(f"處理特殊情況時出錯: {str(e)}", exc_info=True)
+            raise ValueError("處理特殊情況時出錯")
+        
+    def process_spt_specific(self, df: pd.DataFrame) -> pd.DataFrame:
+        """處理SPT特有邏輯(僅當entity_type為SPT時調用)
+        
+        Args:
+            df: PR數據框
+            
+        Returns:
+            pd.DataFrame: 處理後的數據框
+        """
+        if self.entity_type != 'SPT':
+            return df
+            
+        try:
+            # Project含SPX, Remarked by FN=SPX
+            df.loc[df['Product Code'].str.contains('(?i)SPX'), 'Remarked by FN'] = 'SPX'
+            df.loc[df['Remarked by FN'] == 'SPX', '是否估計入帳'] = "N"
+            
+            # 處理分潤
+            self._update_commission_data(df)
+            
+            self.logger.info("成功處理SPT特有邏輯")
+            return df
+            
+        except Exception as e:
+            self.logger.error(f"處理SPT特有邏輯時出錯: {str(e)}", exc_info=True)
+            raise ValueError("處理SPT特有邏輯時出錯")
+    
+    def _update_commission_data(self, df: pd.DataFrame) -> pd.DataFrame:
+        """更新分潤數據
+        
+        Args:
+            df: PR數據框
+            
+        Returns:
+            pd.DataFrame: 更新後的數據框
+        """
+        try:
+            def update_remark(df, type_=True):
+                if type_:
+                    keywords = '(?i)Affiliate commission|Shopee commission|蝦皮分潤計劃會員分潤金'
+                    k1, k2 = 'Affiliate分潤合作', '品牌加碼'
+                    gl_value = '650022'
+                    product_code = 'EC_SPE_COM'
+                else:
+                    keywords = '(?i)AMS commission'
+                    k1, k2 = 'Affiliate分潤合作', '品牌加碼'
+                    gl_value = '650019'
+                    product_code = 'EC_AMS_COST'
+                
+                # 條件
+                condition = df['Item Description'].str.contains(keywords) | (
+                    df['Item Description'].str.contains(k1) &
+                    (~df['Item Description'].str.contains(k2)) if type_ else
+                    df['Item Description'].str.contains(k2)
+                )
+                
+                # 更新 Remarked by FN, GL#, Product code
+                df.loc[condition, 'Remarked by FN'] = '分潤'
+                df.loc[condition, 'GL#'] = gl_value
+                df.loc[condition, 'Account code'] = gl_value
+                df.loc[condition, 'Product code_c'] = product_code
+                
+                return df
+            
+            # 分兩種情況更新分潤數據
+            df = update_remark(df)
+            df = update_remark(df, type_=False)
+            
+            # 設置分潤估計入帳
+            df.loc[(((df['GL#'] == '650022') | (df['GL#'] == '650019')) &
+                   (df['Remarked by FN'] == '分潤') &
+                   (df['PR狀態'].str.contains('已完成'))), '是否估計入帳'] = "Y"
+            
+            return df
+            
+        except Exception as e:
+            self.logger.error(f"更新分潤數據時出錯: {str(e)}", exc_info=True)
+            raise ValueError("更新分潤數據時出錯")
+    

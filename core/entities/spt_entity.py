@@ -12,8 +12,8 @@ from .base_entity import BaseEntity, EntityProcessor, ProcessingFiles, Processin
 try:
     from ...core.models.data_models import EntityType, ProcessingType, ProcessingResult
     from ...core.models.config_models import EntityConfig, create_default_entity_config
-    from ...core.processors.po_processor import BasePOProcessor
-    from ...core.processors.pr_processor import BasePRProcessor
+    from ...core.processors.spt_po_processor import SptPOProcessor
+    from ...core.processors.spt_pr_processor import SptPRProcessor
     from ...utils.logging import Logger
 except ImportError:
     import sys
@@ -25,8 +25,8 @@ except ImportError:
         
     from core.models.data_models import EntityType, ProcessingType, ProcessingResult
     from core.models.config_models import EntityConfig, create_default_entity_config
-    from core.processors.po_processor import BasePOProcessor
-    from core.processors.pr_processor import BasePRProcessor
+    from core.processors.spt_po_processor import SptPOProcessor
+    from core.processors.spt_pr_processor import SptPRProcessor
     from utils.logging import Logger
 
 
@@ -38,8 +38,8 @@ class SPTPOProcessor(EntityProcessor):
         # 使用共享的logger以避免重複創建
         self.logger = shared_logger or Logger().get_logger('spt_entity')
         
-        # 初始化核心處理器
-        self.po_processor = BasePOProcessor(self.entity_config.entity_type.value)
+        # 使用SPT專用處理器
+        self.po_processor = SptPOProcessor()
     
     def process_po(self, files: ProcessingFiles, mode: ProcessingMode) -> ProcessingResult:
         """處理PO數據"""
@@ -102,18 +102,18 @@ class SPTPOProcessor(EntityProcessor):
         )
     
     def process_pr(self, files: ProcessingFiles, mode: ProcessingMode) -> ProcessingResult:
-        """SPT PO處理器不處理PR"""
-        raise NotImplementedError("PO處理器不處理PR數據")
+        """處理PR數據（SPT PO不支援）"""
+        return ProcessingResult(
+            success=False,
+            message="SPT PO處理器不支援PR處理",
+            start_time=datetime.now(),
+            end_time=datetime.now()
+        )
     
     def get_supported_modes(self, processing_type: ProcessingType) -> List[ProcessingMode]:
         """獲取支援的處理模式"""
         if processing_type == ProcessingType.PO:
-            return [
-                ProcessingMode.MODE_1,
-                ProcessingMode.MODE_2,
-                ProcessingMode.MODE_3,
-                ProcessingMode.MODE_4
-            ]
+            return [ProcessingMode.MODE_1, ProcessingMode.MODE_2, ProcessingMode.MODE_3, ProcessingMode.MODE_4]
         else:
             return []
 
@@ -126,8 +126,8 @@ class SPTPRProcessor(EntityProcessor):
         # 使用共享的logger以避免重複創建
         self.logger = shared_logger or Logger().get_logger('spt_entity')
         
-        # 初始化核心處理器
-        self.pr_processor = BasePRProcessor(self.entity_config.entity_type.value)
+        # 使用SPT專用處理器
+        self.pr_processor = SptPRProcessor()
     
     def process_pr(self, files: ProcessingFiles, mode: ProcessingMode) -> ProcessingResult:
         """處理PR數據"""
@@ -140,7 +140,7 @@ class SPTPRProcessor(EntityProcessor):
             elif mode == ProcessingMode.MODE_2:
                 return self._process_mode_2(files)
             else:
-                raise ValueError(f"PR不支援的處理模式: {mode}")
+                raise ValueError(f"不支援的處理模式: {mode}")
                 
         except Exception as e:
             self.logger.error(f"SPT PR {mode.value}處理失敗: {e}")
@@ -169,38 +169,39 @@ class SPTPRProcessor(EntityProcessor):
         )
     
     def process_po(self, files: ProcessingFiles, mode: ProcessingMode) -> ProcessingResult:
-        """SPT PR處理器不處理PO"""
-        raise NotImplementedError("PR處理器不處理PO數據")
+        """處理PO數據（SPT PR不支援）"""
+        return ProcessingResult(
+            success=False,
+            message="SPT PR處理器不支援PO處理",
+            start_time=datetime.now(),
+            end_time=datetime.now()
+        )
     
     def get_supported_modes(self, processing_type: ProcessingType) -> List[ProcessingMode]:
         """獲取支援的處理模式"""
         if processing_type == ProcessingType.PR:
-            return [
-                ProcessingMode.MODE_1,
-                ProcessingMode.MODE_2
-            ]
+            return [ProcessingMode.MODE_1, ProcessingMode.MODE_2]
         else:
             return []
 
 
 class SPTEntity(BaseEntity):
-    """SPT實體"""
+    """SPT業務實體"""
     
     def __init__(self, config: Optional[EntityConfig] = None):
         super().__init__(EntityType.SPT, config)
-        # 為整個SPT實體創建統一的logger
-        self.logger = Logger().get_logger('spt_entity')
-        self._initialize_processors()
     
     def _create_default_config(self) -> EntityConfig:
-        """創建SPT預設配置"""
+        """創建SPT的默認配置"""
         return create_default_entity_config(EntityType.SPT)
     
     def _initialize_processors(self):
         """初始化處理器"""
-        # 將共享的logger傳給處理器
-        self._po_processor = SPTPOProcessor(self.config, self.logger)
-        self._pr_processor = SPTPRProcessor(self.config, self.logger)
+        shared_logger = self.logger
+        
+        # 使用SPT專用處理器
+        self._po_processor = SPTPOProcessor(self.config, shared_logger)
+        self._pr_processor = SPTPRProcessor(self.config, shared_logger)
     
     def get_entity_name(self) -> str:
         """獲取實體名稱"""
@@ -208,58 +209,32 @@ class SPTEntity(BaseEntity):
     
     def get_entity_description(self) -> str:
         """獲取實體描述"""
-        return "Super Micro Computer Taiwan PO/PR 處理實體"
+        return "SPT Taiwan PO/PR 處理實體"
+
+    # 向後相容的方法別名
+    def mode_1(self, raw_data_file: str, filename: str,
+               previous_workpaper: str, procurement_file: str,
+               closing_list: str, **kwargs):
+        """向後相容：SPT PO模式1"""
+        return self.process_po_mode_1(raw_data_file, filename, previous_workpaper, 
+                                      procurement_file, closing_list, **kwargs)
     
-    def validate_spt_specific_requirements(self, files: ProcessingFiles, mode: ProcessingMode) -> bool:
-        """驗證SPT特有的需求"""
-        # SPT特有的驗證邏輯
-        self.logger.info(f"驗證SPT特有需求: {mode.value}")
-        
-        # 檢查SPT特有的FA帳戶
-        spt_fa_accounts = ["1410", "1420", "1610", "1640", "1650"]
-        if set(spt_fa_accounts) != set(self.config.fa_accounts):
-            self.logger.warning("SPT FA帳戶配置與預期不符")
-        
-        return True
+    def mode_2(self, raw_data_file: str, filename: str,
+               previous_workpaper: str, procurement_file: str, **kwargs):
+        """向後相容：SPT PO模式2"""
+        return self.process_po_mode_2(raw_data_file, filename, previous_workpaper, 
+                                      procurement_file, **kwargs)
     
-    def get_spt_specific_settings(self) -> Dict[str, Any]:
-        """獲取SPT特有設定"""
-        return {
-            "entity_code": "SPT",
-            "company_name": "Super Micro Computer Taiwan",
-            "accounting_system": "ERP",
-            "special_processing_rules": {
-                "enable_multi_currency": True,
-                "default_exchange_rate": "月底匯率",
-                "require_department_validation": True
-            }
-        }
+    def mode_3(self, raw_data_file: str, filename: str,
+               previous_workpaper: str, **kwargs):
+        """向後相容：SPT PO模式3"""
+        return self.process_po_mode_3(raw_data_file, filename, previous_workpaper, **kwargs)
     
-    # 為了向後相容，保留原始的方法名稱
-    def mode_1(self, fileUrl: str, file_name: str, fileUrl_previwp: str, 
-               fileUrl_p: str, fileUrl_c: str) -> ProcessingResult:
-        """向後相容的PO模式1方法"""
-        return self.process_po_mode_1(fileUrl, file_name, fileUrl_previwp, fileUrl_p, fileUrl_c)
-    
-    def mode_2(self, fileUrl: str, file_name: str, fileUrl_previwp: str, 
-               fileUrl_p: str) -> ProcessingResult:
-        """向後相容的PO模式2方法"""
-        return self.process_po_mode_2(fileUrl, file_name, fileUrl_previwp, fileUrl_p)
-    
-    def mode_3(self, fileUrl: str, file_name: str, fileUrl_previwp: str) -> ProcessingResult:
-        """向後相容的PO模式3方法"""
-        return self.process_po_mode_3(fileUrl, file_name, fileUrl_previwp)
-    
-    def mode_4(self, fileUrl: str, file_name: str) -> ProcessingResult:
-        """向後相容的PO模式4方法"""
-        return self.process_po_mode_4(fileUrl, file_name)
+    def mode_4(self, raw_data_file: str, filename: str, **kwargs):
+        """向後相容：SPT PO模式4"""
+        return self.process_po_mode_4(raw_data_file, filename, **kwargs)
 
 
 # 向後相容的類別別名
 SPTTW_PO = SPTEntity
 SPTTW_PR = SPTEntity
-
-
-def create_spt_entity(config: Optional[EntityConfig] = None) -> SPTEntity:
-    """創建SPT實體的便捷函數"""
-    return SPTEntity(config)

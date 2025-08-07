@@ -125,7 +125,7 @@ class BasePOProcessor(BaseDataProcessor):
             'Noted by Procurement', 
             'Remarked by FN',
             'Noted by FN',
-            f'Remarked by {month}月 Procurement',
+            f'Remarked by {self.calculate_month(month)}月 Procurement',
             'Remarked by 上月 FN',
             'PO狀態'
         ]
@@ -261,17 +261,14 @@ class BasePOProcessor(BaseDataProcessor):
             # 獲取前期FN備註
             if 'PO Line' in df_copy.columns:
                 fn_mapping = create_mapping_dict(previous_wp_renamed, 'PO Line', 'Remarked by FN_l')
-                df_copy['Remarked by 上月 FN'] = apply_mapping_safely(
-                    df_copy['PO Line'], fn_mapping
-                )
+                df_copy['Remarked by 上月 FN'] = df_copy['PO Line'].map(fn_mapping)
                 
                 # 獲取前期採購備註
                 procurement_mapping = create_mapping_dict(
                     previous_wp_renamed, 'PO Line', 'Remark by PR Team_l'
                 )
-                df_copy[f'Remarked by {month}月 Procurement'] = apply_mapping_safely(
-                    df_copy['PO Line'], procurement_mapping
-                )
+                df_copy[f'Remarked by {self.calculate_month(month)}月 Procurement'] = \
+                    df_copy['PO Line'].map(procurement_mapping)
             
             self.logger.info("成功處理前期底稿")
             return df_copy
@@ -311,16 +308,12 @@ class BasePOProcessor(BaseDataProcessor):
                 procurement_mapping = create_mapping_dict(
                     procurement_wp_renamed, 'PO Line', 'Remark by PR Team'
                 )
-                df_copy['Remarked by Procurement'] = apply_mapping_safely(
-                    df_copy['PO Line'], procurement_mapping
-                )
+                df_copy['Remarked by Procurement'] = df_copy['PO Line'].map(procurement_mapping)
                 
                 noted_mapping = create_mapping_dict(
                     procurement_wp_renamed, 'PO Line', 'Noted by PR'
                 )
-                df_copy['Noted by Procurement'] = apply_mapping_safely(
-                    df_copy['PO Line'], noted_mapping
-                )
+                df_copy['Noted by Procurement'] = df_copy['PO Line'].map(noted_mapping)
             
             # 通過PR Line獲取備註（如果PO Line沒有匹配到）
             if 'PR Line' in df_copy.columns:
@@ -329,10 +322,9 @@ class BasePOProcessor(BaseDataProcessor):
                 )
                 
                 # 只更新尚未匹配的記錄
-                mask_no_remark = df_copy['Remarked by Procurement'].isna()
-                df_copy.loc[mask_no_remark, 'Remarked by Procurement'] = apply_mapping_safely(
-                    df_copy.loc[mask_no_remark, 'PR Line'], pr_procurement_mapping
-                )
+                df_copy['Remarked by Procurement'] = \
+                    (df_copy.apply(lambda x: pr_procurement_mapping.get(x['PR Line'], None) 
+                                   if x['Remarked by Procurement'] is np.nan else x['Remarked by Procurement'], axis=1))
             
             # 設置FN備註為採購備註
             df_copy['Remarked by FN'] = df_copy['Remarked by Procurement']
@@ -439,7 +431,7 @@ class BasePOProcessor(BaseDataProcessor):
     
     def _apply_erm_status_logic(self, df: pd.DataFrame) -> pd.DataFrame:
         """應用ERM狀態邏輯"""
-        # 這個方法會在子類中被重寫以實現特定的ERM邏輯
+        # 特定的ERM邏輯for PO暫時寫在裡面，用欄位區分PO/PR
         return self.evaluate_status_based_on_dates(df, 'PO狀態')
     
     def _set_accrual_estimation(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -458,9 +450,7 @@ class BasePOProcessor(BaseDataProcessor):
             # 設置Account Name
             if ref_accounts is not None and not ref_accounts.empty:
                 account_mapping = create_mapping_dict(ref_accounts, 'Account', 'Account Desc')
-                df_copy['Account Name'] = apply_mapping_safely(
-                    df_copy['Account code'], account_mapping
-                )
+                df_copy['Account Name'] = df_copy['Account code'].map(account_mapping)
             
             # 設置Product code
             mask_accrual = df_copy['是否估計入帳'] == 'Y'
@@ -483,9 +473,7 @@ class BasePOProcessor(BaseDataProcessor):
             # 設置Liability
             if ref_liability is not None and not ref_liability.empty:
                 liability_mapping = create_mapping_dict(ref_liability, 'Account', 'Liability_y')
-                df_copy['Liability'] = apply_mapping_safely(
-                    df_copy['Account code'], liability_mapping
-                )
+                df_copy['Liability'] = df_copy['Account code'].map(liability_mapping)
             
             # 設置是否有預付
             if 'Entry Prepay Amount' in df_copy.columns:
@@ -600,9 +588,9 @@ class BasePOProcessor(BaseDataProcessor):
                 last_month_col = df.pop('Remarked by 上月 FN')
                 df.insert(fn_index, 'Remarked by 上月 FN', last_month_col)
             
-            if 'PO狀態' in df.columns and '是否估計入帳' in df.columns:
-                # 移動PO狀態到是否估計入帳前面
-                accrual_index = df.columns.get_loc('是否估計入帳')
+            if 'PO狀態' in df.columns and 'Remarked by 上月 FN' in df.columns:
+                # 移動PO狀態到Remarked by 上月 FN後面
+                accrual_index = df.columns.get_loc('Remarked by 上月 FN') + 1
                 po_status_col = df.pop('PO狀態')
                 df.insert(accrual_index, 'PO狀態', po_status_col)
             
@@ -815,3 +803,9 @@ class BasePOProcessor(BaseDataProcessor):
         except Exception as e:
             self.logger.error(f"保存輸出檔案失敗: {e}")
             return None
+
+    def calculate_month(self, m):
+        if m == 1:
+            return 12
+        else:
+            return m - 1

@@ -2,6 +2,9 @@
 系統常數定義
 包含所有固定值和配置常數
 """
+# 會計科目參照表
+REF_PATH_MOB = r'G:/共用雲端硬碟/INT_TWN_SEA_FN_Shared_Resources/00_Temp_Internal_share/To Allen/po_pr_bot/raw/ref.xlsx'
+REF_PATH_SPT = r'G:/共用雲端硬碟/INT_TWN_SEA_FN_Shared_Resources/00_Temp_Internal_share/To Allen/po_pr_bot/logic/SPTTW/ref_SPTTW.xlsx'
 
 # 檔案格式常數
 SUPPORTED_FILE_EXTENSIONS = ['.xlsx', '.xls', '.csv']
