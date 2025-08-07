@@ -52,7 +52,6 @@ class Logger:
             # 如果設置失敗，使用預設配置
             self._setup_fallback_logger()
             # 使用fallback logger記錄錯誤（避免print）
-            import sys
             sys.stderr.write(f"日誌設置失敗，使用預設配置: {e}\n")
     
     def _setup_root_logger(self, log_level: str, log_format: str) -> None:
@@ -90,7 +89,6 @@ class Logger:
                 self._setup_file_handler(root_logger, log_path, log_format)
             except Exception as e:
                 # 避免print，使用stderr記錄錯誤
-                import sys
                 sys.stderr.write(f"設置檔案日誌處理器失敗: {e}\n")
     
     def _setup_file_handler(self, logger: logging.Logger, log_path: str, log_format: str) -> None:
@@ -115,7 +113,6 @@ class Logger:
             
         except Exception as e:
             # 避免print，使用stderr記錄錯誤
-            import sys
             sys.stderr.write(f"創建檔案處理器失敗: {e}\n")
     
     def get_logger(self, name: Optional[str] = None) -> logging.Logger:
@@ -244,7 +241,6 @@ class Logger:
                 handler.close()
             except Exception as e:
                 # 避免print，使用stderr記錄錯誤
-                import sys
                 sys.stderr.write(f"關閉日誌處理器失敗: {e}\n")
         
         # 清空字典

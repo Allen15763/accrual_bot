@@ -70,7 +70,6 @@ class ConfigManager:
             
         except Exception as e:
             # 使用stderr記錄錯誤，避免print
-            import sys
             sys.stderr.write(f"載入配置檔案時出錯: {e}\n")
             # 設定預設配置
             self._set_default_config()
