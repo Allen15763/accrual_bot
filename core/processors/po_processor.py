@@ -478,7 +478,7 @@ class BasePOProcessor(BaseDataProcessor):
             # 設置是否有預付
             if 'Entry Prepay Amount' in df_copy.columns:
                 df_copy.loc[mask_accrual, '是否有預付'] = df_copy.loc[mask_accrual, 'Entry Prepay Amount']
-            
+
             return df_copy
             
         except Exception as e:
@@ -809,3 +809,82 @@ class BasePOProcessor(BaseDataProcessor):
             return 12
         else:
             return m - 1
+        
+    def process_spt_specific(self, df: pd.DataFrame) -> pd.DataFrame:
+        """處理SPT特有邏輯(僅當entity_type為SPT時調用)
+        
+        Args:
+            df: PO數據框
+            
+        Returns:
+            pd.DataFrame: 處理後的數據框
+        """
+        if self.entity_type != 'SPT':
+            return df
+            
+        try:
+            # Project含SPX, Remarked by FN=SPX
+            df.loc[df['Product Code'].str.contains('(?i)SPX'), 'Remarked by FN'] = 'SPX'
+            df.loc[df['Remarked by FN'] == 'SPX', '是否估計入帳'] = "N"
+            
+            # 處理分潤
+            self._update_commission_data(df)
+            
+            self.logger.info("成功處理SPT特有邏輯")
+            return df
+            
+        except Exception as e:
+            self.logger.error(f"處理SPT特有邏輯時出錯: {str(e)}", exc_info=True)
+            raise ValueError("處理SPT特有邏輯時出錯")
+    
+    def _update_commission_data(self, df: pd.DataFrame) -> pd.DataFrame:
+        """更新分潤數據
+        
+        Args:
+            df: PO數據框
+            
+        Returns:
+            pd.DataFrame: 更新後的數據框
+        """
+        try:
+            def update_remark(df, type_=True):
+                if type_:
+                    keywords = '(?i)Affiliate commission|Shopee commission|蝦皮分潤計劃會員分潤金'
+                    k1, k2 = 'Affiliate分潤合作', '品牌加碼'
+                    gl_value = '650022'
+                    product_code = 'EC_SPE_COM'
+                else:
+                    keywords = '(?i)AMS commission'
+                    k1, k2 = 'Affiliate分潤合作', '品牌加碼'
+                    gl_value = '650019'
+                    product_code = 'EC_AMS_COST'
+                
+                # 條件
+                condition = df['Item Description'].str.contains(keywords) | (
+                    df['Item Description'].str.contains(k1) &
+                    (~df['Item Description'].str.contains(k2)) if type_ else
+                    df['Item Description'].str.contains(k2)
+                )
+                
+                # 更新 Remarked by FN, GL#, Product code
+                df.loc[condition, 'Remarked by FN'] = '分潤'
+                df.loc[condition, 'GL#'] = gl_value
+                df.loc[condition, 'Account code'] = gl_value
+                df.loc[condition, 'Product code_c'] = product_code
+                
+                return df
+            
+            # 分兩種情況更新分潤數據
+            df = update_remark(df)
+            df = update_remark(df, type_=False)
+            
+            # 設置分潤估計入帳
+            df.loc[(((df['GL#'] == '650022') | (df['GL#'] == '650019')) &
+                   (df['Remarked by FN'] == '分潤') &
+                   (df['PO狀態'].str.contains('已完成'))), '是否估計入帳'] = "Y"
+            
+            return df
+            
+        except Exception as e:
+            self.logger.error(f"更新分潤數據時出錯: {str(e)}", exc_info=True)
+            raise ValueError("更新分潤數據時出錯")

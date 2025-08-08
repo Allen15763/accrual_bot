@@ -335,7 +335,8 @@ class BaseDataProcessor:
             
             # 根據採購備註更新
             not_accrued = ['不預估', '未完成', 'Payroll', '待關單', '未完成ERM', 
-                           '格式錯誤', 'error(Description Period is out of ERM)']
+                           '格式錯誤', 'error(Description Period is out of ERM)',
+                           'Check收貨']
             
             mask_procurement_completed = (
                 (df_copy['是否估計入帳'].isna() | (df_copy['是否估計入帳'] == 'nan')) & 
