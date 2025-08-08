@@ -14,13 +14,11 @@ from .pr_processor import BasePRProcessor
 try:
     from ...core.models.data_models import ProcessingResult
     from ...utils.logging import Logger
-    from ...utils.config import REF_PATH_MOB
     from ...data.exporters import ExcelExporter, CSVExporter
     from ...data.importers import ExcelImporter
 except ImportError:
     from core.models.data_models import ProcessingResult
     from utils.logging import Logger
-    from utils.config import REF_PATH_MOB
     from data.exporters import ExcelExporter, CSVExporter
     from data.importers import ExcelImporter
 
@@ -235,26 +233,6 @@ class MobPRProcessor(BasePRProcessor):
             
         except Exception as e:
             self.logger.error(f"導入數據文件 {name} 時出錯: {str(e)}", exc_info=True)
-            raise
-
-    def import_reference_data(self) -> Tuple[pd.DataFrame, pd.DataFrame]:
-        """導入參考數據
-
-        Returns:
-            Tuple[pd.DataFrame, pd.DataFrame]: 科目參考數據和負債參考數據
-        """
-        try:
-            url = self.config_manager._config_data.get('PATHS').get('ref_path_mob', REF_PATH_MOB)
-            
-            ac_ref = pd.read_excel(url, dtype=str)
-            
-            ref_for_ac = ac_ref.iloc[:, 1:3]
-            ref_for_liability = ac_ref.loc[:, ['Account', 'Liability']]
-            
-            return ref_for_ac, ref_for_liability
-            
-        except Exception as e:
-            self.logger.error(f"導入參考數據時出錯: {str(e)}", exc_info=True)
             raise
 
     def import_procurement(self, url: str) -> pd.DataFrame:

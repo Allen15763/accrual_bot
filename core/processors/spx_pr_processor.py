@@ -1,6 +1,6 @@
 """
 SPX PR處理器
-直接繼承自BaseDataProcessor，實現SPX特有的PR處理邏輯
+直接繼承自BasePRProcessor，實現SPX特有的PR處理邏輯
 """
 
 import pandas as pd
@@ -8,7 +8,7 @@ import numpy as np
 from typing import Tuple, List, Dict, Optional, Union, Any
 
 try:
-    from .base_processor import BaseDataProcessor
+    from .pr_processor import BasePRProcessor
     from ...utils.logging import get_logger
     # from ...utils.config import get_config_manager
 except ImportError:
@@ -21,13 +21,13 @@ except ImportError:
     if str(current_dir) not in sys.path:
         sys.path.insert(0, str(current_dir))
     
-    from core.processors.base_processor import BaseDataProcessor
+    from core.processors.pr_processor import BasePRProcessor
     from utils.logging import get_logger
     # from utils.config import get_config_manager
 
 
-class SpxPRProcessor(BaseDataProcessor):
-    """SPX PR處理器，直接繼承自BaseDataProcessor"""
+class SpxPRProcessor(BasePRProcessor):
+    """SPX PR處理器，直接繼承自BasePRProcessor"""
     
     def __init__(self):
         """初始化SPX PR處理器"""

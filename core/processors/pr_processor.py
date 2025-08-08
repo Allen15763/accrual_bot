@@ -290,9 +290,7 @@ class BasePRProcessor(BaseDataProcessor):
             # 設置Account Name
             if ref_accounts is not None and not ref_accounts.empty:
                 account_mapping = create_mapping_dict(ref_accounts, 'Account', 'Account Desc')
-                df_copy['Account Name'] = apply_mapping_safely(
-                    df_copy['Account code'], account_mapping
-                )
+                df_copy['Account Name'] = df_copy['Account code'].map(account_mapping)
             
             # 設置Product code
             mask_accrual = df_copy['是否估計入帳'] == 'Y'
@@ -318,10 +316,8 @@ class BasePRProcessor(BaseDataProcessor):
             
             # 設置Liability
             if ref_liability is not None and not ref_liability.empty:
-                liability_mapping = create_mapping_dict(ref_liability, 'Account', 'Liability_y')
-                df_copy['Liability'] = apply_mapping_safely(
-                    df_copy['Account code'], liability_mapping
-                )
+                liability_mapping = create_mapping_dict(ref_liability, 'Account', 'Liability')
+                df_copy['Liability'] = df_copy['Account code'].map(liability_mapping)
             
             return df_copy
             

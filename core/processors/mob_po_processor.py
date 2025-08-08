@@ -160,6 +160,9 @@ class MobPOProcessor(BasePOProcessor):
         # 呼叫父類的方法來執行通用邏輯
         # 但是先要確保數據格式符合父類期望
 
+        # 導入參考數據
+        ref_ac, ref_liability = self.import_reference_data()
+
         # 2. 提取月份資訊
         month = self._extract_month_from_filename(filename)
         
@@ -189,7 +192,7 @@ class MobPOProcessor(BasePOProcessor):
         
         # 8. 應用ERM邏輯
         file_date = self._convert_month_to_file_date(month)
-        df = self.apply_erm_logic(df, file_date, None, None)  # 參考數據可以後續添加
+        df = self.apply_erm_logic(df, file_date, ref_ac, ref_liability)
         
         # 9. 最終格式化
         df = self.finalize_data_format(df)

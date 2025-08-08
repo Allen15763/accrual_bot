@@ -54,12 +54,12 @@ def test_mob_entity():
         process_po_mode_2  ok
         """
         # TODO
-        # mob_entity.process_po_mode_2(
-        #     test_files['raw_data'],
-        #     os.path.basename(test_files['raw_data']),
-        #     test_files['previous_wp'],
-        #     test_files['procurement']
-        # )
+        mob_entity.process_po_mode_2(
+            test_files['raw_data'],
+            os.path.basename(test_files['raw_data']),
+            test_files['previous_wp'],
+            test_files['procurement']
+        )
         # mob_entity.process_po_mode_3(
         #     test_files['raw_data'],
         #     os.path.basename(test_files['raw_data']),

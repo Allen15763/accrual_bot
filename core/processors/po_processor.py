@@ -472,7 +472,7 @@ class BasePOProcessor(BaseDataProcessor):
             
             # 設置Liability
             if ref_liability is not None and not ref_liability.empty:
-                liability_mapping = create_mapping_dict(ref_liability, 'Account', 'Liability_y')
+                liability_mapping = create_mapping_dict(ref_liability, 'Account', 'Liability')
                 df_copy['Liability'] = df_copy['Account code'].map(liability_mapping)
             
             # 設置是否有預付

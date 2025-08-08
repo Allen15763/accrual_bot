@@ -312,6 +312,9 @@ def create_mapping_dict(df: pd.DataFrame, key_col: str, value_col: str,
         Dict[Any, Any]: 映射字典
     """
     try:
+        if isinstance(df, dict):
+            return df
+
         if key_col not in df.columns or value_col not in df.columns:
             return {}
         

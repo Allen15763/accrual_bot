@@ -16,6 +16,7 @@ try:
         parse_date_string, extract_date_range_from_description, create_mapping_dict,
         safe_string_operation, DEFAULT_DATE_RANGE, EXCEL_FORMAT, get_unique_filename
     )
+    from ...utils.config import REF_PATH_MOB, REF_PATH_SPT
 except ImportError:
     # 如果相對導入失敗，使用絕對導入
     import sys
@@ -31,6 +32,7 @@ except ImportError:
         parse_date_string, extract_date_range_from_description, create_mapping_dict,
         safe_string_operation, DEFAULT_DATE_RANGE, EXCEL_FORMAT, get_unique_filename
     )
+    from utils.config import REF_PATH_MOB, REF_PATH_SPT
 
 
 class BaseDataProcessor:
@@ -532,3 +534,25 @@ class BaseDataProcessor:
                 self.logger.debug(f"{stage} - 記憶體使用: {memory_mb:.2f} MB")
         except Exception as e:
             self.logger.warning(f"記錄數據信息時出錯: {str(e)}")
+
+    def import_reference_data(self) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        """導入參考數據
+
+        Returns:
+            Tuple[pd.DataFrame, pd.DataFrame]: 科目參考數據和負債參考數據
+        """
+        try:
+            ref_path, ref_constant = \
+                ('ref_path_mob', REF_PATH_MOB) if self.entity_type == 'MOB' else ('ref_path_spt', REF_PATH_SPT)
+            url = self.config_manager._config_data.get('PATHS').get(ref_path, ref_constant)
+            
+            ac_ref = pd.read_excel(url, dtype=str)
+            
+            ref_for_ac = ac_ref.iloc[:, 1:3]
+            ref_for_liability = ac_ref.loc[:, ['Account', 'Liability']]
+            
+            return ref_for_ac, ref_for_liability
+            
+        except Exception as e:
+            self.logger.error(f"導入參考數據時出錯: {str(e)}", exc_info=True)
+            raise
