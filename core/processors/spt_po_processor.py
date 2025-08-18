@@ -181,21 +181,9 @@ class SptPOProcessor(BasePOProcessor):
             previous_wp = self.import_previous_wp(previous_workpaper)
             df = self.process_previous_workpaper(df, previous_wp, month)
         
-
-         
         # 設置檔案日期
         df['檔案日期'] = yyyymm
         
-        # # 解析日期並評估狀態
-        # df = self.parse_date_from_description(df)
-        # df = self.evaluate_status_based_on_dates(df, 'PO狀態')
-        
-        # # 更新估計入帳標識
-        # df = self.update_estimation_based_on_status(df, 'PO狀態')
-        
-        # # 判斷科目代碼 and 判斷其他欄位
-        # df = self.set_accounting_fields(df, ref_ac, ref_liability)
-
         # 處理特殊情況
         df = self.process_spt_specific(df)
 

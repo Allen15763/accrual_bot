@@ -73,7 +73,8 @@ class GoogleSheetsImporter(BaseDataImporter):
             raise
     
     def get_sheet_data(self, spreadsheet_id: str, sheet_name: str, 
-                       cell_range: str = None, header_row: bool = True) -> pd.DataFrame:
+                       cell_range: str = None, header_row: bool = True, 
+                       skip_first_row: bool = False) -> pd.DataFrame:
         """
         從Google Sheets獲取數據
         
@@ -82,6 +83,7 @@ class GoogleSheetsImporter(BaseDataImporter):
             sheet_name: 工作表名稱
             cell_range: 儲存格範圍（例如'A:J'）
             header_row: 是否包含標題行
+            skip_first_row: 是否跳過第一行（當第一行是說明文字時使用）
             
         Returns:
             pd.DataFrame: 獲取的數據
@@ -110,13 +112,30 @@ class GoogleSheetsImporter(BaseDataImporter):
                 self.logger.warning("Google Sheets返回空數據")
                 return pd.DataFrame()
             
-            # 轉換為DataFrame
-            if header_row and len(values) > 1:
-                df = pd.DataFrame(values[1:], columns=values[0])
+            # 根據參數調整數據處理方式
+            if skip_first_row:
+                # 模仿 getData 的處理方式：跳過第1行，第2行為標題，第3行開始為數據
+                if header_row and len(values) > 2:
+                    columns = values[1]  # 第2行作為標題
+                    data = values[2:]    # 第3行開始作為數據
+                    df = pd.DataFrame(data, columns=columns)
+                elif header_row and len(values) > 1:
+                    # 如果只有2行，第2行作為標題，沒有數據行
+                    columns = values[1]
+                    df = pd.DataFrame([], columns=columns)
+                else:
+                    # 不使用標題行，跳過第1行後的所有數據
+                    df = pd.DataFrame(values[1:])
             else:
-                df = pd.DataFrame(values)
+                # 原本的處理方式：第1行為標題，第2行開始為數據
+                if header_row and len(values) > 1:
+                    df = pd.DataFrame(values[1:], columns=values[0])
+                else:
+                    df = pd.DataFrame(values)
             
             self.logger.info(f"成功讀取Google Sheets數據，形狀: {df.shape}")
+            self.logger.info(f"處理模式: skip_first_row={skip_first_row}, header_row={header_row}")
+            
             return df
             
         except HttpError as e:
@@ -125,7 +144,7 @@ class GoogleSheetsImporter(BaseDataImporter):
         except Exception as e:
             self.logger.error(f"讀取Google Sheets時出錯: {str(e)}", exc_info=True)
             raise
-    
+
     def get_multiple_sheets_data(self, queries: List[Tuple[str, str, str, bool]]) -> List[pd.DataFrame]:
         """
         獲取多個工作表的數據

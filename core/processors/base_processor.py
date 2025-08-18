@@ -332,7 +332,7 @@ class BaseDataProcessor:
                 end_dates = pd.Series([0] * len(df_copy), index=df_copy.index)
             
             expected_month = df_copy.get('Expected Received Month_轉換格式', 
-                                        pd.Series([0] * len(df_copy), index=df_copy.index))
+                                         pd.Series([0] * len(df_copy), index=df_copy.index))
             file_date = df_copy.get('檔案日期', 
                                     pd.Series([0] * len(df_copy), index=df_copy.index))
             
@@ -359,9 +359,9 @@ class BaseDataProcessor:
                 eba_is_zero = pd.to_numeric(df_copy['Entry Billed Amount'], errors='coerce').fillna(0) == 0
                 eba_not_zero = pd.to_numeric(df_copy['Entry Billed Amount'], errors='coerce').fillna(0) != 0
                 ea_minus_eba_zero = (pd.to_numeric(df_copy['Entry Amount'], errors='coerce').fillna(0) - 
-                                    pd.to_numeric(df_copy['Entry Billed Amount'], errors='coerce').fillna(0)) == 0
+                                     pd.to_numeric(df_copy['Entry Billed Amount'], errors='coerce').fillna(0)) == 0
                 ea_minus_eba_not_zero = (pd.to_numeric(df_copy['Entry Amount'], errors='coerce').fillna(0) - 
-                                        pd.to_numeric(df_copy['Entry Billed Amount'], errors='coerce').fillna(0)) != 0
+                                         pd.to_numeric(df_copy['Entry Billed Amount'], errors='coerce').fillna(0)) != 0
                 
                 # 公司條件
                 is_mobtw = df_copy.get('Company', '') == 'MOBTW'
@@ -422,7 +422,8 @@ class BaseDataProcessor:
                     choices.append('已完成ERM')
                     
                     # 條件10：部分完成ERM（SPTTW，RQ!=0，EQ!=RQ）
-                    conditions.append(base_mask & out_of_range & is_spttw & ~format_error & rq_not_zero & eq_not_equals_rq)
+                    conditions.append(
+                        base_mask & out_of_range & is_spttw & ~format_error & rq_not_zero & eq_not_equals_rq)
                     choices.append('部分完成ERM')
                     
                     # 條件11：未完成ERM（SPTTW，RQ=0）
@@ -444,11 +445,11 @@ class BaseDataProcessor:
                     
                     # 條件2：已完成
                     (expected_month.between(start_dates, end_dates, inclusive='both') & 
-                    (expected_month <= file_date)) & na_mask,
+                     (expected_month <= file_date)) & na_mask,
                     
                     # 條件3：未完成
                     (expected_month.between(start_dates, end_dates, inclusive='both') & 
-                    (expected_month > file_date)) & na_mask
+                     (expected_month > file_date)) & na_mask
                 ]
                 
                 choices = ['格式錯誤', '已完成', '未完成']
@@ -475,26 +476,6 @@ class BaseDataProcessor:
         """
         try:
             df_copy = df.copy()
-            
-            # # 已完成狀態設為Y，未完成設為N
-            # mask_completed = df_copy[status_col] == '已完成'
-            # mask_incomplete = df_copy[status_col] == '未完成'
-            
-            # df_copy.loc[mask_completed, '是否估計入帳'] = 'Y'
-            # df_copy.loc[mask_incomplete, '是否估計入帳'] = 'N'
-            
-            # # 處理特殊狀態
-            # if status_col == 'PO狀態':
-            #     df_copy.loc[df_copy[status_col] == '待關單', '是否估計入帳'] = 'N'
-            #     df_copy.loc[df_copy[status_col] == '已入帳', '是否估計入帳'] = 'N'
-            #     df_copy.loc[df_copy[status_col] == '已完成ERM', '是否估計入帳'] = 'Y'
-            #     df_copy.loc[df_copy[status_col] == '未完成ERM', '是否估計入帳'] = 'N'
-            # elif status_col == 'PR狀態':
-            #     df_copy.loc[df_copy[status_col] == '待關單', '是否估計入帳'] = 'N'
-            #     df_copy.loc[df_copy[status_col] == 'Payroll', '是否估計入帳'] = 'N'
-            #     df_copy.loc[df_copy[status_col] == '不預估', '是否估計入帳'] = 'N'
-            
-
 
             # 定義不應估計的採購備註
             procurement_no_accrual = ['未完成', '勞報', 'Payroll', '不預估', 'error', 'SPX']
@@ -527,20 +508,6 @@ class BaseDataProcessor:
                 (df_copy['是否估計入帳'].isna() | (df_copy['是否估計入帳'] == ''))
             )
             df_copy.loc[mask_procurement_yes, '是否估計入帳'] = 'Y'
-
-
-
-            # # 根據採購備註&狀態更新
-            # not_accrued = ['不預估', '未完成', 'Payroll', '待關單', '未完成ERM', 
-            #                '格式錯誤', 'error(Description Period is out of ERM)',
-            #                'Check收貨', '提早完成?']
-            
-            # mask_procurement_completed = (
-            #     (df_copy['是否估計入帳'].isna() | (df_copy['是否估計入帳'] == 'nan')) & 
-            #     (df_copy.get('Remarked by Procurement', '') == '已完成') &
-            #     (~df_copy[status_col].isin(not_accrued))
-            # )
-            # df_copy.loc[mask_procurement_completed, '是否估計入帳'] = 'Y'
             
             return df_copy
             

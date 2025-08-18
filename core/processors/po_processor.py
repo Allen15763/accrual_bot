@@ -373,7 +373,7 @@ class BasePOProcessor(BaseDataProcessor):
                 df_copy.loc[mask_profit_sharing & mask_no_status, 'PO狀態'] = '分潤'
                 
             # 處理已入帳
-            if 'PO Entry full invoiced status' in df_copy.columns:
+            if 'PO Entry full invoiced status' in df_copy.columns and self.entity_type != 'SPX':
                 mask_posted = (
                     (df_copy['PO狀態'].isna() | (df_copy['PO狀態'] == 'nan')) & 
                     (df_copy['PO Entry full invoiced status'].astype(str) == '1')
