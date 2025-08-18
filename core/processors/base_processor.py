@@ -301,6 +301,167 @@ class BaseDataProcessor:
             self.logger.error(f"根據日期評估狀態時出錯: {str(e)}", exc_info=True)
             raise ValueError("根據日期評估狀態時出錯")
     
+    def evaluate_status_based_on_dates_integrated(self, df: pd.DataFrame, status_col: str) -> pd.DataFrame:
+        """
+        根據日期範圍評估狀態 - 整合版（包含完整的11個條件）
+        
+        Args:
+            df: 要處理的DataFrame
+            status_col: 狀態列名 ('PR狀態' 或 'PO狀態')
+            
+        Returns:
+            pd.DataFrame: 更新了狀態的DataFrame
+        """
+        try:
+            df_copy = df.copy()
+            
+            # 確保日期解析已完成
+            if 'YMs of Item Description' not in df_copy.columns:
+                df_copy = self.parse_date_from_description(df_copy)
+            
+            # === 基礎條件準備 ===
+            na_mask = df_copy[status_col].isna() | (df_copy[status_col] == 'nan') | (df_copy[status_col] == '')
+            
+            # 提取日期範圍
+            date_ranges = df_copy['YMs of Item Description'].str.split(',', expand=True)
+            if date_ranges.shape[1] >= 2:
+                start_dates = pd.to_numeric(date_ranges[0], errors='coerce').fillna(0).astype('int32')
+                end_dates = pd.to_numeric(date_ranges[1], errors='coerce').fillna(0).astype('int32')
+            else:
+                start_dates = pd.Series([0] * len(df_copy), index=df_copy.index)
+                end_dates = pd.Series([0] * len(df_copy), index=df_copy.index)
+            
+            expected_month = df_copy.get('Expected Received Month_轉換格式', 
+                                        pd.Series([0] * len(df_copy), index=df_copy.index))
+            file_date = df_copy.get('檔案日期', 
+                                    pd.Series([0] * len(df_copy), index=df_copy.index))
+            
+            # === PO狀態判斷邏輯 ===
+            if 'Received Quantity' in df_copy.columns:  # PO處理
+                
+                # 前置條件：Remarked by Procurement != 'error'
+                base_mask = (df_copy.get('Remarked by Procurement', '') != 'error') & na_mask
+                
+                # 日期範圍條件
+                in_range_past = \
+                    expected_month.between(start_dates, end_dates, inclusive='both') & (expected_month <= file_date)
+                in_range_future = \
+                    expected_month.between(start_dates, end_dates, inclusive='both') & (expected_month > file_date)
+                out_of_range = ~expected_month.between(start_dates, end_dates, inclusive='both')
+                
+                # 數量條件
+                eq_equals_rq = df_copy['Entry Quantity'] == df_copy['Received Quantity']
+                eq_not_equals_rq = df_copy['Entry Quantity'] != df_copy['Received Quantity']
+                rq_is_zero = pd.to_numeric(df_copy['Received Quantity'], errors='coerce').fillna(0) == 0
+                rq_not_zero = pd.to_numeric(df_copy['Received Quantity'], errors='coerce').fillna(0) != 0
+                
+                # 金額條件
+                eba_is_zero = pd.to_numeric(df_copy['Entry Billed Amount'], errors='coerce').fillna(0) == 0
+                eba_not_zero = pd.to_numeric(df_copy['Entry Billed Amount'], errors='coerce').fillna(0) != 0
+                ea_minus_eba_zero = (pd.to_numeric(df_copy['Entry Amount'], errors='coerce').fillna(0) - 
+                                    pd.to_numeric(df_copy['Entry Billed Amount'], errors='coerce').fillna(0)) == 0
+                ea_minus_eba_not_zero = (pd.to_numeric(df_copy['Entry Amount'], errors='coerce').fillna(0) - 
+                                        pd.to_numeric(df_copy['Entry Billed Amount'], errors='coerce').fillna(0)) != 0
+                
+                # 公司條件
+                is_mobtw = df_copy.get('Company', '') == 'MOBTW'
+                is_spttw = df_copy.get('Company', '') == 'SPTTW'
+                
+                # 格式檢查
+                format_error = df_copy['YMs of Item Description'] == '100001,100002'
+                
+                # === 建立11個條件（按優先順序） ===
+                conditions = []
+                choices = []
+                
+                # 條件0：格式錯誤（特殊處理）
+                conditions.append(format_error & na_mask)
+                choices.append('格式錯誤')
+                
+                # --- 日期在範圍內且已過（條件1-4）---
+                # 條件1：已完成（EQ=RQ, EBA=0）
+                conditions.append(base_mask & in_range_past & eq_equals_rq & eba_is_zero)
+                choices.append('已完成')
+                
+                # 條件2：全付完，未關單（EQ=RQ, EBA!=0, EA-EBA=0）
+                conditions.append(base_mask & in_range_past & eq_equals_rq & eba_not_zero & ea_minus_eba_zero)
+                choices.append('全付完，未關單')
+                
+                # 條件3：已完成但有未付款部分（EQ=RQ, EBA!=0, EA-EBA!=0）
+                conditions.append(base_mask & in_range_past & eq_equals_rq & eba_not_zero & ea_minus_eba_not_zero)
+                choices.append('已完成')
+                
+                # 條件4：Check收貨（EQ!=RQ）
+                conditions.append(base_mask & in_range_past & eq_not_equals_rq)
+                choices.append('Check收貨')
+                
+                # --- 日期在範圍內但未到（條件5-7）---
+                if self.entity_type == 'MOB':
+                    # 條件5：未完成（MOBTW）
+                    conditions.append(base_mask & in_range_future & is_mobtw)
+                    choices.append('未完成')
+                
+                elif self.entity_type == 'SPT':
+                    # 條件6：未完成（SPTTW，RQ=0）
+                    conditions.append(base_mask & in_range_future & is_spttw & rq_is_zero)
+                    choices.append('未完成')
+                    
+                    # 條件7：提早完成?（SPTTW，RQ!=0）
+                    conditions.append(base_mask & in_range_future & is_spttw & rq_not_zero)
+                    choices.append('提早完成?')
+                
+                # --- 日期不在範圍內（條件8-11）---
+                if self.entity_type == 'MOB':
+                    # 條件8：範圍錯誤（MOBTW）
+                    conditions.append(base_mask & out_of_range & is_mobtw & ~format_error)
+                    choices.append('error(Description Period is out of ERM)')
+                
+                elif self.entity_type == 'SPT':
+                    # 條件9：已完成ERM（SPTTW，RQ!=0，EQ=RQ）
+                    conditions.append(base_mask & out_of_range & is_spttw & ~format_error & rq_not_zero & eq_equals_rq)
+                    choices.append('已完成ERM')
+                    
+                    # 條件10：部分完成ERM（SPTTW，RQ!=0，EQ!=RQ）
+                    conditions.append(base_mask & out_of_range & is_spttw & ~format_error & rq_not_zero & eq_not_equals_rq)
+                    choices.append('部分完成ERM')
+                    
+                    # 條件11：未完成ERM（SPTTW，RQ=0）
+                    conditions.append(base_mask & out_of_range & is_spttw & ~format_error & rq_is_zero)
+                    choices.append('未完成ERM')
+                
+                # === 應用條件 ===
+                df_copy[status_col] = np.select(conditions, choices, default=df_copy[status_col])
+                
+                # 處理剩餘的空值（不符合任何條件的情況）
+                remaining_mask = df_copy[status_col].isna() | (df_copy[status_col] == '')
+                df_copy.loc[remaining_mask, status_col] = 'error(Description Period is out of ERM)'
+                
+            else:  # PR處理
+                # PR的邏輯相對簡單，保持原有實現
+                conditions = [
+                    # 條件1：格式錯誤
+                    (df_copy['YMs of Item Description'] == '100001,100002') & na_mask,
+                    
+                    # 條件2：已完成
+                    (expected_month.between(start_dates, end_dates, inclusive='both') & 
+                    (expected_month <= file_date)) & na_mask,
+                    
+                    # 條件3：未完成
+                    (expected_month.between(start_dates, end_dates, inclusive='both') & 
+                    (expected_month > file_date)) & na_mask
+                ]
+                
+                choices = ['格式錯誤', '已完成', '未完成']
+                
+                df_copy[status_col] = np.select(conditions, choices, default=df_copy[status_col])
+                df_copy[status_col] = df_copy[status_col].fillna('error(Description Period is out of ERM)')
+            
+            return df_copy
+            
+        except Exception as e:
+            self.logger.error(f"根據日期評估狀態時出錯: {str(e)}", exc_info=True)
+            raise ValueError("根據日期評估狀態時出錯")
+
     def update_estimation_based_on_status(self, df: pd.DataFrame, status_col: str) -> pd.DataFrame:
         """
         根據狀態更新估計入帳標識
@@ -315,35 +476,71 @@ class BaseDataProcessor:
         try:
             df_copy = df.copy()
             
-            # 已完成狀態設為Y，未完成設為N
-            mask_completed = df_copy[status_col] == '已完成'
-            mask_incomplete = df_copy[status_col] == '未完成'
+            # # 已完成狀態設為Y，未完成設為N
+            # mask_completed = df_copy[status_col] == '已完成'
+            # mask_incomplete = df_copy[status_col] == '未完成'
             
-            df_copy.loc[mask_completed, '是否估計入帳'] = 'Y'
-            df_copy.loc[mask_incomplete, '是否估計入帳'] = 'N'
+            # df_copy.loc[mask_completed, '是否估計入帳'] = 'Y'
+            # df_copy.loc[mask_incomplete, '是否估計入帳'] = 'N'
             
-            # 處理特殊狀態
-            if status_col == 'PO狀態':
-                df_copy.loc[df_copy[status_col] == '待關單', '是否估計入帳'] = 'N'
-                df_copy.loc[df_copy[status_col] == '已入帳', '是否估計入帳'] = 'N'
-                df_copy.loc[df_copy[status_col] == '已完成ERM', '是否估計入帳'] = 'Y'
-                df_copy.loc[df_copy[status_col] == '未完成ERM', '是否估計入帳'] = 'N'
-            elif status_col == 'PR狀態':
-                df_copy.loc[df_copy[status_col] == '待關單', '是否估計入帳'] = 'N'
-                df_copy.loc[df_copy[status_col] == 'Payroll', '是否估計入帳'] = 'N'
-                df_copy.loc[df_copy[status_col] == '不預估', '是否估計入帳'] = 'N'
+            # # 處理特殊狀態
+            # if status_col == 'PO狀態':
+            #     df_copy.loc[df_copy[status_col] == '待關單', '是否估計入帳'] = 'N'
+            #     df_copy.loc[df_copy[status_col] == '已入帳', '是否估計入帳'] = 'N'
+            #     df_copy.loc[df_copy[status_col] == '已完成ERM', '是否估計入帳'] = 'Y'
+            #     df_copy.loc[df_copy[status_col] == '未完成ERM', '是否估計入帳'] = 'N'
+            # elif status_col == 'PR狀態':
+            #     df_copy.loc[df_copy[status_col] == '待關單', '是否估計入帳'] = 'N'
+            #     df_copy.loc[df_copy[status_col] == 'Payroll', '是否估計入帳'] = 'N'
+            #     df_copy.loc[df_copy[status_col] == '不預估', '是否估計入帳'] = 'N'
             
-            # 根據採購備註更新
-            not_accrued = ['不預估', '未完成', 'Payroll', '待關單', '未完成ERM', 
-                           '格式錯誤', 'error(Description Period is out of ERM)',
-                           'Check收貨']
+
+
+            # 定義不應估計的採購備註
+            procurement_no_accrual = ['未完成', '勞報', 'Payroll', '不預估', 'error', 'SPX']
             
-            mask_procurement_completed = (
-                (df_copy['是否估計入帳'].isna() | (df_copy['是否估計入帳'] == 'nan')) & 
-                (df_copy.get('Remarked by Procurement', '') == '已完成') &
-                (~df_copy[status_col].isin(not_accrued))
+            # 定義不應估計的狀態
+            status_no_accrual = ['不預估', '未完成', 'Payroll', '待關單', '未完成ERM', 
+                                 '格式錯誤', 'error(Description Period is out of ERM)', 'Check收貨',
+                                 '提早完成?']
+            
+            # 邏輯1：先檢查採購備註（採購備註有最高優先權）
+            mask_procurement_no = df_copy['Remarked by Procurement'].isin(procurement_no_accrual)
+            df_copy.loc[mask_procurement_no, '是否估計入帳'] = 'N'
+            
+            # 邏輯2：再根據狀態設置（但不覆蓋已設為N的）
+            mask_completed = (
+                (df_copy[status_col] == '已完成') & 
+                (~mask_procurement_no) &  # 排除採購說不行的
+                (df_copy['是否估計入帳'].isna() | (df_copy['是否估計入帳'] == ''))
             )
-            df_copy.loc[mask_procurement_completed, '是否估計入帳'] = 'Y'
+            df_copy.loc[mask_completed, '是否估計入帳'] = 'Y'
+            
+            # 邏輯3：狀態為不預估清單中的，設為N
+            mask_status_no = df_copy[status_col].isin(status_no_accrual)
+            df_copy.loc[mask_status_no, '是否估計入帳'] = 'N'
+            
+            # 邏輯4：採購備註為"已完成"且狀態允許的，設為Y
+            mask_procurement_yes = (
+                (df_copy['Remarked by Procurement'] == '已完成') &
+                (~df_copy[status_col].isin(status_no_accrual)) &
+                (df_copy['是否估計入帳'].isna() | (df_copy['是否估計入帳'] == ''))
+            )
+            df_copy.loc[mask_procurement_yes, '是否估計入帳'] = 'Y'
+
+
+
+            # # 根據採購備註&狀態更新
+            # not_accrued = ['不預估', '未完成', 'Payroll', '待關單', '未完成ERM', 
+            #                '格式錯誤', 'error(Description Period is out of ERM)',
+            #                'Check收貨', '提早完成?']
+            
+            # mask_procurement_completed = (
+            #     (df_copy['是否估計入帳'].isna() | (df_copy['是否估計入帳'] == 'nan')) & 
+            #     (df_copy.get('Remarked by Procurement', '') == '已完成') &
+            #     (~df_copy[status_col].isin(not_accrued))
+            # )
+            # df_copy.loc[mask_procurement_completed, '是否估計入帳'] = 'Y'
             
             return df_copy
             

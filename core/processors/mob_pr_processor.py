@@ -184,7 +184,7 @@ class MobPRProcessor(BasePRProcessor):
         
         # 解析日期並評估狀態
         df = self.parse_date_from_description(df)
-        df = self.evaluate_status_based_on_dates(df, 'PR狀態')
+        df = self.evaluate_status_based_on_dates_integrated(df, 'PR狀態')
         
         # 更新估計入帳標識
         df = self.update_estimation_based_on_status(df, 'PR狀態')

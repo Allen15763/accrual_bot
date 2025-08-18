@@ -256,7 +256,7 @@ class BasePRProcessor(BaseDataProcessor):
             df_copy['檔案日期'] = file_date
             
             # 應用狀態邏輯
-            df_copy = self.evaluate_status_based_on_dates(df_copy, 'PR狀態')
+            df_copy = self.evaluate_status_based_on_dates_integrated(df_copy, 'PR狀態')
             
             # 設置估計入帳標識
             df_copy = self.update_estimation_based_on_status(df_copy, 'PR狀態')
@@ -284,8 +284,8 @@ class BasePRProcessor(BaseDataProcessor):
             df_copy = df.copy()
             
             # 設置Account code
-            df_copy = self.judge_ac_code(df_copy)
             df_copy = self.process_spt_specific(df_copy)
+            df_copy = self.judge_ac_code(df_copy)
             
             # 設置Account Name
             if ref_accounts is not None and not ref_accounts.empty:

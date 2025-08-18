@@ -119,13 +119,15 @@ def test_spt_entity():
             'procurement': r"C:\SEA\Accrual\prpo_bot\resources\頂一下\202503\SPT\raw\採購底稿PO_未結PO 202503 SPTTW.xlsx",
             # 'closing_list': r"C:\SEA\Accrual\prpo_bot\resources\頂一下\202503\SPT\raw\mob_closing.xlsx"
         }
-
-        spt_entity.process_po_mode_2(
-            test_files['raw_data'],
-            os.path.basename(test_files['raw_data']),
-            test_files['previous_wp'],
-            test_files['procurement']
-        )
+        """
+        SPT PO mode 2 ok pass
+        """
+        # spt_entity.process_po_mode_2(
+        #     test_files['raw_data'],
+        #     os.path.basename(test_files['raw_data']),
+        #     test_files['previous_wp'],
+        #     test_files['procurement']
+        # )
 
         # 測試資料路徑 (請根據實際情況調整)
         test_files = {
@@ -156,7 +158,8 @@ def test_spx_entity():
     logger.info("=== 測試SPX實體 ===")
     
     try:
-        from core.entities import create_entity, EntityType
+        from core.entities import create_entity
+        from core.models.data_models import EntityType
         
         # 創建SPX實體
         spx_entity = create_entity(EntityType.SPX)
@@ -183,7 +186,8 @@ def test_spx_po_processing():
     logger.info("=== 測試SPX PO處理 ===")
     
     try:
-        from core.entities import create_entity, EntityType
+        from core.entities import create_entity
+        from core.models.data_models import EntityType
         
         spx_entity = create_entity(EntityType.SPX)
         
@@ -201,7 +205,7 @@ def test_spx_po_processing():
         # 檢查檔案是否存在
         missing_files = []
         for file_type, file_path in test_files.items():
-            if not os.path.exists(file_path):
+            if not os.path.exists(file_path) and file_type != 'po_file_name':
                 missing_files.append(f"{file_type}: {file_path}")
         
         if missing_files:
@@ -263,7 +267,7 @@ def test_spx_pr_processing():
         # 檢查檔案是否存在
         missing_files = []
         for file_type, file_path in test_files.items():
-            if not os.path.exists(file_path):
+            if not os.path.exists(file_path) and file_type != 'pr_file_name':
                 missing_files.append(f"{file_type}: {file_path}")
         
         if missing_files:
@@ -323,7 +327,7 @@ def test_concurrent_processing():
         # 檢查檔案
         missing_files = []
         for file_type, file_path in file_paths.items():
-            if not os.path.exists(file_path):
+            if not os.path.exists(file_path) and file_type != 'po_file_name':
                 missing_files.append(f"{file_type}: {file_path}")
         
         if missing_files:
@@ -458,7 +462,7 @@ def test_specific_spx_file():
         # 檢查檔案是否存在
         missing_files = []
         for file_key, file_path in test_case['files'].items():
-            if not os.path.exists(file_path):
+            if not os.path.exists(file_path) and file_key != 'filename':
                 missing_files.append(f"{file_key}: {file_path}")
         
         if missing_files:

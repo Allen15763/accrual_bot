@@ -372,9 +372,6 @@ class BasePOProcessor(BaseDataProcessor):
                 
                 df_copy.loc[mask_profit_sharing & mask_no_status, 'PO狀態'] = '分潤'
                 
-                if self.entity_type == 'SPT':
-                    df_copy.loc[df_copy['PO狀態'] == '分潤', '是否估計入帳'] = '分潤'
-            
             # 處理已入帳
             if 'PO Entry full invoiced status' in df_copy.columns:
                 mask_posted = (
@@ -431,8 +428,9 @@ class BasePOProcessor(BaseDataProcessor):
     
     def _apply_erm_status_logic(self, df: pd.DataFrame) -> pd.DataFrame:
         """應用ERM狀態邏輯"""
-        # 特定的ERM邏輯for PO暫時寫在裡面，用欄位區分PO/PR
-        return self.evaluate_status_based_on_dates(df, 'PO狀態')
+        # # 特定的ERM邏輯for PO暫時寫在裡面，用欄位區分PO/PR
+        # return self.evaluate_status_based_on_dates(df, 'PO狀態')
+        return self.evaluate_status_based_on_dates_integrated(df, 'PO狀態')
     
     def _set_accrual_estimation(self, df: pd.DataFrame) -> pd.DataFrame:
         """設置估計入帳標識"""

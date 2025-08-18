@@ -181,9 +181,8 @@ class SptPOProcessor(BasePOProcessor):
             previous_wp = self.import_previous_wp(previous_workpaper)
             df = self.process_previous_workpaper(df, previous_wp, month)
         
-        # 處理特殊情況
-        df = self.process_spt_specific(df)
-        
+
+         
         # 設置檔案日期
         df['檔案日期'] = yyyymm
         
@@ -197,7 +196,8 @@ class SptPOProcessor(BasePOProcessor):
         # # 判斷科目代碼 and 判斷其他欄位
         # df = self.set_accounting_fields(df, ref_ac, ref_liability)
 
-
+        # 處理特殊情況
+        df = self.process_spt_specific(df)
 
         # 7. 應用日期邏輯
         df = self.apply_date_logic(df)
@@ -205,8 +205,6 @@ class SptPOProcessor(BasePOProcessor):
         # 8. 應用ERM邏輯
         file_date = self._convert_month_to_file_date(month)
         df = self.apply_erm_logic(df, file_date, ref_ac, ref_liability)
-        
-        
         
         # 格式化數據
         df = self.finalize_data_format(df)
