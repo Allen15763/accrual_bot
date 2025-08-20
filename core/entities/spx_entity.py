@@ -294,7 +294,8 @@ class SPXEntity(BaseEntity):
     def process_po_mode_1_spx(self, raw_data_file: str, filename: str,
                               previous_workpaper: str, procurement_file: str,
                               ap_invoice_file: str, previous_workpaper_pr: str,
-                              procurement_file_pr: str) -> ProcessingResult:
+                              procurement_file_pr: str,
+                              ops_validation: str) -> ProcessingResult:
         """
         SPX特有的PO模式1：包含AP invoice和PR處理
         
@@ -317,7 +318,8 @@ class SPXEntity(BaseEntity):
             procurement_file=procurement_file,
             ap_invoice_file=ap_invoice_file,
             previous_workpaper_pr=previous_workpaper_pr,
-            procurement_file_pr=procurement_file_pr
+            procurement_file_pr=procurement_file_pr,
+            ops_validation=ops_validation
         )
         
         return self._po_processor.process_po(files, ProcessingMode.MODE_1)
@@ -421,11 +423,11 @@ class SPXEntity(BaseEntity):
     # 為了向後相容，保留原始的方法名稱
     def mode_1(self, fileUrl: str, file_name: str, fileUrl_previwp: str, 
                fileUrl_p: str, fileUrl_ap: str, fileUrl_previwp_pr: str, 
-               fileUrl_p_pr: str) -> ProcessingResult:
+               fileUrl_p_pr: str, fileUrl_opsValidation: str) -> ProcessingResult:
         """向後相容的SPX PO模式1方法"""
         return self.process_po_mode_1_spx(
             fileUrl, file_name, fileUrl_previwp, fileUrl_p, 
-            fileUrl_ap, fileUrl_previwp_pr, fileUrl_p_pr
+            fileUrl_ap, fileUrl_previwp_pr, fileUrl_p_pr, fileUrl_opsValidation
         )
     
     def mode_2(self, fileUrl: str, file_name: str, fileUrl_previwp: str, 

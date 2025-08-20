@@ -199,7 +199,8 @@ def test_spx_po_processing():
             'procurement': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202504\202504_PO_PQ.xlsx",
             'ap_invoice': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202504\AP_Invoice_Match_Monitoring_Ext_202504.xlsx",
             'previous_wp_pr': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202504\202503_PR_FN.xlsx",
-            'procurement_pr': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202504\202504_PR_PQ.xlsx"
+            'procurement_pr': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202504\202504_PR_PQ.xlsx",
+            'ops_validation': r"C:\Users\lia\Downloads\SPX智取櫃及繳費機驗收明細(For FN)_2507.xlsx"
         }
         
         # 檢查檔案是否存在
@@ -226,7 +227,8 @@ def test_spx_po_processing():
             test_files['procurement'],
             test_files['ap_invoice'],
             test_files['previous_wp_pr'],
-            test_files['procurement_pr']
+            test_files['procurement_pr'],
+            test_files['ops_validation']
         )
         
         end_time = time.time()
@@ -321,7 +323,8 @@ def test_concurrent_processing():
             'procurement': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_test\採購底稿_PO.xlsx",
             'ap_invoice': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_test\AP_Invoice_Match_Monitoring_Ext_202502.xlsx",
             'previous_wp_pr': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_test\PR_for前期載入.xlsx",
-            'procurement_pr': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_test\採購底稿_PR.xlsx"
+            'procurement_pr': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_test\採購底稿_PR.xlsx",
+            'ops_validation': r"C:\Users\lia\Downloads\SPX智取櫃及繳費機驗收明細(For FN)_2507.xlsx"
         }
         
         # 檢查檔案
@@ -440,7 +443,8 @@ def test_specific_spx_file():
                 'procurement': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202504\202504_PO_PQ.xlsx",
                 'ap_invoice': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202504\AP_Invoice_Match_Monitoring_Ext_202504.xlsx",
                 'previous_wp_pr': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202504\202503_PR_FN.xlsx",
-                'procurement_pr': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202504\202504_PR_PQ.xlsx"
+                'procurement_pr': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202504\202504_PR_PQ.xlsx",
+                'ops_validation': r"C:\Users\lia\Downloads\SPX智取櫃及繳費機驗收明細(For FN)_2507.xlsx"
             }
         },
         {

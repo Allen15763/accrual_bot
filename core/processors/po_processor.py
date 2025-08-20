@@ -267,8 +267,12 @@ class BasePOProcessor(BaseDataProcessor):
                 procurement_mapping = create_mapping_dict(
                     previous_wp_renamed, 'PO Line', 'Remark by PR Team_l'
                 )
-                df_copy[f'Remarked by {self.calculate_month(month)}月 Procurement'] = \
-                    df_copy['PO Line'].map(procurement_mapping)
+                if self.entity_type != 'SPX':
+                    df_copy[f'Remarked by {self.calculate_month(month)}月 Procurement'] = \
+                        df_copy['PO Line'].map(procurement_mapping)
+                else:
+                    df_copy[f'Remarked by {month}月 Procurement'] = \
+                        df_copy['PO Line'].map(procurement_mapping)
             
             self.logger.info("成功處理前期底稿")
             return df_copy

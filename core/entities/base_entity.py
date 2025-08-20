@@ -50,6 +50,7 @@ class ProcessingFiles:
     ap_invoice_file: Optional[str] = None
     previous_workpaper_pr: Optional[str] = None
     procurement_file_pr: Optional[str] = None
+    ops_validation: Optional[str] = None
     
     def validate(self) -> bool:
         """驗證檔案是否存在"""

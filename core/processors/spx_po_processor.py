@@ -606,6 +606,10 @@ class SpxPOProcessor(BasePOProcessor):
                 'Accr. Amount', '是否為FA', 'Region_c', 'Dep.'
             ]
             df = self.clean_nan_values(df, columns_to_clean)
+            df['Accr. Amount'] = (df['Accr. Amount'].str.replace(',', '')
+                                  .fillna(0)
+                                  .astype(float)
+                                  .apply(lambda x: x if x != 0 else None))
             
             # SPX特有的欄位重新排列
             # 重新排列上月備註欄位位置
@@ -634,6 +638,12 @@ class SpxPOProcessor(BasePOProcessor):
                         col = df.pop(col_name)
                         df.insert(noted_index, col_name, col)
                         noted_index += 1
+
+            # 把本期驗收數量/金額移到memo前面
+            if '本期驗收數量/金額' in df.columns:
+                memo_index = df.columns.get_loc('memo')
+                validation_col = df.pop('本期驗收數量/金額')
+                df.insert(memo_index, '本期驗收數量/金額', validation_col)
             
             self.logger.info("成功格式化SPX數據")
             return df
@@ -645,7 +655,8 @@ class SpxPOProcessor(BasePOProcessor):
     def process(self, fileUrl: str, file_name: str, 
                 fileUrl_previwp: str = None, fileUrl_p: str = None, 
                 fileUrl_ap: str = None, fileUrl_previwp_pr: str = None,
-                fileUrl_p_pr: str = None) -> None:
+                fileUrl_p_pr: str = None,
+                fileUrl_opsValidation: str = None) -> None:
         """處理SPX PO數據的主流程 - 使用AsyncDataImporter並發導入
         
         Args:
@@ -793,10 +804,12 @@ class SpxPOProcessor(BasePOProcessor):
             # 處理ERM邏輯
             df = self.erm(df, date, ref_ac, ref_liability)
 
-            # 處理驗收 TODO
-            locker_non_discount, locker_discount, kiosk_data = self.process_validation_data(r"C:\Users\lia\Downloads\SPX智取櫃及繳費機驗收明細(For FN)_2507.xlsx", date)
-            df['本期驗收數量/金額'] = 0
-            # 格式化數據git
+            # 處理驗收
+            if fileUrl_opsValidation:
+                locker_non_discount, locker_discount, kiosk_data = \
+                    self.process_validation_data(fileUrl_opsValidation, date)
+                df = self.apply_validation_data_to_po(df, locker_non_discount, locker_discount, kiosk_data)
+            # 格式化數據
             df = self.reformate(df)
             
             # 導出文件
@@ -1045,6 +1058,364 @@ class SpxPOProcessor(BasePOProcessor):
         except Exception as e:
             self.logger.error(f"分類{data_type}驗收數據時發生錯誤: {str(e)}", exc_info=True)
             return {'non_discount': {}, 'discount': {}}
+    
+    def apply_validation_data_to_po(self, 
+                                    df: pd.DataFrame, 
+                                    locker_non_discount: Dict[str, dict], 
+                                    locker_discount: Dict[str, dict], 
+                                    kiosk_data: Dict[str, dict]) -> pd.DataFrame:
+        """
+        將驗收數據應用到PO DataFrame中
+        
+        Args:
+            df: PO DataFrame
+            locker_non_discount: 智取櫃非折扣驗收數據 {PO#: {A:value, B:value, ...}}
+            locker_discount: 智取櫃折扣驗收數據 {PO#: {A:value, B:value, ...}}
+            kiosk_data: 繳費機驗收數據 {PO#: value}
+            
+        Returns:
+            pd.DataFrame: 更新後的PO DataFrame
+        """
+        try:
+            self.logger.info("開始將驗收數據應用到PO DataFrame")
+            
+            # 初始化本期驗收數量/金額欄位
+            df['本期驗收數量/金額'] = 0
+            
+            # 獲取供應商配置
+            locker_suppliers = self.config_manager.get(self.entity_type, 'locker_suppliers', [])
+            kiosk_suppliers = self.config_manager.get(self.entity_type, 'kiosk_suppliers', [])
+            
+            # 確保PO#欄位存在
+            if 'PO#' not in df.columns:
+                self.logger.error("DataFrame中缺少PO#欄位")
+                return df
+            
+            # 確保必要欄位存在
+            required_columns = ['Item Description', 'PO Supplier']
+            missing_columns = [col for col in required_columns if col not in df.columns]
+            if missing_columns:
+                self.logger.error(f"DataFrame中缺少必要欄位: {missing_columns}")
+                return df
+            
+            # 處理智取櫃非折扣驗收
+            df = self._apply_locker_validation(df, locker_non_discount, locker_suppliers, is_discount=False)
+            
+            # 處理智取櫃折扣驗收  
+            df = self._apply_locker_validation(df, locker_discount, locker_suppliers, is_discount=True)
+            
+            # 處理繳費機驗收
+            df = self._apply_kiosk_validation(df, kiosk_data, kiosk_suppliers)
+
+            df = self.modify_relevant_columns(df)
+            
+            self.logger.info("成功完成驗收數據應用")
+            return df
+            
+        except Exception as e:
+            self.logger.error(f"應用驗收數據時發生錯誤: {str(e)}", exc_info=True)
+            return df
+    
+    def _apply_locker_validation(self, 
+                                 df: pd.DataFrame, 
+                                 locker_data: Dict[str, dict], 
+                                 locker_suppliers: List[str], 
+                                 is_discount: bool = False) -> pd.DataFrame:
+        """
+        應用智取櫃驗收數據
+        
+        Args:
+            df: PO DataFrame
+            locker_data: 智取櫃驗收數據 {PO#: {A:value, B:value, ...}}
+            locker_suppliers: 智取櫃供應商列表
+            is_discount: 是否為折扣驗收
+            
+        Returns:
+            pd.DataFrame: 更新後的DataFrame
+        """
+        try:
+            if not locker_data:
+                self.logger.info(f"智取櫃{'折扣' if is_discount else '非折扣'}驗收數據為空")
+                return df
+            
+            # 定義櫃體種類的正則表達式模式
+            patterns = {
+                # A~K類櫃體，後面非英文字母數字組合，但允許中文字符
+                'A': r'locker\s*A(?![A-Za-z0-9])',
+                'B': r'locker\s*B(?![A-Za-z0-9])', 
+                'C': r'locker\s*C(?![A-Za-z0-9])',
+                'D': r'locker\s*D(?![A-Za-z0-9])',
+                'E': r'locker\s*E(?![A-Za-z0-9])',
+                'F': r'locker\s*F(?![A-Za-z0-9])',
+                'G': r'locker\s*G(?![A-Za-z0-9])',
+                'H': r'locker\s*H(?![A-Za-z0-9])',
+                'I': r'locker\s*I(?![A-Za-z0-9])',
+                'J': r'locker\s*J(?![A-Za-z0-9])',
+                'K': r'locker\s*K(?![A-Za-z0-9])',
+                # DA類（控制主櫃）
+                'DA': r'locker\s*控制主[櫃|機]',
+                # 特殊種類
+                '裝運費': r'locker\s*安裝運費',
+                '超出櫃體安裝費': r'locker\s*超出櫃體安裝費', 
+                '超出櫃體運費': r'locker\s*超出櫃體運費'
+            }
+            
+            processed_count = 0
+            
+            # 遍歷DataFrame
+            for idx, row in df.iterrows():
+                try:
+                    po_number = row['PO#']
+                    item_desc = str(row['Item Description'])
+                    po_supplier = str(row['PO Supplier'])
+                    
+                    # 檢查基本條件
+                    if not self._check_locker_conditions(po_number, item_desc, po_supplier, 
+                                                         locker_data, locker_suppliers, is_discount):
+                        continue
+                    
+                    # 提取櫃體種類
+                    cabinet_type = self._extract_cabinet_type(item_desc, patterns)
+                    
+                    if cabinet_type and po_number in locker_data:
+                        # 獲取對應的驗收數據
+                        po_validation_data = locker_data[po_number]
+                        
+                        if cabinet_type in po_validation_data:
+                            # 檢查是否已經有映射值，避免覆蓋
+                            current_value = df.at[idx, '本期驗收數量/金額']
+                            if current_value == 0:  # 只有當前值為0時才設置新值
+                                validation_value = po_validation_data[cabinet_type]
+                                df.at[idx, '本期驗收數量/金額'] = validation_value
+                                processed_count += 1
+                                
+                                self.logger.debug(f"PO#{po_number} 櫃體類型{cabinet_type} "
+                                                  f"{'折扣' if is_discount else '非折扣'}驗收: {validation_value}")
+                            else:
+                                self.logger.debug(f"PO#{po_number} 櫃體類型{cabinet_type} "
+                                                  f"{'折扣' if is_discount else '非折扣'}驗收已有值({current_value})，跳過設置")
+                
+                except Exception as e:
+                    self.logger.error(f"處理第{idx}行智取櫃數據時出錯: {str(e)}")
+                    continue
+            
+            self.logger.info(f"智取櫃{'折扣' if is_discount else '非折扣'}驗收處理完成，共處理 {processed_count} 筆記錄")
+            return df
+            
+        except Exception as e:
+            self.logger.error(f"應用智取櫃驗收數據時發生錯誤: {str(e)}", exc_info=True)
+            return df
+    
+    def _check_locker_conditions(self, 
+                                 po_number: str, 
+                                 item_desc: str, 
+                                 po_supplier: str, 
+                                 locker_data: Dict[str, dict], 
+                                 locker_suppliers: List[str], 
+                                 is_discount: bool) -> bool:
+        """
+        檢查智取櫃處理條件
+        
+        Args:
+            po_number: PO編號
+            item_desc: 項目描述
+            po_supplier: PO供應商
+            locker_data: 智取櫃驗收數據
+            locker_suppliers: 智取櫃供應商列表
+            is_discount: 是否為折扣驗收
+            
+        Returns:
+            bool: 是否符合條件
+        """
+        try:
+            # 檢查PO#是否在字典keys中
+            if po_number not in locker_data:
+                return False
+            
+            # 檢查Item Description是否包含"門市智取櫃"
+            if '門市智取櫃' not in item_desc:
+                return False
+            
+            # 對於非折扣驗收，檢查是否不包含"減價"
+            if not is_discount and '減價' in item_desc:
+                return False
+            
+            # 檢查PO Supplier是否在配置的suppliers中
+            if locker_suppliers and po_supplier not in locker_suppliers:
+                return False
+            
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"檢查智取櫃條件時出錯: {str(e)}")
+            return False
+    
+    def _extract_cabinet_type(self, item_desc: str, patterns: Dict[str, str]) -> Optional[str]:
+        """
+        從Item Description中提取櫃體種類
+        
+        Args:
+            item_desc: 項目描述
+            patterns: 正則表達式模式字典
+            
+        Returns:
+            Optional[str]: 提取到的櫃體種類，若未找到則返回None
+        """
+        try:
+            import re
+            
+            # 按照優先級順序檢查模式（特殊類型優先，避免誤匹配）
+            priority_order = ['DA', '裝運費', '超出櫃體安裝費', '超出櫃體運費', 
+                              'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K']
+            
+            for cabinet_type in priority_order:
+                if cabinet_type in patterns:
+                    pattern = patterns[cabinet_type]
+                    if re.search(pattern, item_desc, re.IGNORECASE):
+                        return cabinet_type
+            
+            return None
+            
+        except Exception as e:
+            self.logger.error(f"提取櫃體種類時出錯: {str(e)}")
+            return None
+    
+    def _apply_kiosk_validation(self, 
+                                df: pd.DataFrame, 
+                                kiosk_data: Dict[str, dict], 
+                                kiosk_suppliers: List[str]) -> pd.DataFrame:
+        """
+        應用繳費機驗收數據
+        
+        Args:
+            df: PO DataFrame
+            kiosk_data: 繳費機驗收數據 {PO#: value}
+            kiosk_suppliers: 繳費機供應商列表
+            
+        Returns:
+            pd.DataFrame: 更新後的DataFrame
+        """
+        try:
+            if not kiosk_data:
+                self.logger.info("繳費機驗收數據為空")
+                return df
+            
+            processed_count = 0
+            
+            # 遍歷DataFrame
+            for idx, row in df.iterrows():
+                try:
+                    po_number = row['PO#']
+                    item_desc = str(row['Item Description'])
+                    po_supplier = str(row['PO Supplier'])
+                    
+                    # 檢查條件
+                    if not self._check_kiosk_conditions(po_number, item_desc, po_supplier, 
+                                                        kiosk_data, kiosk_suppliers):
+                        continue
+                    
+                    # 檢查是否已經有映射值，避免覆蓋
+                    current_value = df.at[idx, '本期驗收數量/金額']
+                    if current_value == 0:  # 只有當前值為0時才設置新值
+                        validation_value = kiosk_data[po_number]
+                        df.at[idx, '本期驗收數量/金額'] = validation_value
+                        processed_count += 1
+                        
+                        self.logger.debug(f"PO#{po_number} 繳費機驗收: {validation_value}")
+                    else:
+                        self.logger.debug(f"PO#{po_number} 繳費機驗收已有值({current_value})，跳過設置")
+                
+                except Exception as e:
+                    self.logger.error(f"處理第{idx}行繳費機數據時出錯: {str(e)}")
+                    continue
+            
+            self.logger.info(f"繳費機驗收處理完成，共處理 {processed_count} 筆記錄")
+            return df
+            
+        except Exception as e:
+            self.logger.error(f"應用繳費機驗收數據時發生錯誤: {str(e)}", exc_info=True)
+            return df
+    
+    def _check_kiosk_conditions(self, 
+                                po_number: str, 
+                                item_desc: str, 
+                                po_supplier: str, 
+                                kiosk_data: Dict[str, dict], 
+                                kiosk_suppliers: List[str]) -> bool:
+        """
+        檢查繳費機處理條件
+        
+        Args:
+            po_number: PO編號
+            item_desc: 項目描述
+            po_supplier: PO供應商
+            kiosk_data: 繳費機驗收數據
+            kiosk_suppliers: 繳費機供應商列表
+            
+        Returns:
+            bool: 是否符合條件
+        """
+        try:
+            # 檢查PO#是否在字典keys中
+            if po_number not in kiosk_data:
+                return False
+            
+            # 檢查Item Description是否包含"門市繳費機"
+            if '門市繳費機' not in item_desc:
+                return False
+            
+            # 檢查PO Supplier是否在配置的suppliers中
+            if kiosk_suppliers and po_supplier not in kiosk_suppliers:
+                return False
+            
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"檢查繳費機條件時出錯: {str(e)}")
+            return False
+
+    def modify_relevant_columns(self, df):
+        df_copy = df.copy()
+        
+        need_to_accrual = df_copy['本期驗收數量/金額'] != 0
+        df_copy.loc[need_to_accrual, '是否估計入帳'] = 'Y'
+            
+        # 設置Account code
+        df_copy.loc[need_to_accrual, 'Account code'] = self.config_manager.get_fa_accounts(self.entity_type)[0]
+        
+        # 設置Account Name
+        df_copy.loc[need_to_accrual, 'Account Name'] = 'AP,FA Clear Account'
+        
+        # 設置Product code - SPX固定值
+        df_copy.loc[need_to_accrual, 'Product code'] = "LG_SPX_OWN"
+        
+        # 設置Region_c - SPX固定值
+        df_copy.loc[need_to_accrual, 'Region_c'] = "TW"
+        
+        # 設置Dep.
+        df_copy.loc[need_to_accrual, 'Dep.'] = '000'
+        
+        # 設置Currency_c
+        df_copy.loc[need_to_accrual, 'Currency_c'] = df_copy.loc[need_to_accrual, 'Currency']
+        
+        # 設置Accr. Amount
+        df_copy['temp_amount'] = (
+            df_copy['Unit Price'].astype(float) * df_copy['本期驗收數量/金額'].fillna(0).astype(float)
+        )
+        non_shipping = ~df_copy['Item Description'].str.contains('運費|安裝費')
+        df_copy.loc[need_to_accrual & non_shipping, 'Accr. Amount'] = \
+            df_copy.loc[need_to_accrual & non_shipping, 'temp_amount']
+        df_copy.loc[need_to_accrual & ~non_shipping, 'Accr. Amount'] = \
+            df_copy.loc[need_to_accrual & ~non_shipping, '本期驗收數量/金額']
+        df_copy.drop('temp_amount', axis=1, inplace=True)
+        
+        # 設置是否有預付
+        is_prepayment = df_copy['Entry Prepay Amount'] != '0'
+        df_copy.loc[need_to_accrual & is_prepayment, '是否有預付'] = 'Y'
+
+        # 設置Liability
+        df_copy.loc[need_to_accrual, 'Liability'] = '200414'
+        return df_copy
 
     def _is_valid_data(self, data) -> bool:
         """檢查數據是否有效
