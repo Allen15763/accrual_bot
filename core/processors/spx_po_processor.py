@@ -11,6 +11,7 @@ from typing import Tuple, List, Dict, Optional, Union, Any
 try:
     from .po_processor import BasePOProcessor
     from ...utils.logging import get_logger
+    from ...utils import get_unique_filename
     from ...data.importers.google_sheets_importer import GoogleSheetsImporter
     from ...data.importers.async_data_importer import AsyncDataImporter  # 新增
 except ImportError:
@@ -25,6 +26,7 @@ except ImportError:
     
     from core.processors.po_processor import BasePOProcessor
     from utils.logging import get_logger
+    from utils import get_unique_filename
     from data.importers.google_sheets_importer import GoogleSheetsImporter
     from data.importers.async_data_importer import AsyncDataImporter  # 新增
 
@@ -37,14 +39,8 @@ class SpxPOProcessor(BasePOProcessor):
         super().__init__("SPX")
         self.logger = get_logger(self.__class__.__name__)
         
-        # SPX特有配置
-        self.bao_categories = ['Cost of Logistics and Warehouse - Water', 
-                               'Cost of Logistics and Warehouse - Electricity']
-        self.bao_supplier = 'TW_寶倉物流股份有限公司'
-        
         # SPX部門相關帳戶
-        self.dept_accounts = ['650005', '610104', '630001', '650003', '600301', 
-                              '610110', '610105', '600310', '620003', '610311']
+        self.dept_accounts = self.config_manager.get_list(self.entity_type, 'exp_accounts')
     
     def filter_spx_product_code(self, df: pd.DataFrame) -> pd.DataFrame:
         """過濾SPX產品代碼
@@ -99,8 +95,8 @@ class SpxPOProcessor(BasePOProcessor):
         try:
             # 獲取Google Sheets配置
             config = {
-                'certificate_path': self.config_manager.get('CREDENTIALS', 'certificate_path', ''),
-                'scopes': self.config_manager.get_list('CREDENTIALS', 'scopes')
+                'certificate_path': self.config_manager.get_credentials_config().get('certificate_path', None),
+                'scopes': self.config_manager.get_credentials_config().get('scopes', None)
             }
             
             # 使用AsyncDataImporter導入SPX關單數據
@@ -168,6 +164,8 @@ class SpxPOProcessor(BasePOProcessor):
                 .fillna('0')
                 .astype('int32')
             )
+
+            df_ap['match_type'] = df_ap['Match Type'].fillna('system_filled')
             
             # 只保留期間在yyyymm之前的AP發票，並且對每個po_line保留最新的期間
             df_ap = (
@@ -178,11 +176,11 @@ class SpxPOProcessor(BasePOProcessor):
             )
             
             # 根據匹配的'PO Line'將期間信息合併到df中
-            df = df.merge(df_ap[['po_line', 'period']], left_on='PO Line', right_on='po_line', how='left')
+            df = df.merge(df_ap[['po_line', 'period', 'match_type']], left_on='PO Line', right_on='po_line', how='left')
             df['GL DATE'] = df['period']
             df.drop(columns=['po_line', 'period'], inplace=True)
             
-            self.logger.info("成功添加GL DATE")
+            self.logger.info("成功添加GL DATE and match_type")
             return df
         except Exception as e:
             self.logger.error(f"添加GL DATE時出錯: {str(e)}", exc_info=True)
@@ -300,79 +298,6 @@ class SpxPOProcessor(BasePOProcessor):
         except Exception as e:
             self.logger.error(f"處理SPX採購底稿時出錯: {str(e)}", exc_info=True)
             raise ValueError("處理SPX採購底稿時出錯")
-    
-    def give_status_stage_1(self, df: pd.DataFrame, df_spx_closing: pd.DataFrame) -> pd.DataFrame:
-        """給予第一階段狀態 - SPX特有邏輯
-        
-        Args:
-            df: PO DataFrame
-            df_spx_closing: SPX關單數據DataFrame
-            
-        Returns:
-            pd.DataFrame: 處理後的DataFrame
-        """
-        try:
-            # 依據已關單條件取得對應的PO#
-            c1, c2 = self.is_closed_spx(df_spx_closing)
-            to_be_close = df_spx_closing.loc[c1, 'po_no'].unique() if c1.any() else []
-            closed = df_spx_closing.loc[c2, 'po_no'].unique() if c2.any() else []
-            
-            # 定義「上月FN」備註關單條件
-            remarked_close_by_fn_last_month = (
-                df['Remarked by 上月 FN'].str.contains('刪|關', na=False) | 
-                df['Remarked by 上月 FN PR'].str.contains('刪|關', na=False)
-            )
-            
-            # 統一轉換日期格式
-            df['Remarked by 上月 FN'] = self.convert_date_format_in_remark(df['Remarked by 上月 FN'])
-            df['Remarked by 上月 FN PR'] = self.convert_date_format_in_remark(df['Remarked by 上月 FN PR'])
-            
-            # 條件1：摘要中有押金/保證金/Deposit/找零金，且不是FA相關科目
-            cond1 = df['Item Description'].str.contains('(?i)押金|保證金|Deposit|找零金|定存', na=False)
-            is_fa = df['GL#'].astype(str) == self.config_manager.get('FA_ACCOUNTS', 'spx', '199999')
-            cond_exclude = df['Item Description'].str.contains('(?i)繳費機訂金', na=False)  # 繳費機訂金屬FA
-            df.loc[cond1 & ~is_fa & ~cond_exclude, 'PO狀態'] = '摘要內有押金/保證金/Deposit/找零金'
-            
-            # 條件2：供應商與類別對應，做GL調整
-            cond2 = (df['PO Supplier'] == self.bao_supplier) & (df['Category'].isin(self.bao_categories))
-            df.loc[cond2, 'PO狀態'] = 'GL調整'
-            
-            # 條件3：該PO#在待關單清單中
-            cond3 = df['PO#'].astype(str).isin([str(x) for x in to_be_close])
-            df.loc[cond3, 'PO狀態'] = '待關單'
-            
-            # 條件4：該PO#在已關單清單中
-            cond4 = df['PO#'].astype(str).isin([str(x) for x in closed])
-            df.loc[cond4, 'PO狀態'] = '已關單'
-            
-            # 條件5：上月FN備註含有「刪」或「關」
-            cond5 = remarked_close_by_fn_last_month
-            df.loc[cond5, 'PO狀態'] = '參照上月關單'
-            
-            # 條件6：若「Remarked by 上月 FN」含有「入FA」，則提取該數字，並更新狀態
-            cond6 = (
-                (df['Remarked by 上月 FN'].str.contains('入FA', na=False)) & 
-                (~df['Remarked by 上月 FN'].str.contains('部分完成', na=False))
-            )
-            if cond6.any():
-                extracted_fn = self.extract_fa_remark(df.loc[cond6, 'Remarked by 上月 FN'])
-                df.loc[cond6, 'PO狀態'] = extracted_fn
-            
-            # 條件7：若「Remarked by 上月 FN PR」含有「入FA」，則提取該數字，並更新狀態
-            cond7 = (
-                (df['Remarked by 上月 FN PR'].str.contains('入FA', na=False)) & 
-                (~df['Remarked by 上月 FN PR'].str.contains('部分完成', na=False))
-            )
-            if cond7.any():
-                extracted_pr = self.extract_fa_remark(df.loc[cond7, 'Remarked by 上月 FN PR'])
-                df.loc[cond7, 'PO狀態'] = extracted_pr
-            
-            self.logger.info("成功給予第一階段狀態")
-            return df
-        
-        except Exception as e:
-            self.logger.error(f"給予第一階段狀態時出錯: {str(e)}", exc_info=True)
-            raise ValueError("給予第一階段狀態時出錯")
     
     def erm(self, df: pd.DataFrame, ym: int, ref_a: pd.DataFrame, ref_b: pd.DataFrame) -> pd.DataFrame:
         """處理SPX特有的ERM邏輯
@@ -576,7 +501,7 @@ class SpxPOProcessor(BasePOProcessor):
             df.loc[mask_format_error, 'PO狀態'] = '格式錯誤，退單'
             
             # 根據PO狀態設置估計入帳 - SPX邏輯：已完成->入帳，其餘N
-            mask_completed = (df['PO狀態'] == '已完成')
+            mask_completed = (df['PO狀態'].str.contains('已完成', na=False))
             df.loc[mask_completed, '是否估計入帳'] = 'Y'
             df.loc[~mask_completed, '是否估計入帳'] = 'N'
             
@@ -762,15 +687,21 @@ class SpxPOProcessor(BasePOProcessor):
                     file_paths.append(file_path)
                     file_names[file_type] = os.path.basename(file_path)
             
-            # 並發導入所有文件 - 與原始版本相同的調用方式
-            import_results = async_importer.concurrent_read_files(
-                file_types, 
-                file_paths, 
-                file_names=file_names,
-                config={'certificate_path': self.config_manager.get('CREDENTIALS', 'certificate_path'),
-                        'scopes': self.config_manager.get_list('CREDENTIALS', 'scopes')},
-                ap_columns=self.config_manager.get_list('SPX', 'ap_columns')
-            )
+            if os.path.isfile(r'C:\SEA\Accrual\prpo_bot\prpo_bot_renew_v2\output\import_results.pkl'):
+                import pickle as pkl
+                with open(r'C:\SEA\Accrual\prpo_bot\prpo_bot_renew_v2\output\import_results.pkl', 'rb') as f:
+                    import_results = pkl.load(f)
+                self.logger.info('Loaded existing files.')
+            else:
+                # 並發導入所有文件 - 與原始版本相同的調用方式
+                import_results = async_importer.concurrent_read_files(
+                    file_types, 
+                    file_paths, 
+                    file_names=file_names,
+                    config={'certificate_path': self.config_manager.get('CREDENTIALS', 'certificate_path'),
+                            'scopes': self.config_manager.get_list('CREDENTIALS', 'scopes')},
+                    ap_columns=self.config_manager.get_list('SPX', 'ap_columns')
+                )
             
             # 檢測並處理原始PO數據
             if 'raw_po' in import_results:
@@ -857,16 +788,19 @@ class SpxPOProcessor(BasePOProcessor):
             
             # 獲取關單數據並給予第一階段狀態
             df_spx_closing = self.get_closing_note()
-            df = self.give_status_stage_1(df, df_spx_closing)
+            df = self.give_status_stage_1(df, df_spx_closing, date)
             
             # 處理ERM邏輯
             df = self.erm(df, date, ref_ac, ref_liability)
 
-            # 格式化數據
+            # 處理驗收 TODO
+
+
+            # 格式化數據git
             df = self.reformate(df)
             
             # 導出文件
-            self.export_file(df, date, 'PO')
+            self._save_output(df, file_name)
             
             self.logger.info(f"成功完成SPX PO數據處理: {file_name}")
             
@@ -938,3 +872,34 @@ class SpxPOProcessor(BasePOProcessor):
         except Exception as e:
             self.logger.error(f"SPX PO並發處理時出錯: {str(e)}", exc_info=True)
             raise ValueError(f"SPX PO並發處理時出錯: {str(e)}")
+        
+    def _save_output(self, df: pd.DataFrame, original_filename: str) -> Optional[str]:
+        """保存輸出檔案"""
+        try:
+            
+            # 清理DataFrame中的<NA>值
+            df_export = df.replace('<NA>', np.nan)
+            # 生成輸出檔案名稱
+            base_name = os.path.splitext(original_filename)[0]
+            date = base_name[:7]
+            output_filename = f"{base_name}_processed_{self.entity_type}.xlsx"
+            
+            # 創建輸出目錄
+            output_dir = "output"
+            if not os.path.exists(output_dir):
+                os.makedirs(output_dir)
+            
+            output_path = os.path.join(output_dir, output_filename)
+            
+            # 確保文件名唯一
+            output_path = get_unique_filename(os.path.dirname(output_path) or '.', 
+                                              os.path.basename(output_path))
+            # 保存Excel檔案
+            df_export.to_excel(output_path, index=False)
+            
+            self.logger.info(f"輸出檔案已保存: {output_path}")
+            return output_path
+            
+        except Exception as e:
+            self.logger.error(f"保存輸出檔案失敗: {e}")
+            return None

@@ -721,3 +721,273 @@ class BaseDataProcessor:
         except Exception as e:
             self.logger.error(f"導入參考數據時出錯: {str(e)}", exc_info=True)
             raise
+
+    def give_status_stage_1(self, df: pd.DataFrame, df_spx_closing: pd.DataFrame, date) -> pd.DataFrame:
+        """給予第一階段狀態 - SPX特有邏輯
+        
+        Args:
+            df: PO/PR DataFrame
+            df_spx_closing: SPX關單數據DataFrame
+            
+        Returns:
+            pd.DataFrame: 處理後的DataFrame
+        """
+        try:
+            utility_suppliers = self.config_manager.get(self.entity_type, 'utility_suppliers')
+            if 'PO狀態' in df.columns:
+                tag_column = 'PO狀態'
+                # 依據已關單條件取得對應的PO#
+                c1, c2 = self.is_closed_spx(df_spx_closing)
+                to_be_close = df_spx_closing.loc[c1, 'po_no'].unique() if c1.any() else []
+                closed = df_spx_closing.loc[c2, 'po_no'].unique() if c2.any() else []
+                
+                # 定義「上月FN」備註關單條件
+                remarked_close_by_fn_last_month = (
+                    df['Remarked by 上月 FN'].str.contains('刪|關', na=False) | 
+                    df['Remarked by 上月 FN PR'].str.contains('刪|關', na=False)
+                )
+                
+                # 統一轉換日期格式
+                df['Remarked by 上月 FN'] = self.convert_date_format_in_remark(df['Remarked by 上月 FN'])
+                df['Remarked by 上月 FN PR'] = self.convert_date_format_in_remark(df['Remarked by 上月 FN PR'])
+                
+                # 條件1：摘要中有押金/保證金/Deposit/找零金，且不是FA相關科目
+                cond1 = \
+                    df['Item Description'].str.contains(self.config_manager.get(self.entity_type, 'deposit_keywords'), 
+                                                        na=False)
+                is_fa = df['GL#'].astype(str) == self.config_manager.get('FA_ACCOUNTS', self.entity_type, '199999')
+                cond_exclude = df['Item Description'].str.contains('(?i)繳費機訂金', na=False)  # 繳費機訂金屬FA
+                df.loc[cond1 & ~is_fa & ~cond_exclude, tag_column] = \
+                    self.config_manager.get(self.entity_type, 'deposit_keywords_label')
+                
+                # 條件2：供應商與類別對應，做GL調整
+                bao_supplier: list = self.config_manager.get_list(self.entity_type, 'bao_supplier')
+                bao_categories: list = self.config_manager.get_list(self.entity_type, 'bao_categories')
+                cond2 = (df['PO Supplier'].isin(bao_supplier)) & (df['Category'].isin(bao_categories))
+                df.loc[cond2, tag_column] = 'GL調整'
+                
+                # 條件3：該PO#在待關單清單中
+                cond3 = df['PO#'].astype(str).isin([str(x) for x in to_be_close])
+                df.loc[cond3, tag_column] = '待關單'
+                
+                # 條件4：該PO#在已關單清單中
+                cond4 = df['PO#'].astype(str).isin([str(x) for x in closed])
+                df.loc[cond4, tag_column] = '已關單'
+                
+                # 條件5：上月FN備註含有「刪」或「關」
+                cond5 = remarked_close_by_fn_last_month
+                df.loc[cond5, tag_column] = '參照上月關單'
+                
+                # 條件6：若「Remarked by 上月 FN」含有「入FA」，則提取該數字，並更新狀態
+                cond6 = (
+                    (df['Remarked by 上月 FN'].str.contains('入FA', na=False)) & 
+                    (~df['Remarked by 上月 FN'].str.contains('部分完成', na=False))
+                )
+                if cond6.any():
+                    extracted_fn = self.extract_fa_remark(df.loc[cond6, 'Remarked by 上月 FN'])
+                    df.loc[cond6, tag_column] = extracted_fn
+                
+                # 條件7：若「Remarked by 上月 FN PR」含有「入FA」，則提取該數字，並更新狀態
+                cond7 = (
+                    (df['Remarked by 上月 FN PR'].str.contains('入FA', na=False)) & 
+                    (~df['Remarked by 上月 FN PR'].str.contains('部分完成', na=False))
+                )
+                if cond7.any():
+                    extracted_pr = self.extract_fa_remark(df.loc[cond7, 'Remarked by 上月 FN PR'])
+                    df.loc[cond7, tag_column] = extracted_pr
+
+                # 條件8：該筆資料supplier是"台電"、"台水"、"北水"等公共費用
+                cond8 = df['PO Supplier'].fillna('system_filled').str.contains(utility_suppliers)
+                df.loc[cond8, tag_column] = '授扣GL調整'
+
+                # 費用類按申請人篩選
+                is_non_labeled = (df[tag_column].isna()) | (df[tag_column] == '') | (df[tag_column] == 'nan')
+                ops_rent: str = self.config_manager.get(self.entity_type, 'ops_for_rent')
+                account_rent: str = self.config_manager.get(self.entity_type, 'account_rent')
+                ops_intermediary: str = self.config_manager.get(self.entity_type, 'ops_for_intermediary')
+                ops_other: str = self.config_manager.get(self.entity_type, 'ops_for_other')
+                
+                mask_erm_equals_current = df['Expected Received Month_轉換格式'] == date
+                mask_account_rent = df['GL#'] == account_rent
+                mask_ops_rent = df['PR Requester'] == ops_rent
+                mask_descerm_equals_current = df['YMs of Item Description'].str[:6].astype(int) == date
+                mask_desc_contains_intermediary = df['Item Description'].fillna('na').str.contains('(?i)intermediary')
+                mask_ops_intermediary = df['PR Requester'] == ops_intermediary
+
+                combined_cond = is_non_labeled & mask_erm_equals_current & mask_account_rent & mask_ops_rent
+                df.loc[combined_cond, tag_column] = '已完成_租金'
+
+                combined_cond = is_non_labeled & mask_descerm_equals_current & mask_account_rent & mask_ops_rent
+                df.loc[combined_cond, tag_column] = '已完成_租金'
+
+                # 租金已入帳
+                # df.loc[(df[tag_column] == '已完成_租金') & (df['GL DATE'].isna()), tag_column] = '已入帳'
+
+                uncompleted_rent = (
+                    ((df['Remarked by Procurement'] != 'error') &
+                     is_non_labeled &
+                     mask_ops_rent &
+                     mask_account_rent &
+                     (df['Item Description'].str.contains('(?i)租金', na=False))
+                     ) &
+                    
+                    ((df['Expected Received Month_轉換格式'] <= df['YMs of Item Description'].str[:6].astype('int32')) &
+                     (df['Expected Received Month_轉換格式'] > date) &
+                     (df['YMs of Item Description'] != '100001,100002')
+                     ) |
+                    ((df['Expected Received Month_轉換格式'] > df['YMs of Item Description'].str[:6].astype('int32')) &
+                     (df['Expected Received Month_轉換格式'] > date) &
+                     (df['YMs of Item Description'] != '100001,100002')
+                     )
+                     
+
+                )
+                df.loc[uncompleted_rent, tag_column] = '未完成_租金'
+
+                combined_cond = is_non_labeled & mask_ops_intermediary & mask_desc_contains_intermediary & \
+                    ((df['Expected Received Month_轉換格式'] == date) |
+                     ((df['Expected Received Month_轉換格式'] < date) & (df['Remarked by 上月 FN'].str.contains('已完成')))
+                     )
+                df.loc[combined_cond, tag_column] = '已完成_intermediary'
+                
+                combined_cond = is_non_labeled & mask_ops_intermediary & mask_desc_contains_intermediary & \
+                    (df['Expected Received Month_轉換格式'] > date)
+                df.loc[combined_cond, tag_column] = '未完成_intermediary'
+
+                # 要判斷OPS驗收數
+                kiosk_suppliers: list = self.config_manager.get_list(self.entity_type, 'kiosk_suppliers')
+                locker_suppliers: list = self.config_manager.get_list(self.entity_type, 'locker_suppliers')
+                asset_suppliers: list = kiosk_suppliers + locker_suppliers
+                po_doesnt_contain_fa = (~df['Remarked by 上月 FN'].str.contains('入FA', na=False))
+                pr_doesnt_contain_fa = (~df['Remarked by 上月 FN PR'].str.contains('入FA', na=False))
+                df.loc[(df['PO Supplier'].isin(asset_suppliers)) & (po_doesnt_contain_fa & pr_doesnt_contain_fa), 
+                       tag_column] = 'Pending_validating'
+                
+                self.logger.info("成功給予第一階段狀態")
+                return df
+            else:
+                tag_column = 'PR狀態'
+                # 依據已關單條件取得對應的PO#
+                c1, c2 = self.is_closed_spx(df_spx_closing)
+                to_be_close = df_spx_closing.loc[c1, 'new_pr_no'].unique() if c1.any() else []
+                closed = df_spx_closing.loc[c2, 'new_pr_no'].unique() if c2.any() else []
+                
+                # 定義「上月FN」備註關單條件
+                remarked_close_by_fn_last_month = (
+                    df['Remarked by 上月 FN'].str.contains('刪|關', na=False) | 
+                    df['Remarked by 上月 FN PR'].str.contains('刪|關', na=False)
+                )
+                
+                # 統一轉換日期格式
+                df['Remarked by 上月 FN'] = self.convert_date_format_in_remark(df['Remarked by 上月 FN'])
+                df['Remarked by 上月 FN PR'] = self.convert_date_format_in_remark(df['Remarked by 上月 FN PR'])
+                
+                # 條件1：摘要中有押金/保證金/Deposit/找零金，且不是FA相關科目
+                cond1 = \
+                    df['Item Description'].str.contains(self.config_manager.get(self.entity_type, 'deposit_keywords'), 
+                                                        na=False)
+                is_fa = df['GL#'].astype(str) == self.config_manager.get('FA_ACCOUNTS', self.entity_type, '199999')
+                cond_exclude = df['Item Description'].str.contains('(?i)繳費機訂金', na=False)  # 繳費機訂金屬FA
+                df.loc[cond1 & ~is_fa & ~cond_exclude, tag_column] = \
+                    self.config_manager.get(self.entity_type, 'deposit_keywords_label')
+                
+                # 條件2：供應商與類別對應，做GL調整
+                bao_supplier: list = self.config_manager.get_list(self.entity_type, 'bao_supplier')
+                bao_categories: list = self.config_manager.get_list(self.entity_type, 'bao_categories')
+                cond2 = (df['PR Supplier'].isin(bao_supplier)) & (df['Category'].isin(bao_categories))
+                df.loc[cond2, tag_column] = 'GL調整'
+                
+                # 條件3：該PR#在待關單清單中
+                cond3 = df['PR#'].astype(str).isin([str(x) for x in to_be_close])
+                df.loc[cond3, tag_column] = '待關單'
+                
+                # 條件4：該PR#在已關單清單中
+                cond4 = df['PR#'].astype(str).isin([str(x) for x in closed])
+                df.loc[cond4, tag_column] = '已關單'
+                
+                # 條件5：上月FN備註含有「刪」或「關」
+                cond5 = remarked_close_by_fn_last_month
+                df.loc[cond5, tag_column] = '參照上月關單'
+                
+                # 條件6：若「Remarked by 上月 FN」含有「入FA」，則提取該數字，並更新狀態
+                cond6 = (
+                    (df['Remarked by 上月 FN'].str.contains('入FA', na=False)) & 
+                    (~df['Remarked by 上月 FN'].str.contains('部分完成', na=False))
+                )
+                if cond6.any():
+                    extracted_fn = self.extract_fa_remark(df.loc[cond6, 'Remarked by 上月 FN'])
+                    df.loc[cond6, tag_column] = extracted_fn
+                
+                # 條件8：該筆資料supplier是"台電"、"台水"、"北水"等公共費用
+                cond8 = df['PR Supplier'].fillna('system_filled').str.contains(utility_suppliers)
+                df.loc[cond8, tag_column] = '授扣GL調整'
+
+                # 費用類按申請人篩選
+                is_non_labeled = (df[tag_column].isna()) | (df[tag_column] == '') | (df[tag_column] == 'nan')
+                ops_rent: str = self.config_manager.get(self.entity_type, 'ops_for_rent')
+                account_rent: str = self.config_manager.get(self.entity_type, 'account_rent')
+                ops_intermediary: str = self.config_manager.get(self.entity_type, 'ops_for_intermediary')
+                ops_other: str = self.config_manager.get(self.entity_type, 'ops_for_other')
+                
+                mask_erm_equals_current = df['Expected Received Month_轉換格式'] == date
+                mask_account_rent = df['GL#'] == account_rent
+                mask_ops_rent = df['Requester'] == ops_rent
+                mask_descerm_equals_current = df['YMs of Item Description'].str[:6].astype(int) == date
+                mask_desc_contains_intermediary = df['Item Description'].fillna('na').str.contains('(?i)intermediary')
+                mask_ops_intermediary = df['Requester'] == ops_intermediary
+
+                combined_cond = is_non_labeled & mask_erm_equals_current & mask_account_rent & mask_ops_rent
+                df.loc[combined_cond, tag_column] = '已完成_租金'
+
+                combined_cond = is_non_labeled & mask_descerm_equals_current & mask_account_rent & mask_ops_rent
+                df.loc[combined_cond, tag_column] = '已完成_租金'
+
+                # 租金已入帳
+                # df.loc[(df[tag_column] == '已完成_租金') & (df['GL DATE'].isna()), tag_column] = '已入帳'
+
+                uncompleted_rent = (
+                    ((df['Remarked by Procurement'] != 'error') &
+                     is_non_labeled &
+                     mask_ops_rent &
+                     mask_account_rent &
+                     (df['Item Description'].str.contains('(?i)租金', na=False))
+                     ) &
+                    
+                    ((df['Expected Received Month_轉換格式'] <= df['YMs of Item Description'].str[:6].astype('int32')) &
+                     (df['Expected Received Month_轉換格式'] > date) &
+                     (df['YMs of Item Description'] != '100001,100002')
+                     ) |
+                    ((df['Expected Received Month_轉換格式'] > df['YMs of Item Description'].str[:6].astype('int32')) &
+                     (df['Expected Received Month_轉換格式'] > date) &
+                     (df['YMs of Item Description'] != '100001,100002')
+                     )
+                     
+
+                )
+                df.loc[uncompleted_rent, tag_column] = '未完成_租金'
+
+                combined_cond = is_non_labeled & mask_ops_intermediary & mask_desc_contains_intermediary & \
+                    ((df['Expected Received Month_轉換格式'] == date) |
+                     ((df['Expected Received Month_轉換格式'] < date) & (df['Remarked by 上月 FN'].str.contains('已完成')))
+                     )
+                df.loc[combined_cond, tag_column] = '已完成_intermediary'
+                
+                combined_cond = is_non_labeled & mask_ops_intermediary & mask_desc_contains_intermediary & \
+                    (df['Expected Received Month_轉換格式'] > date)
+                df.loc[combined_cond, tag_column] = '未完成_intermediary'
+
+                # 要判斷OPS驗收數
+                kiosk_suppliers: list = self.config_manager.get_list(self.entity_type, 'kiosk_suppliers')
+                locker_suppliers: list = self.config_manager.get_list(self.entity_type, 'locker_suppliers')
+                asset_suppliers: list = kiosk_suppliers + locker_suppliers
+                po_doesnt_contain_fa = (~df['Remarked by 上月 FN'].str.contains('入FA', na=False))
+                pr_doesnt_contain_fa = (~df['Remarked by 上月 FN PR'].str.contains('入FA', na=False))
+                df.loc[(df['PR Supplier'].isin(asset_suppliers)) & (po_doesnt_contain_fa | pr_doesnt_contain_fa), 
+                       tag_column] = 'Pending_validating'
+
+                self.logger.info("成功給予第一階段狀態")
+                return df
+        
+        except Exception as e:
+            self.logger.error(f"給予第一階段狀態時出錯: {str(e)}", exc_info=True)
+            raise ValueError("給予第一階段狀態時出錯")

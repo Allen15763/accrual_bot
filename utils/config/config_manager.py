@@ -26,6 +26,73 @@ def get_resource_path(relative_path: str) -> str:
     return os.path.join(os.path.abspath('.'), relative_path)
 
 
+def resolve_flexible_path(relative_path: str, reference_file: str = None) -> Optional[str]:
+    """
+    彈性解析路徑，支援不同執行目錄
+    
+    Args:
+        relative_path: 相對路徑 (如 './secret/credentials.json')
+        reference_file: 參考文件路徑 (如 __file__)
+        
+    Returns:
+        Optional[str]: 解析成功的完整路徑，失敗則返回None
+    """
+    # 移除路徑開頭的 './' 
+    clean_path = relative_path.lstrip('./')
+    
+    # 候選路徑列表 (按優先級排序)
+    candidate_paths = []
+    
+    # 1. 基於當前工作目錄的路徑
+    candidate_paths.append(os.path.join(os.getcwd(), clean_path))
+    
+    # 2. 基於當前工作目錄下的 accrual_bot 子目錄
+    accrual_bot_cwd = os.path.join(os.getcwd(), 'accrual_bot', clean_path)
+    candidate_paths.append(accrual_bot_cwd)
+    
+    # 3. 如果提供了參考文件，基於參考文件的目錄
+    if reference_file:
+        ref_dir = Path(reference_file).parent
+        # 往上找到 accrual_bot 目錄
+        while ref_dir.name != 'accrual_bot' and ref_dir.parent != ref_dir:
+            ref_dir = ref_dir.parent
+        
+        if ref_dir.name == 'accrual_bot':
+            candidate_paths.append(str(ref_dir / clean_path))
+    
+    # 4. 基於腳本文件位置推算的 accrual_bot 目錄
+    if reference_file:
+        script_dir = Path(reference_file).parent.parent.parent  # 從 utils/config/ 往上三層
+        candidate_paths.append(str(script_dir / clean_path))
+    
+    # 5. 嘗試常見的專案結構路徑
+    common_patterns = [
+        # 如果在 prpo_bot_renew_v2 目錄執行
+        os.path.join(os.getcwd(), 'accrual_bot', clean_path),
+        # 如果在 accrual_bot 目錄執行  
+        os.path.join(os.getcwd(), clean_path),
+        # 如果在上級目錄執行
+        os.path.join(os.getcwd(), '..', 'accrual_bot', clean_path),
+    ]
+    candidate_paths.extend(common_patterns)
+    
+    # 去除重複路徑
+    unique_paths = []
+    seen_paths = set()
+    for path in candidate_paths:
+        normalized = os.path.normpath(path)
+        if normalized not in seen_paths:
+            unique_paths.append(normalized)
+            seen_paths.add(normalized)
+    
+    # 依序檢查每個候選路徑
+    for path in unique_paths:
+        if os.path.exists(path) and os.path.isfile(path):
+            return os.path.abspath(path)
+    
+    return None
+
+
 class ConfigManager:
     """配置管理器，單例模式"""
     
@@ -53,9 +120,9 @@ class ConfigManager:
             if getattr(sys, 'frozen', False):
                 base_dir = sys._MEIPASS
             else:
-                # 開發環境，從原始src目錄載入config.ini
-                current_dir = Path(__file__).parent.parent.parent.parent.parent
-                base_dir = current_dir / 'prpo_bot_renew' / 'src'
+                # 開發環境，從重構版本的config目錄載入config.ini
+                current_dir = Path(__file__).parent.parent.parent  # 到達accrual_bot目錄
+                base_dir = current_dir / 'config'
             
             config_path = os.path.join(base_dir, 'config.ini')
             
@@ -95,7 +162,7 @@ class ConfigManager:
                 'format': '%(asctime)s %(levelname)s: %(message)s'
             },
             'CREDENTIALS': {
-                'certificate_path': './credentials.json',
+                'certificate_path': './secret/credentials.json',
                 'scopes': 'https://www.googleapis.com/auth/spreadsheets.readonly'
             }
         }
@@ -302,15 +369,60 @@ class ConfigManager:
     
     def get_credentials_config(self) -> Dict[str, Any]:
         """
-        獲取憑證配置
+        獲取憑證配置，支援彈性路徑解析
         
         Returns:
             Dict[str, Any]: 憑證配置
         """
+        cert_path_config = self.get('CREDENTIALS', 'certificate_path')
+        
+        # 如果是絕對路徑，直接使用
+        if os.path.isabs(cert_path_config):
+            resolved_cert_path = cert_path_config
+        else:
+            # 使用彈性路徑解析
+            resolved_cert_path = resolve_flexible_path(cert_path_config, __file__)
+            
+            # 如果解析失敗，fallback 到原始路徑
+            if resolved_cert_path is None:
+                resolved_cert_path = cert_path_config
+                # 記錄警告（如果有 logger 的話）
+                try:
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.warning(f"無法解析憑證路徑: {cert_path_config}，使用原始路徑")
+                except Exception as err:
+                    pass
+        
         return {
-            'certificate_path': self.get('CREDENTIALS', 'certificate_path'),
+            'certificate_path': resolved_cert_path,
             'scopes': self.get_list('CREDENTIALS', 'scopes')
         }
+    
+    def get_resolved_path(self, section: str, key: str, fallback: str = None) -> Optional[str]:
+        """
+        獲取解析後的路徑配置
+        
+        Args:
+            section: 配置段落
+            key: 配置鍵
+            fallback: 預設值
+            
+        Returns:
+            Optional[str]: 解析後的完整路徑
+        """
+        path_config = self.get(section, key, fallback)
+        
+        if not path_config:
+            return None
+            
+        # 如果是絕對路徑，直接返回
+        if os.path.isabs(path_config):
+            return path_config
+        
+        # 使用彈性路徑解析
+        resolved_path = resolve_flexible_path(path_config, __file__)
+        return resolved_path or path_config
     
     def reload_config(self) -> None:
         """重新加載配置"""

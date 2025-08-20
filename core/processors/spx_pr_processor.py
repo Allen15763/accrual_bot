@@ -186,33 +186,6 @@ class SpxPRProcessor(BasePRProcessor):
             self.logger.error(f"處理前期底稿時出錯: {str(e)}", exc_info=True)
             raise ValueError("處理前期底稿時出錯")
 
-    def give_status_stage_1(self, df: pd.DataFrame) -> pd.DataFrame:
-        """給予第一階段狀態 - SPX特有邏輯
-        
-        Args:
-            df: PR數據框
-            
-        Returns:
-            pd.DataFrame: 處理後的數據框
-        """
-        try:
-            # 條件1：摘要中有押金/保證金/Deposit/找零金，且不是FA相關科目
-            cond1 = df['Item Description'].str.contains('(?i)押金|保證金|Deposit|找零金|定存', na=False)
-            is_fa = df['GL#'].astype(str) == self.config_manager.get('FA_ACCOUNTS', 'spx', '199999')
-            cond_exclude = df['Item Description'].str.contains('(?i)繳費機訂金', na=False)  # 繳費機訂金屬FA
-            df.loc[cond1 & ~is_fa & ~cond_exclude, 'PR狀態'] = '摘要內有押金/保證金/Deposit/找零金'
-
-            # 條件2：該筆資料在前期底稿中有"關單"或"待刪"字
-            cond2 = df['Remarked by 上月 FN'].fillna('system_filled').str.contains('關單|待刪')
-            df.loc[cond2, 'PR狀態'] = '關單/待刪'
-
-            # 條件3：該筆資料supplier是"台電"、"台水"、"北水"
-            cond3 = df['PR Supplier'].fillna('system_filled').str.contains('台灣電力|自來水')
-            df.loc[cond3, 'PR狀態'] = '授扣GL調整'
-
-            self.logger.info("成功給予第一階段狀態")
-            return df
-
         except Exception as e:
             self.logger.error(f"給予第一階段狀態時出錯: {str(e)}", exc_info=True)
             raise ValueError("給予第一階段狀態時出錯")
