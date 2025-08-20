@@ -794,8 +794,8 @@ class SpxPOProcessor(BasePOProcessor):
             df = self.erm(df, date, ref_ac, ref_liability)
 
             # 處理驗收 TODO
-
-
+            locker_non_discount, locker_discount, kiosk_data = self.process_validation_data(r"C:\Users\lia\Downloads\SPX智取櫃及繳費機驗收明細(For FN)_2507.xlsx", date)
+            df['本期驗收數量/金額'] = 0
             # 格式化數據git
             df = self.reformate(df)
             
@@ -807,7 +807,245 @@ class SpxPOProcessor(BasePOProcessor):
         except Exception as e:
             self.logger.error(f"處理SPX PO數據時出錯: {str(e)}", exc_info=True)
             raise ValueError(f"處理SPX PO數據時出錯: {str(e)}")
-    
+        
+    def process_validation_data(self, 
+                                validation_file_path: str, 
+                                target_date: int) -> Tuple[Dict[str, dict], Dict[str, dict], Dict[str, dict]]:
+        """
+        處理驗收數據 - 智取櫃和繳費機驗收明細
+        
+        Args:
+            validation_file_path: 驗收明細檔案路徑
+            target_date: 目標日期 (YYYYMM格式)
+            
+        Returns:
+            Tuple[Dict, Dict, Dict]: (智取櫃非折扣驗收數量, 智取櫃折扣驗收數量, 繳費機驗收數量)
+            
+        Raises:
+            ValueError: 當驗收數據處理失敗時
+        """
+        try:
+            self.logger.info(f"開始處理驗收數據: {validation_file_path}")
+            
+            # 檢查檔案是否存在
+            if not os.path.exists(validation_file_path):
+                self.logger.error(f"驗收檔案不存在: {validation_file_path}")
+                raise FileNotFoundError(f"驗收檔案不存在: {validation_file_path}")
+            
+            # 處理智取櫃驗收明細
+            locker_data = self._process_locker_validation_data(validation_file_path, target_date)
+            
+            # 處理繳費機驗收明細
+            kiosk_data = self._process_kiosk_validation_data(validation_file_path, target_date)
+            
+            self.logger.info("成功完成驗收數據處理")
+            return locker_data['non_discount'], locker_data['discount'], kiosk_data
+            
+        except Exception as e:
+            self.logger.error(f"處理驗收數據時發生錯誤: {str(e)}", exc_info=True)
+            raise ValueError(f"處理驗收數據失敗: {str(e)}")
+
+    def _process_locker_validation_data(self, validation_file_path: str, target_date: int) -> Dict[str, dict]:
+        """
+        處理智取櫃驗收明細數據
+        
+        Args:
+            validation_file_path: 驗收明細檔案路徑
+            target_date: 目標日期 (YYYYMM格式)
+            
+        Returns:
+            Dict[str, dict]: 包含非折扣和折扣驗收數量的字典
+        """
+        try:
+            # 讀取智取櫃驗收明細
+            df_locker = pd.read_excel(
+                validation_file_path, 
+                sheet_name='智取櫃驗收明細', 
+                header=1, 
+                usecols='A:Y'
+            )
+            
+            # 檢查數據是否為空
+            if df_locker.empty:
+                self.logger.warning("智取櫃驗收明細數據為空")
+                return {'non_discount': {}, 'discount': {}}
+            
+            # 設置欄位名稱
+            locker_columns = self.config_manager.get_list(self.entity_type, 'locker_columns')
+            if len(df_locker.columns) != len(locker_columns):
+                self.logger.warning(f"智取櫃欄位數量不匹配: 期望 {len(locker_columns)}, 實際 {len(df_locker.columns)}")
+            
+            df_locker.columns = locker_columns
+            
+            # 過濾掉驗收月份為空的記錄
+            df_locker = df_locker.loc[~df_locker['驗收月份'].isna(), :].reset_index(drop=True)
+            
+            if df_locker.empty:
+                self.logger.warning("過濾後智取櫃驗收明細數據為空")
+                return {'non_discount': {}, 'discount': {}}
+            
+            # 轉換驗收月份格式
+            df_locker['validated_month'] = pd.to_datetime(
+                df_locker['驗收月份'], 
+                errors='coerce'
+            ).dt.strftime('%Y%m').astype('Int64')  # 使用 nullable integer
+            
+            # 移除無效日期的記錄
+            df_locker = df_locker.dropna(subset=['validated_month']).reset_index(drop=True)
+            
+            # 篩選目標月份的數據
+            df_locker_filtered = df_locker.loc[df_locker['validated_month'] == target_date, :]
+            
+            if df_locker_filtered.empty:
+                self.logger.info(f"智取櫃驗收明細中沒有找到 {target_date} 的數據")
+                return {'non_discount': {}, 'discount': {}}
+            
+            # 定義聚合欄位
+            agg_cols = [
+                'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'DA', 
+                '超出櫃體安裝費', '超出櫃體運費', '裝運費'
+            ]
+            
+            # 檢查聚合欄位是否存在
+            missing_cols = [col for col in agg_cols if col not in df_locker_filtered.columns]
+            if missing_cols:
+                self.logger.warning(f"智取櫃數據中缺少欄位: {missing_cols}")
+                agg_cols = [col for col in agg_cols if col in df_locker_filtered.columns]
+            
+            # 分類處理折扣和非折扣驗收
+            validation_results = self._categorize_validation_data(df_locker_filtered, agg_cols, 'locker')
+            
+            self.logger.info(f"智取櫃驗收處理完成 - 非折扣: {len(validation_results['non_discount'])} 筆, "
+                             f"折扣: {len(validation_results['discount'])} 筆")
+            
+            return validation_results
+            
+        except Exception as e:
+            self.logger.error(f"處理智取櫃驗收數據時發生錯誤: {str(e)}", exc_info=True)
+            raise
+
+    def _process_kiosk_validation_data(self, validation_file_path: str, target_date: int) -> Dict[str, dict]:
+        """
+        處理繳費機驗收明細數據
+        
+        Args:
+            validation_file_path: 驗收明細檔案路徑
+            target_date: 目標日期 (YYYYMM格式)
+            
+        Returns:
+            Dict[str, dict]: 繳費機驗收數量字典
+        """
+        try:
+            # 讀取繳費機驗收明細
+            df_kiosk = pd.read_excel(
+                validation_file_path, 
+                sheet_name='繳費機驗收明細', 
+                usecols='A:J'
+            )
+            
+            # 檢查數據是否為空
+            if df_kiosk.empty:
+                self.logger.warning("繳費機驗收明細數據為空")
+                return {}
+            
+            # 檢查必要欄位是否存在
+            required_cols = ['PO單號', '驗收月份']
+            missing_required = [col for col in required_cols if col not in df_kiosk.columns]
+            if missing_required:
+                self.logger.error(f"繳費機數據缺少必要欄位: {missing_required}")
+                return {}
+            
+            # 過濾掉驗收月份為空的記錄
+            df_kiosk = df_kiosk.loc[~df_kiosk['驗收月份'].isna(), :].reset_index(drop=True)
+            
+            if df_kiosk.empty:
+                self.logger.warning("過濾後繳費機驗收明細數據為空")
+                return {}
+            
+            # 轉換驗收月份格式
+            df_kiosk['validated_month'] = pd.to_datetime(
+                df_kiosk['驗收月份'], 
+                errors='coerce'
+            ).dt.strftime('%Y%m').astype('Int64')
+            
+            # 移除無效日期的記錄
+            df_kiosk = df_kiosk.dropna(subset=['validated_month']).reset_index(drop=True)
+            
+            # 篩選目標月份的數據
+            df_kiosk_filtered = df_kiosk.loc[df_kiosk['validated_month'] == target_date, :]
+            
+            if df_kiosk_filtered.empty:
+                self.logger.info(f"繳費機驗收明細中沒有找到 {target_date} 的數據")
+                return {}
+            
+            # 取得當期驗收數
+            kiosk_validation = df_kiosk_filtered['PO單號'].value_counts().to_dict()
+            
+            self.logger.info(f"繳費機驗收處理完成 - {len(kiosk_validation)} 筆")
+            return kiosk_validation
+            
+        except Exception as e:
+            self.logger.error(f"處理繳費機驗收數據時發生錯誤: {str(e)}", exc_info=True)
+            # 繳費機數據處理失敗不應該阻止整個流程
+            return {}
+
+    def _categorize_validation_data(self, df: pd.DataFrame, agg_cols: List[str], data_type: str) -> Dict[str, dict]:
+        """
+        分類驗收數據為折扣和非折扣類型
+        
+        Args:
+            df: 驗收數據DataFrame
+            agg_cols: 需要聚合的欄位列表
+            data_type: 數據類型標識 ('locker' 或 'kiosk')
+            
+        Returns:
+            Dict[str, dict]: 包含 'non_discount' 和 'discount' 鍵的字典
+        """
+        try:
+            validation_results = {'non_discount': {}, 'discount': {}}
+            
+            # 檢查是否有 discount 欄位
+            if 'discount' not in df.columns:
+                self.logger.warning(f"{data_type}數據中沒有 discount 欄位，所有數據將歸類為非折扣")
+                df['discount'] = ''
+            
+            # 確保 discount 欄位為字符串類型
+            df['discount'] = df['discount'].fillna('').astype(str)
+            
+            # 非折扣驗收 (不包含 X折驗收 的記錄)
+            try:
+                non_discount_condition = ~df['discount'].str.contains(r'\d折驗收', na=False, regex=True)
+                df_non_discount = df.loc[non_discount_condition, :]
+                
+                if not df_non_discount.empty and 'PO單號' in df_non_discount.columns:
+                    validation_results['non_discount'] = (
+                        df_non_discount.groupby(['PO單號'])[agg_cols]
+                        .sum()
+                        .to_dict('index')
+                    )
+            except Exception as e:
+                self.logger.error(f"處理非折扣{data_type}數據時出錯: {str(e)}")
+            
+            # 折扣驗收 (包含 X折驗收 的記錄)
+            try:
+                discount_condition = df['discount'].str.contains(r'\d折驗收', na=False, regex=True)
+                df_discount = df.loc[discount_condition, :]
+                
+                if not df_discount.empty and 'PO單號' in df_discount.columns:
+                    validation_results['discount'] = (
+                        df_discount.groupby(['PO單號'])[agg_cols]
+                        .sum()
+                        .to_dict('index')
+                    )
+            except Exception as e:
+                self.logger.error(f"處理折扣{data_type}數據時出錯: {str(e)}")
+            
+            return validation_results
+            
+        except Exception as e:
+            self.logger.error(f"分類{data_type}驗收數據時發生錯誤: {str(e)}", exc_info=True)
+            return {'non_discount': {}, 'discount': {}}
+
     def _is_valid_data(self, data) -> bool:
         """檢查數據是否有效
         
