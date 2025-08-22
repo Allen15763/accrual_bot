@@ -14,6 +14,7 @@ try:
     from ...core.models.config_models import EntityConfig, create_default_entity_config
     from ...core.processors.spx_po_processor import SpxPOProcessor
     from ...core.processors.spx_pr_processor import SpxPRProcessor
+    from ...core.processors.spx_ppe_processor import SpxPpeProcessor
     from ...utils.logging import Logger
 except ImportError:
     import sys
@@ -27,6 +28,7 @@ except ImportError:
     from core.models.config_models import EntityConfig, create_default_entity_config
     from core.processors.spx_po_processor import SpxPOProcessor
     from core.processors.spx_pr_processor import SpxPRProcessor
+    from core.processors.spx_ppe_processor import SpxPpeProcessor
     from utils.logging import Logger
 
 
@@ -255,6 +257,28 @@ class SPXPRProcessor(EntityProcessor):
         else:
             return []
 
+class SPXPpeProcessor(EntityProcessor):
+    """SPX PPE處理器"""
+    
+    def __init__(self, entity_config: EntityConfig, shared_logger=None):
+        self.entity_config = entity_config
+        # 使用共享的logger以避免重複創建
+        self.logger = shared_logger or Logger().get_logger('spx_entity')
+        
+        # 初始化SPX專用處理器
+        self.spx_ppe_processor = SpxPpeProcessor()
+
+    def get_supported_modes(self):
+        pass
+
+    def process_po(self):
+        pass
+
+    def process_pr(self):
+        pass
+
+    def process(self, *args, **kwargs):
+        return self.spx_ppe_processor.process(*args, **kwargs)
 
 class SPXEntity(BaseEntity):
     """SPX實體"""
@@ -282,6 +306,7 @@ class SPXEntity(BaseEntity):
         # 將共享的logger傳給處理器
         self._po_processor = SPXPOProcessor(self.config, self.logger)
         self._pr_processor = SPXPRProcessor(self.config, self.logger)
+        self._ppe_processor = SPXPpeProcessor(self.config, self.logger)
     
     def get_entity_name(self) -> str:
         """獲取實體名稱"""
@@ -420,6 +445,9 @@ class SPXEntity(BaseEntity):
             }
         }
     
+    def process_ppe_working_paper(self, *args, **kwargs):
+        return self._ppe_processor.process(*args, **kwargs)
+
     # 為了向後相容，保留原始的方法名稱
     def mode_1(self, fileUrl: str, file_name: str, fileUrl_previwp: str, 
                fileUrl_p: str, fileUrl_ap: str, fileUrl_previwp_pr: str, 

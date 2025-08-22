@@ -506,8 +506,24 @@ def test_specific_spx_file():
             import traceback
             traceback.print_exc()
 
+def ppe_test():
+    """for PPE底稿測試"""
+
+    """完成折舊年限表"""
+    from core.entities import create_entity
+    from core.models.data_models import EntityType
+    
+    spx_entity = create_entity(EntityType.SPX)
+
+    url = r'G:\共用雲端硬碟\INT_TWN_SEA_FN_Shared_Resources\00_Temp_Internal_share\SPX\租金\SPX租金合約歸檔清單及匯款狀態_marge1.xlsx'
+    df = spx_entity.process_ppe_working_paper(contract_filing_list_url=url, current_month=202507)
+
+    """地址模糊比對"""
+
 if __name__ == "__main__":
     # 執行完整測試
+
+    ppe_test()
     success = run_comprehensive_test()
     
     # 測試特定檔案
