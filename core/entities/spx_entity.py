@@ -81,7 +81,8 @@ class SPXPOProcessor(EntityProcessor):
             files.procurement_file,
             files.ap_invoice_file,
             files.previous_workpaper_pr,
-            files.procurement_file_pr
+            files.procurement_file_pr,
+            files.ops_validation
         )
         return ProcessingResult(
             success=True,

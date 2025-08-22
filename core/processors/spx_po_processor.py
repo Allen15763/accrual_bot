@@ -698,7 +698,8 @@ class SpxPOProcessor(BasePOProcessor):
                     file_paths.append(file_path)
                     file_names[file_type] = os.path.basename(file_path)
             
-            if os.path.isfile(r'C:\SEA\Accrual\prpo_bot\prpo_bot_renew_v2\output\import_results.pkl'):
+            # if os.path.isfile(r'C:\SEA\Accrual\prpo_bot\prpo_bot_renew_v2\output\import_results.pkl'):
+            if os.path.isfile(r'C:\SEA\Accrual\prpo_bot\prpo_bot_renew_v2\output\import_results.pkl') is not True:
                 import pickle as pkl
                 with open(r'C:\SEA\Accrual\prpo_bot\prpo_bot_renew_v2\output\import_results.pkl', 'rb') as f:
                     import_results = pkl.load(f)
