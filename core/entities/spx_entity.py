@@ -266,19 +266,23 @@ class SPXPpeProcessor(EntityProcessor):
         # 使用共享的logger以避免重複創建
         self.logger = shared_logger or Logger().get_logger('spx_entity')
         
-        # 初始化SPX專用處理器
-        self.spx_ppe_processor = SpxPpeProcessor()
+        # 初始化SPX專用PPE處理器（傳遞正確的entity_type參數）
+        self.spx_ppe_processor = SpxPpeProcessor("SPX")
 
-    def get_supported_modes(self):
-        pass
+    def get_supported_modes(self, processing_type: ProcessingType) -> List[ProcessingMode]:
+        """PPE處理器不支援PO/PR模式"""
+        return []  # PPE有自己的處理邏輯，不使用標準模式
 
-    def process_po(self):
-        pass
+    def process_po(self, files: ProcessingFiles, mode: ProcessingMode) -> ProcessingResult:
+        """PPE處理器不處理PO"""
+        raise NotImplementedError("PPE處理器不處理PO數據")
 
-    def process_pr(self):
-        pass
+    def process_pr(self, files: ProcessingFiles, mode: ProcessingMode) -> ProcessingResult:
+        """PPE處理器不處理PR"""
+        raise NotImplementedError("PPE處理器不處理PR數據")
 
-    def process(self, *args, **kwargs):
+    def process(self, *args, **kwargs) -> ProcessingResult:
+        """處理PPE相關業務 - 返回ProcessingResult物件"""
         return self.spx_ppe_processor.process(*args, **kwargs)
 
 class SPXEntity(BaseEntity):
@@ -447,6 +451,25 @@ class SPXEntity(BaseEntity):
         }
     
     def process_ppe_working_paper(self, *args, **kwargs):
+        """處理PPE工作底稿
+        
+        優化版本：返回ProcessingResult物件，包含完整的處理資訊
+        同時保持向後相容，如果需要可以從結果中獲取DataFrame
+        
+        Args:
+            contract_filing_list_url: 合約歸檔清單檔案路徑
+            current_month: 當前月份 (YYYYMM格式)
+            **kwargs: 其他參數
+            
+        Returns:
+            ProcessingResult: 處理結果物件，包含：
+                - success: 是否成功
+                - message: 處理訊息
+                - processed_data: 處理後的DataFrame
+                - validation_results: 驗證結果
+                - errors/warnings: 錯誤和警告
+                - metadata: 元數據資訊
+        """
         return self._ppe_processor.process(*args, **kwargs)
 
     # 為了向後相容，保留原始的方法名稱

@@ -516,24 +516,119 @@ def test_specific_spx_file():
             traceback.print_exc()
 
 def ppe_test():
-    """for PPE底稿測試"""
-
-    """完成折舊年限表"""
-    from core.entities import create_entity
-    from core.models.data_models import EntityType
+    """PPE底稿測試 - 優化版本"""
+    logger.info("=== 測試PPE處理器（優化版本）===")
     
-    spx_entity = create_entity(EntityType.SPX)
+    try:
+        from core.entities import create_entity
+        from core.models.data_models import EntityType
+        from core.processors.spx_ppe_processor import PPEProcessingFiles
+        
+        # 創建SPX實體
+        spx_entity = create_entity(EntityType.SPX)
+        
+        # 測試檔案路徑
+        test_file_url = r'G:\共用雲端硬碟\INT_TWN_SEA_FN_Shared_Resources\00_Temp_Internal_share\SPX\租金\SPX租金合約歸檔清單及匯款狀態_marge1.xlsx'
+        
+        # 方法1: 向後相容的呼叫方式
+        # logger.info("\n測試方法1: 向後相容的呼叫方式")
+        # result1 = spx_entity.process_ppe_working_paper(
+        #     contract_filing_list_url=test_file_url, 
+        #     current_month=202507
+        # )
+        
+        # if hasattr(result1, 'success'):
+        #     logger.info(f"處理狀態: {'成功' if result1.success else '失敗'}")
+        #     logger.info(f"訊息: {result1.message}")
+        #     logger.info(f"總記錄數: {result1.total_records}")
+        #     logger.info(f"處理時間: {result1.processing_time:.2f} 秒" if result1.processing_time else "處理時間: N/A")
+            
+        #     if result1.errors:
+        #         logger.error("錯誤列表:")
+        #         for error in result1.errors:
+        #             logger.error(f"  - {error}")
+            
+        #     if result1.warnings:
+        #         logger.warning("警告列表:")
+        #         for warning in result1.warnings:
+        #             logger.warning(f"  - {warning}")
+            
+        #     if result1.metadata:
+        #         logger.info("元數據:")
+        #         for key, value in result1.metadata.items():
+        #             logger.info(f"  - {key}: {value}")
+        
+        # 方法2: 使用新的結構化PPEProcessingFiles
+        logger.info("\n測試方法2: 使用結構化PPEProcessingFiles")
+        from core.processors.spx_ppe_processor import SpxPpeProcessor, PPEProcessingFiles
+        
+        # 創建檔案配置物件
+        ppe_files = PPEProcessingFiles(
+            contract_filing_list_url=test_file_url,
+            current_month=202507
+        )
+        
+        # 驗證輸入
+        is_valid, errors = ppe_files.validate()
+        if not is_valid:
+            logger.error("輸入驗證失敗:")
+            for error in errors:
+                logger.error(f"  - {error}")
+            return False
+        
+        logger.info("輸入驗證通過")
+        logger.info(f"可用檔案: {ppe_files.get_available_files()}")
+        
+        # 創建處理器並執行
+        ppe_processor = SpxPpeProcessor("SPX")
+        result2 = ppe_processor.process(ppe_files)
+        
+        if result2.warnings:
+            logger.warning("警告列表:")
+            for warning in result2.warnings:
+                logger.warning(f"  - {warning}")
 
-    url = r'G:\共用雲端硬碟\INT_TWN_SEA_FN_Shared_Resources\00_Temp_Internal_share\SPX\租金\SPX租金合約歸檔清單及匯款狀態_marge1.xlsx'
-    df = spx_entity.process_ppe_working_paper(contract_filing_list_url=url, current_month=202507)
+        # 顯示處理結果摘要
+        logger.info("\n處理結果摘要:")
+        summary = result2.get_summary()
+        for key, value in summary.items():
+            logger.info(f"  {key}: {value}")
+        
+        # 檢查處理的數據
+        if result2.processed_data is not None and not result2.processed_data.empty:
+            logger.info(f"\n處理結果DataFrame形狀: {result2.processed_data.shape}")
+            logger.info(f"前5筆記錄:")
+            logger.info(result2.processed_data.head())
+        
+        return result2.success
+        
+    except FileNotFoundError as e:
+        logger.error(f"❌ 測試檔案不存在: {str(e)}")
+        logger.warning("請確認檔案路徑是否正確或準備測試數據")
+        return False
+    except Exception as e:
+        logger.error(f"❌ PPE測試失敗: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return False
 
-    """地址模糊比對"""
+    """地址模糊比對 - 待實現"""
 
 if __name__ == "__main__":
     # 執行完整測試
-
-    # ppe_test()
-    success = run_comprehensive_test()
+    
+    # 測試PPE優化版本
+    logger.info("\n" + "=" * 60)
+    logger.info("開始測試PPE處理器優化版本")
+    logger.info("=" * 60)
+    ppe_test_result = ppe_test()
+    if ppe_test_result:
+        logger.info("✅ PPE處理器測試通過")
+    else:
+        logger.warning("⚠️ PPE處理器測試失敗或檔案不存在")
+    
+    # 執行其他測試
+    # success = run_comprehensive_test()
     
     # 測試特定檔案
     test_specific_spx_file()
