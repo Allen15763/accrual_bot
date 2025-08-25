@@ -3,6 +3,7 @@ SPX PPE處理器
 添加結構化設計但避免過度工程
 """
 
+import re
 import pandas as pd
 import numpy as np
 from typing import Tuple, List, Dict, Optional, Union, Any
@@ -276,6 +277,9 @@ class SpxPpeProcessor(BaseDataProcessor):
                 files.current_month,
                 'months_diff'
             )
+
+            # 新增一欄只到"號"的地址欄位 for mapping OPS摘要可能出現的不完全地址資訊
+            result_df['truncated_address'] = result_df['address'].apply(self.truncate_address_at_hao)
             
             # 添加驗證結果
             self._validate_result(result_df, result)
@@ -834,6 +838,35 @@ class SpxPpeProcessor(BaseDataProcessor):
         ).add(1)
         
         return df_result
+    
+    def truncate_address_at_hao(self, address):
+        """
+        使用正規表達式擷取地址到第一個'號'字為止。
+        
+        Args:
+            address (str): 輸入的地址字串。
+            
+        Returns:
+            str: 如果成功匹配，返回擷取的地址；
+                如果地址中沒有'號'，則返回原始地址。
+        """
+        # 檢查輸入是否為字串，以避免 NaN 或其他類型資料造成錯誤
+        if not isinstance(address, str):
+            return address
+            
+        # 定義正規表達式: 從頭開始(^)匹配任意字元非貪婪模式(.*?)直到第一個'號'
+        pattern = r'^.*?號'
+        
+        # re.search() 會尋找字串中第一個匹配的位置
+        match = re.search(pattern, address)
+        
+        # 如果找到匹配項
+        if match:
+            # match.group(0) 或 match.group() 返回整個匹配到的字串
+            return match.group(0)
+        else:
+            # 如果地址中沒有'號'，則返回原始地址
+            return address
     
     # === 向後相容的舊方法名稱 ===
     def _get_depreciation_period(self, *args, **kwargs):
