@@ -86,55 +86,6 @@ class SpxPOProcessor(BasePOProcessor):
             self.logger.error(f"添加SPX特有列時出錯: {str(e)}", exc_info=True)
             raise ValueError("添加SPX特有列時出錯")
     
-    def get_closing_note(self) -> pd.DataFrame:
-        """獲取關單數據 - 優化版本支持並發處理
-        
-        Returns:
-            pd.DataFrame: 關單數據框
-        """
-        try:
-            # 獲取Google Sheets配置
-            config = {
-                'certificate_path': self.config_manager.get_credentials_config().get('certificate_path', None),
-                'scopes': self.config_manager.get_credentials_config().get('scopes', None)
-            }
-            
-            # 使用AsyncDataImporter導入SPX關單數據
-            async_importer = AsyncDataImporter()
-            combined_df = async_importer.import_spx_closing_list(config)
-            
-            self.logger.info(f"成功獲取關單數據，共 {len(combined_df)} 筆記錄")
-            return combined_df
-            
-        except Exception as e:
-            self.logger.error(f"獲取關單數據時出錯: {str(e)}", exc_info=True)
-            return pd.DataFrame()
-    
-    def is_closed_spx(self, df: pd.DataFrame) -> Tuple[pd.Series, pd.Series]:
-        """判斷SPX關單狀態
-        
-        Args:
-            df: 關單數據DataFrame
-            
-        Returns:
-            Tuple[pd.Series, pd.Series]: (待關單條件, 已關單條件)
-        """
-        # [0]有新的PR編號，但FN未上系統關單的
-        condition_to_be_closed = (
-            (~df['new_pr_no'].isna()) & 
-            (df['new_pr_no'] != '') & 
-            (df['done_by_fn'].isna())
-        )
-        
-        # [1]有新的PR編號，但FN已經上系統關單的
-        condition_closed = (
-            (~df['new_pr_no'].isna()) & 
-            (df['new_pr_no'] != '') & 
-            (~df['done_by_fn'].isna())
-        )
-        
-        return condition_to_be_closed, condition_closed
-    
     def get_period_from_ap_invoice(self, df: pd.DataFrame, df_ap: pd.DataFrame, yyyymm: int) -> pd.DataFrame:
         """從AP發票填入期間到PO數據中（排除月份m之後的期間）
         
@@ -185,21 +136,6 @@ class SpxPOProcessor(BasePOProcessor):
         except Exception as e:
             self.logger.error(f"添加GL DATE時出錯: {str(e)}", exc_info=True)
             raise ValueError("添加GL DATE時出錯")
-    
-    def convert_date_format_in_remark(self, series: pd.Series) -> pd.Series:
-        """轉換備註中的日期格式 (YYYY/MM -> YYYYMM)
-        
-        Args:
-            series: 包含日期的Series
-            
-        Returns:
-            pd.Series: 轉換後的Series
-        """
-        try:
-            return series.astype(str).str.replace(r'(\d{4})/(\d{2})', r'\1\2', regex=True)
-        except Exception as e:
-            self.logger.error(f"轉換日期格式時出錯: {str(e)}", exc_info=True)
-            return series
     
     def extract_fa_remark(self, series: pd.Series) -> pd.Series:
         """提取FA備註中的日期
@@ -876,7 +812,7 @@ class SpxPOProcessor(BasePOProcessor):
                 validation_file_path, 
                 sheet_name='智取櫃驗收明細', 
                 header=1, 
-                usecols='A:Y'
+                usecols='A:AE'
             )
             
             # 檢查數據是否為空

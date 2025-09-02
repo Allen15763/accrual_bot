@@ -17,6 +17,7 @@ try:
         safe_string_operation, DEFAULT_DATE_RANGE, EXCEL_FORMAT, get_unique_filename
     )
     from ...utils.config import REF_PATH_MOB, REF_PATH_SPT
+    from ...data.importers.async_data_importer import AsyncDataImporter
 except ImportError:
     # 如果相對導入失敗，使用絕對導入
     import sys
@@ -33,6 +34,7 @@ except ImportError:
         safe_string_operation, DEFAULT_DATE_RANGE, EXCEL_FORMAT, get_unique_filename
     )
     from utils.config import REF_PATH_MOB, REF_PATH_SPT
+    from data.importers.async_data_importer import AsyncDataImporter
 
 
 class BaseDataProcessor:
@@ -778,7 +780,8 @@ class BaseDataProcessor:
                 cond5 = remarked_close_by_fn_last_month
                 df.loc[cond5, tag_column] = '參照上月關單'
                 
-                # 條件6：若「Remarked by 上月 FN」含有「入FA」，則提取該數字，並更新狀態
+                # 條件6：若「Remarked by 上月 FN」含有「入FA」，則提取該數字，並更新狀態(xxxxxx入FA)
+                # 部分完成xxxxxx入FA不計入，前期FN備註如果是部分完成的會掉到erm邏輯判斷
                 cond6 = (
                     (df['Remarked by 上月 FN'].str.contains('入FA', na=False)) & 
                     (~df['Remarked by 上月 FN'].str.contains('部分完成', na=False))
@@ -831,14 +834,16 @@ class BaseDataProcessor:
                      (df['Item Description'].str.contains('(?i)租金', na=False))
                      ) &
                     
-                    ((df['Expected Received Month_轉換格式'] <= df['YMs of Item Description'].str[:6].astype('int32')) &
-                     (df['Expected Received Month_轉換格式'] > date) &
-                     (df['YMs of Item Description'] != '100001,100002')
-                     ) |
-                    ((df['Expected Received Month_轉換格式'] > df['YMs of Item Description'].str[:6].astype('int32')) &
-                     (df['Expected Received Month_轉換格式'] > date) &
-                     (df['YMs of Item Description'] != '100001,100002')
-                     )
+                    (
+                        ((df['Expected Received Month_轉換格式'] <= df['YMs of Item Description'].str[:6].astype('int32')) &
+                         (df['Expected Received Month_轉換格式'] > date) &
+                         (df['YMs of Item Description'] != '100001,100002')
+                         ) |
+                        ((df['Expected Received Month_轉換格式'] > df['YMs of Item Description'].str[:6].astype('int32')) &
+                         (df['Expected Received Month_轉換格式'] > date) &
+                         (df['YMs of Item Description'] != '100001,100002')
+                         )
+                    )
                      
 
                 )
@@ -858,9 +863,17 @@ class BaseDataProcessor:
                 kiosk_suppliers: list = self.config_manager.get_list(self.entity_type, 'kiosk_suppliers')
                 locker_suppliers: list = self.config_manager.get_list(self.entity_type, 'locker_suppliers')
                 asset_suppliers: list = kiosk_suppliers + locker_suppliers
-                po_doesnt_contain_fa = (~df['Remarked by 上月 FN'].str.contains('入FA', na=False))
-                pr_doesnt_contain_fa = (~df['Remarked by 上月 FN PR'].str.contains('入FA', na=False))
-                df.loc[(df['PO Supplier'].isin(asset_suppliers)) & (po_doesnt_contain_fa & pr_doesnt_contain_fa), 
+
+                # Exclude both general '入FA' but Include specific patterns(部分入)
+                po_general_fa = df['Remarked by 上月 FN'].str.contains('入FA', na=False)
+                po_specific_pattern = df['Remarked by 上月 FN'].str.contains(r'部分完成.*\d{6}入FA', na=False, regex=True)
+
+                pr_general_fa = df['Remarked by 上月 FN PR'].str.contains('入FA', na=False)
+                pr_specific_pattern = df['Remarked by 上月 FN PR'].str.contains(r'部分完成.*\d{6}入FA', na=False, regex=True)
+
+                doesnt_contain_fa = (~pr_general_fa & ~po_general_fa)
+                specific_pattern = (pr_specific_pattern | po_specific_pattern)
+                df.loc[(df['PO Supplier'].isin(asset_suppliers)) & (doesnt_contain_fa & specific_pattern), 
                        tag_column] = 'Pending_validating'
                 
                 self.logger.info("成功給予第一階段狀態")
@@ -874,13 +887,11 @@ class BaseDataProcessor:
                 
                 # 定義「上月FN」備註關單條件
                 remarked_close_by_fn_last_month = (
-                    df['Remarked by 上月 FN'].str.contains('刪|關', na=False) | 
-                    df['Remarked by 上月 FN PR'].str.contains('刪|關', na=False)
+                    df['Remarked by 上月 FN'].str.contains('刪|關', na=False)
                 )
                 
                 # 統一轉換日期格式
                 df['Remarked by 上月 FN'] = self.convert_date_format_in_remark(df['Remarked by 上月 FN'])
-                df['Remarked by 上月 FN PR'] = self.convert_date_format_in_remark(df['Remarked by 上月 FN PR'])
                 
                 # 條件1：摘要中有押金/保證金/Deposit/找零金，且不是FA相關科目
                 cond1 = \
@@ -909,7 +920,8 @@ class BaseDataProcessor:
                 cond5 = remarked_close_by_fn_last_month
                 df.loc[cond5, tag_column] = '參照上月關單'
                 
-                # 條件6：若「Remarked by 上月 FN」含有「入FA」，則提取該數字，並更新狀態
+                # 條件6：若「Remarked by 上月 FN」含有「入FA」，則提取該數字，並更新狀態(xxxxxx入FA)
+                # 部分完成xxxxxx入FA不計入，前期FN備註如果是部分完成的會掉到erm邏輯判斷
                 cond6 = (
                     (df['Remarked by 上月 FN'].str.contains('入FA', na=False)) & 
                     (~df['Remarked by 上月 FN'].str.contains('部分完成', na=False))
@@ -953,15 +965,16 @@ class BaseDataProcessor:
                      (df['Item Description'].str.contains('(?i)租金', na=False))
                      ) &
                     
-                    ((df['Expected Received Month_轉換格式'] <= df['YMs of Item Description'].str[:6].astype('int32')) &
-                     (df['Expected Received Month_轉換格式'] > date) &
-                     (df['YMs of Item Description'] != '100001,100002')
-                     ) |
-                    ((df['Expected Received Month_轉換格式'] > df['YMs of Item Description'].str[:6].astype('int32')) &
-                     (df['Expected Received Month_轉換格式'] > date) &
-                     (df['YMs of Item Description'] != '100001,100002')
-                     )
-                     
+                    (
+                        ((df['Expected Received Month_轉換格式'] <= df['YMs of Item Description'].str[:6].astype('int32')) &
+                         (df['Expected Received Month_轉換格式'] > date) &
+                         (df['YMs of Item Description'] != '100001,100002')
+                         ) |
+                        ((df['Expected Received Month_轉換格式'] > df['YMs of Item Description'].str[:6].astype('int32')) &
+                         (df['Expected Received Month_轉換格式'] > date) &
+                         (df['YMs of Item Description'] != '100001,100002')
+                         )
+                    )
 
                 )
                 df.loc[uncompleted_rent, tag_column] = '未完成_租金'
@@ -976,18 +989,74 @@ class BaseDataProcessor:
                     (df['Expected Received Month_轉換格式'] > date)
                 df.loc[combined_cond, tag_column] = '未完成_intermediary'
 
-                # 要判斷OPS驗收數
-                kiosk_suppliers: list = self.config_manager.get_list(self.entity_type, 'kiosk_suppliers')
-                locker_suppliers: list = self.config_manager.get_list(self.entity_type, 'locker_suppliers')
-                asset_suppliers: list = kiosk_suppliers + locker_suppliers
-                po_doesnt_contain_fa = (~df['Remarked by 上月 FN'].str.contains('入FA', na=False))
-                pr_doesnt_contain_fa = (~df['Remarked by 上月 FN PR'].str.contains('入FA', na=False))
-                df.loc[(df['PR Supplier'].isin(asset_suppliers)) & (po_doesnt_contain_fa | pr_doesnt_contain_fa), 
-                       tag_column] = 'Pending_validating'
-
                 self.logger.info("成功給予第一階段狀態")
                 return df
         
         except Exception as e:
             self.logger.error(f"給予第一階段狀態時出錯: {str(e)}", exc_info=True)
             raise ValueError("給予第一階段狀態時出錯")
+        
+    def get_closing_note(self) -> pd.DataFrame:
+        """獲取關單數據 - 優化版本支持並發處理
+        
+        Returns:
+            pd.DataFrame: 關單數據框
+        """
+        try:
+            # 獲取Google Sheets配置
+            config = {
+                'certificate_path': self.config_manager.get_credentials_config().get('certificate_path', None),
+                'scopes': self.config_manager.get_credentials_config().get('scopes', None)
+            }
+            
+            # 使用AsyncDataImporter導入SPX關單數據
+            async_importer = AsyncDataImporter()
+            combined_df = async_importer.import_spx_closing_list(config)
+            
+            self.logger.info(f"成功獲取關單數據，共 {len(combined_df)} 筆記錄")
+            return combined_df
+            
+        except Exception as e:
+            self.logger.error(f"獲取關單數據時出錯: {str(e)}", exc_info=True)
+            return pd.DataFrame()
+    
+    def is_closed_spx(self, df: pd.DataFrame) -> Tuple[pd.Series, pd.Series]:
+        """判斷SPX關單狀態
+        
+        Args:
+            df: 關單數據DataFrame
+            
+        Returns:
+            Tuple[pd.Series, pd.Series]: (待關單條件, 已關單條件)
+        """
+        # [0]有新的PR編號，但FN未上系統關單的
+        condition_to_be_closed = (
+            (~df['new_pr_no'].isna()) & 
+            (df['new_pr_no'] != '') & 
+            (df['done_by_fn'].isna())
+        )
+        
+        # [1]有新的PR編號，但FN已經上系統關單的
+        condition_closed = (
+            (~df['new_pr_no'].isna()) & 
+            (df['new_pr_no'] != '') & 
+            (~df['done_by_fn'].isna())
+        )
+        
+        return condition_to_be_closed, condition_closed
+
+    def convert_date_format_in_remark(self, series: pd.Series) -> pd.Series:
+        """轉換備註中的日期格式 (YYYY/MM -> YYYYMM)
+        
+        Args:
+            series: 包含日期的Series
+            
+        Returns:
+            pd.Series: 轉換後的Series
+        """
+        try:
+            return series.astype(str).str.replace(r'(\d{4})/(\d{2})', r'\1\2', regex=True)
+        except Exception as e:
+            self.logger.error(f"轉換日期格式時出錯: {str(e)}", exc_info=True)
+            return series
+    

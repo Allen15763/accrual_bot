@@ -219,8 +219,8 @@ class SPXPRProcessor(EntityProcessor):
         self.spx_pr_processor.process(
             files.raw_data_file,
             files.raw_data_filename,
-            files.procurement_file,
-            files.previous_workpaper
+            files.procurement_file_pr,
+            files.previous_workpaper_pr
         )
         return ProcessingResult(
             success=True,
@@ -471,6 +471,28 @@ class SPXEntity(BaseEntity):
                 - metadata: 元數據資訊
         """
         return self._ppe_processor.process(*args, **kwargs)
+
+    def process_pr(self, raw_data_file: str, filename: str,
+                   previous_workpaper_pr: str,
+                   procurement_file_pr: str) -> ProcessingResult:
+        """
+        Args:
+            raw_data_file: PO原始數據文件路徑
+            filename: PO原始數據文件名
+            previous_workpaper_pr: 前期PR底稿文件路徑
+            procurement_file_pr: 採購PR底稿文件路徑
+            
+        Returns:
+            ProcessingResult: 處理結果
+        """
+        files = ProcessingFiles(
+            raw_data_file=raw_data_file,
+            raw_data_filename=filename,
+            previous_workpaper_pr=previous_workpaper_pr,
+            procurement_file_pr=procurement_file_pr
+        )
+        
+        return self._pr_processor.process_pr(files, ProcessingMode.MODE_1)
 
     # 為了向後相容，保留原始的方法名稱
     def mode_1(self, fileUrl: str, file_name: str, fileUrl_previwp: str, 

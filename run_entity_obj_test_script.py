@@ -202,14 +202,23 @@ def test_spx_po_processing():
             # 'procurement_pr': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202504\202504_PR_PQ.xlsx",
             # 'ops_validation': r"C:\Users\lia\Downloads\SPX智取櫃及繳費機驗收明細(For FN)_2507.xlsx"
 
-            'po_file': r"G:\.shortcut-targets-by-id\1am-NBNd2ffKOuVY0b81CBrFd4dxss3QP\Financial Data - LG\02_Accounts Payable\SPX_Closing Data\2025(新路徑-已完成)\202507\未結PRPO\For robot\202507_purchase_order.csv",
-            'po_file_name': "202507_purchase_order.csv",
-            'previous_wp': r"G:\.shortcut-targets-by-id\1am-NBNd2ffKOuVY0b81CBrFd4dxss3QP\Financial Data - LG\02_Accounts Payable\SPX_Closing Data\2025(新路徑-已完成)\202507\未結PRPO\For robot\202506_PO_FN.xlsx",
-            'procurement': r"G:\.shortcut-targets-by-id\1am-NBNd2ffKOuVY0b81CBrFd4dxss3QP\Financial Data - LG\02_Accounts Payable\SPX_Closing Data\2025(新路徑-已完成)\202507\未結PRPO\For robot\202507_PO_PQ.xlsx",
-            'ap_invoice': r"G:\.shortcut-targets-by-id\1am-NBNd2ffKOuVY0b81CBrFd4dxss3QP\Financial Data - LG\02_Accounts Payable\SPX_Closing Data\2025(新路徑-已完成)\202507\未結PRPO\For robot\AP_Invoice_Match_Monitoring_Ext_202507.xlsx",
-            'previous_wp_pr': r"G:\.shortcut-targets-by-id\1am-NBNd2ffKOuVY0b81CBrFd4dxss3QP\Financial Data - LG\02_Accounts Payable\SPX_Closing Data\2025(新路徑-已完成)\202507\未結PRPO\For robot\202506_PR_FN.xlsx",
-            'procurement_pr': r"G:\.shortcut-targets-by-id\1am-NBNd2ffKOuVY0b81CBrFd4dxss3QP\Financial Data - LG\02_Accounts Payable\SPX_Closing Data\2025(新路徑-已完成)\202507\未結PRPO\For robot\202507_PR_PQ.xlsx",
-            'ops_validation': r"C:\Users\lia\Downloads\SPX智取櫃及繳費機驗收明細(For FN)_2507.xlsx"
+            # 'po_file': r"G:\.shortcut-targets-by-id\1am-NBNd2ffKOuVY0b81CBrFd4dxss3QP\Financial Data - LG\02_Accounts Payable\SPX_Closing Data\2025(新路徑-已完成)\202507\未結PRPO\For robot\202507_purchase_order.csv",
+            # 'po_file_name': "202507_purchase_order.csv",
+            # 'previous_wp': r"G:\.shortcut-targets-by-id\1am-NBNd2ffKOuVY0b81CBrFd4dxss3QP\Financial Data - LG\02_Accounts Payable\SPX_Closing Data\2025(新路徑-已完成)\202507\未結PRPO\For robot\202506_PO_FN.xlsx",
+            # 'procurement': r"G:\.shortcut-targets-by-id\1am-NBNd2ffKOuVY0b81CBrFd4dxss3QP\Financial Data - LG\02_Accounts Payable\SPX_Closing Data\2025(新路徑-已完成)\202507\未結PRPO\For robot\202507_PO_PQ.xlsx",
+            # 'ap_invoice': r"G:\.shortcut-targets-by-id\1am-NBNd2ffKOuVY0b81CBrFd4dxss3QP\Financial Data - LG\02_Accounts Payable\SPX_Closing Data\2025(新路徑-已完成)\202507\未結PRPO\For robot\AP_Invoice_Match_Monitoring_Ext_202507.xlsx",
+            # 'previous_wp_pr': r"G:\.shortcut-targets-by-id\1am-NBNd2ffKOuVY0b81CBrFd4dxss3QP\Financial Data - LG\02_Accounts Payable\SPX_Closing Data\2025(新路徑-已完成)\202507\未結PRPO\For robot\202506_PR_FN.xlsx",
+            # 'procurement_pr': r"G:\.shortcut-targets-by-id\1am-NBNd2ffKOuVY0b81CBrFd4dxss3QP\Financial Data - LG\02_Accounts Payable\SPX_Closing Data\2025(新路徑-已完成)\202507\未結PRPO\For robot\202507_PR_PQ.xlsx",
+            # 'ops_validation': r"C:\Users\lia\Downloads\SPX智取櫃及繳費機驗收明細(For FN)_2507.xlsx"
+
+            'po_file': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202508\SPX未結For 機器人\202508_purchase_order.csv",
+            'po_file_name': "202508_purchase_order.csv",
+            'previous_wp': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202508\SPX未結For 機器人\202507_PO_FN.xlsx",
+            'procurement': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202508\SPX未結For 機器人\202508_PO_PQ.xlsx",
+            'ap_invoice': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202508\SPX未結For 機器人\AP_Invoice_Match_Monitoring_Ext (NEW).xlsx",
+            'previous_wp_pr': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202508\SPX未結For 機器人\202507_PR_FN.xlsx",
+            'procurement_pr': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202508\SPX未結For 機器人\202508_PR_PQ.xlsx",
+            'ops_validation': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202508\SPX未結For 機器人\SPX智取櫃及繳費機驗收明細(For FN)_2508_修復.xlsx"
         }
         
         # 檢查檔案是否存在
@@ -269,10 +278,15 @@ def test_spx_pr_processing():
         spx_pr_processor = SPXTW_PR()
         
         test_files = {
-            'pr_file': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202505\For robot\202505_purchase_request_20250206_101058_移除缺失資料.xlsx",
-            'pr_file_name': "202505_purchase_request_20250206_101058.xlsx",
-            'procurement_pr': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202505\For robot\202505_PR_PQ.xlsx",
-            'previous_wp_pr': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202505\For robot\202504_PR_FN.xlsx"
+            # 'pr_file': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202505\For robot\202505_purchase_request_20250206_101058_移除缺失資料.xlsx",
+            # 'pr_file_name': "202505_purchase_request_20250206_101058.xlsx",
+            # 'procurement_pr': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202505\For robot\202505_PR_PQ.xlsx",
+            # 'previous_wp_pr': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202505\For robot\202504_PR_FN.xlsx"
+
+            'pr_file': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202508\SPX未結For 機器人\202508_purchase_request.xlsx",
+            'pr_file_name': "202508_purchase_request.xlsx",
+            'procurement_pr': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202508\SPX未結For 機器人\202508_PR_PQ.xlsx",
+            'previous_wp_pr': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202508\SPX未結For 機器人\202507_PR_FN.xlsx"
         }
         
         # 檢查檔案是否存在
@@ -292,16 +306,23 @@ def test_spx_pr_processing():
         
         # 測試PR模式1
         # 注意：這裡需要檢查SPXTW_PR是否有正確的mode_1方法
-        if hasattr(spx_pr_processor, 'mode_1'):
-            spx_pr_processor.mode_1(
-                test_files['pr_file'],
-                test_files['pr_file_name'],
-                test_files['procurement_pr'],
-                test_files['previous_wp_pr']
-            )
-        else:
-            logger.error("❌ SPXTW_PR沒有mode_1方法")
-            return False
+        # if hasattr(spx_pr_processor, 'mode_1'):
+        #     spx_pr_processor.mode_1(
+        #         test_files['pr_file'],
+        #         test_files['pr_file_name'],
+        #         test_files['procurement_pr'],
+        #         test_files['previous_wp_pr']
+        #     )
+        # else:
+        #     logger.error("❌ SPXTW_PR沒有mode_1方法")
+        #     return False
+        
+        spx_pr_processor.process_pr(
+            test_files['pr_file'],
+            test_files['pr_file_name'],
+            test_files['previous_wp_pr'],
+            test_files['procurement_pr']
+        )
         
         end_time = time.time()
         processing_time = end_time - start_time
@@ -402,7 +423,6 @@ def run_comprehensive_test():
     # 測試實際處理功能
     test_results.append(("SPX PO處理", test_spx_po_processing()))
     test_results.append(("SPX PR處理", test_spx_pr_processing()))
-    test_results.append(("並發處理", test_concurrent_processing()))
     
     # 驗證一致性
     test_results.append(("輸出一致性", validate_output_consistency()))
@@ -434,86 +454,6 @@ def run_comprehensive_test():
         logger.warning(f"\n⚠️ 有 {failed} 項測試失敗，需要進一步修復。")
     
     return failed == 0
-
-def test_specific_spx_file():
-    """測試特定的SPX檔案處理"""
-    logger.info("=== 測試特定SPX檔案處理 ===")
-    
-    # 使用原始程式中的測試案例
-    test_cases = [
-        {
-            'name': 'SPX PO 202504 - 模式1',
-            'entity_type': 'SPX_PO',
-            'mode': 1,
-            'files': {
-                'raw_file': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202504\202504_purchase_order.csv",
-                'filename': "202504_purchase_order.csv",
-                'previous_wp': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202504\202503_PO_FN.xlsx",
-                'procurement': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202504\202504_PO_PQ.xlsx",
-                'ap_invoice': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202504\AP_Invoice_Match_Monitoring_Ext_202504.xlsx",
-                'previous_wp_pr': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202504\202503_PR_FN.xlsx",
-                'procurement_pr': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202504\202504_PR_PQ.xlsx",
-                'ops_validation': r"C:\Users\lia\Downloads\SPX智取櫃及繳費機驗收明細(For FN)_2507.xlsx"
-            }
-        },
-        {
-            'name': 'SPX PR 202505 - 模式1',
-            'entity_type': 'SPX_PR',
-            'mode': 1,
-            'files': {
-                'raw_file': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202505\For robot\202505_purchase_request_20250206_101058_移除缺失資料.xlsx",
-                'filename': "202505_purchase_request_20250206_101058.xlsx",
-                'procurement_pr': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202505\For robot\202505_PR_PQ.xlsx",
-                'previous_wp_pr': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202505\For robot\202504_PR_FN.xlsx"
-            }
-        }
-    ]
-    
-    for test_case in test_cases:
-        logger.info(f"測試案例: {test_case['name']}")
-        
-        # 檢查檔案是否存在
-        missing_files = []
-        for file_key, file_path in test_case['files'].items():
-            if not os.path.exists(file_path) and file_key != 'filename':
-                missing_files.append(f"{file_key}: {file_path}")
-        
-        if missing_files:
-            logger.warning("⚠️ 以下檔案不存在，跳過此測試:")
-            for missing in missing_files:
-                logger.warning(f"  - {missing}")
-            continue
-        
-        try:
-            if test_case['entity_type'] == 'SPX_PO':
-                from core.entities import create_entity, EntityType
-                spx_entity = create_entity(EntityType.SPX)
-                
-                start_time = time.time()
-                
-                # 模擬原始的mode_1調用
-                result = spx_entity.mode_1(
-                    test_case['files']['raw_file'],
-                    test_case['files']['filename'],
-                    test_case['files']['previous_wp'],
-                    test_case['files']['procurement'],
-                    test_case['files']['ap_invoice'],
-                    test_case['files']['previous_wp_pr'],
-                    test_case['files']['procurement_pr']
-                )
-                
-                end_time = time.time()
-                logger.info(f"✅ {test_case['name']} 處理成功，耗時: {end_time - start_time:.2f}秒")
-                
-            elif test_case['entity_type'] == 'SPX_PR':
-                # 測試SPX PR處理
-                # 這裡需要檢查重構後的SPX PR處理器是否正確
-                logger.warning("⚠️ SPX PR處理需要進一步實現")
-                
-        except Exception as e:
-            logger.error(f"❌ {test_case['name']} 處理失敗: {str(e)}")
-            import traceback
-            traceback.print_exc()
 
 def ppe_test():
     """PPE底稿測試 - 優化版本"""
@@ -565,7 +505,7 @@ def ppe_test():
         # 創建檔案配置物件
         ppe_files = PPEProcessingFiles(
             contract_filing_list_url=test_file_url,
-            current_month=202507
+            current_month=202508
         )
         
         # 驗證輸入
@@ -615,27 +555,31 @@ def ppe_test():
     """地址模糊比對 - 待實現"""
 
 if __name__ == "__main__":
+    import warnings
+    warnings.filterwarnings('ignore')
     # 執行完整測試
     
     # 測試PPE優化版本
-    logger.info("\n" + "=" * 60)
-    logger.info("開始測試PPE處理器優化版本")
-    logger.info("=" * 60)
-    ppe_test_result = ppe_test()
-    if ppe_test_result:
-        logger.info("✅ PPE處理器測試通過")
-    else:
-        logger.warning("⚠️ PPE處理器測試失敗或檔案不存在")
+    # logger.info("\n" + "=" * 60)
+    # logger.info("開始測試PPE處理器優化版本")
+    # logger.info("=" * 60)
+    # ppe_test_result = ppe_test()
+    # if ppe_test_result:
+    #     logger.info("✅ PPE處理器測試通過")
+    # else:
+    #     logger.warning("⚠️ PPE處理器測試失敗或檔案不存在")
     
     # 執行其他測試
     # success = run_comprehensive_test()
     
     # 測試特定檔案
-    test_specific_spx_file()
+    test_spx_po_processing()
+    # test_spx_pr_processing()
+
     
-    logger.info("\n" + "=" * 60)
-    if success:
-        logger.info("🎉 重構驗證完成！")
-    else:
-        logger.warning("⚠️ 重構驗證發現問題，請檢查錯誤訊息。")
-    logger.info("=" * 60)
+    # logger.info("\n" + "=" * 60)
+    # if success:
+    #     logger.info("🎉 重構驗證完成！")
+    # else:
+    #     logger.warning("⚠️ 重構驗證發現問題，請檢查錯誤訊息。")
+    # logger.info("=" * 60)

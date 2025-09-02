@@ -3,6 +3,7 @@ SPX PR處理器
 直接繼承自BasePRProcessor，實現SPX特有的PR處理邏輯
 """
 
+import os
 import pandas as pd
 import numpy as np
 from typing import Tuple, List, Dict, Optional, Union, Any
@@ -11,6 +12,7 @@ try:
     from .pr_processor import BasePRProcessor
     from ...utils.logging import get_logger
     # from ...utils.config import get_config_manager
+    from ...data.importers import ExcelImporter
 except ImportError:
     # 如果相對導入失敗，使用絕對導入
     import sys
@@ -24,6 +26,7 @@ except ImportError:
     from core.processors.pr_processor import BasePRProcessor
     from utils.logging import get_logger
     # from utils.config import get_config_manager
+    from data.importers import ExcelImporter
 
 
 class SpxPRProcessor(BasePRProcessor):
@@ -34,6 +37,7 @@ class SpxPRProcessor(BasePRProcessor):
         super().__init__("SPX")
         self.logger = get_logger(self.__class__.__name__)
         # self.config_manager = get_config_manager()
+        self.data_importer = ExcelImporter()
         
         # SPX特有配置
         self.dept_accounts = ['650005', '610104', '630001', '650003', '600301', 
@@ -363,10 +367,10 @@ class SpxPRProcessor(BasePRProcessor):
             self.logger.info(f"開始處理SPX PR數據: {file_name}")
             
             # 導入原始數據
-            df, date = self.importer.import_rawdata(fileUrl, file_name)
+            df, date = self.import_raw_data(fileUrl)
             
             # 導入參考數據 - SPX使用SPT的ref檔案參照會計科目和負債科目
-            ref_ac, ref_liability = self.importer.import_reference_data('SPT')
+            ref_ac, ref_liability = self.import_reference_data()
 
             # 過濾SPX產品代碼
             df = self.filter_spx_product_code(df)
@@ -377,7 +381,7 @@ class SpxPRProcessor(BasePRProcessor):
             # 處理採購底稿
             if fileUrl_p:
                 try:
-                    df_procu = self.importer.import_procurement(fileUrl_p)
+                    df_procu = self.import_procurement(fileUrl_p)
                     if df_procu is not None and not df_procu.empty:
                         df = self.process_with_procurement(df, df_procu)
                         self.logger.info("成功處理採購底稿")
@@ -389,7 +393,7 @@ class SpxPRProcessor(BasePRProcessor):
             # 處理前期底稿
             if fileUrl_previwp:
                 try:
-                    previous_wp = self.importer.import_previous_wp(fileUrl_previwp)
+                    previous_wp = self.import_previous_wp(fileUrl_previwp)
                     if previous_wp is not None and not previous_wp.empty:
                         df = self.process_with_previous(df, previous_wp)
                         self.logger.info("成功處理前期底稿")
@@ -406,7 +410,8 @@ class SpxPRProcessor(BasePRProcessor):
             df = self.evaluate_status_based_on_dates_integrated(df, 'PR狀態')
             
             # 更新估計入帳標識
-            df = self.give_status_stage_1(df)
+            df_spx_closing = self.get_closing_note()
+            df = self.give_status_stage_1(df, df_spx_closing, date)
             df = self.update_estimation_based_on_status(df, 'PR狀態')
             
             # 判斷科目代碼
@@ -426,3 +431,95 @@ class SpxPRProcessor(BasePRProcessor):
         except Exception as e:
             self.logger.error(f"處理SPX PR數據時出錯: {str(e)}", exc_info=True)
             raise ValueError(f"處理SPX PR數據時出錯: {str(e)}")
+
+    def import_raw_data(self, url: str) -> Tuple[pd.DataFrame, int]:
+        """導入PR數據
+        
+        Args:
+            url: 文件路徑
+            
+        Returns:
+            Tuple[pd.DataFrame, int]: 數據框和年月值
+        """
+        try:
+            name = os.path.basename(url)
+
+            if name.lower().endswith('.csv'):
+                df = self.data_importer.import_file(url, header=0, dtype=str, encoding='utf-8-sig')
+            else:
+                df = self.data_importer.import_file(url, dtype=str)
+                
+            df.encoding = 'big5'
+            
+            # 數據轉換
+            df['Line#'] = round(df['Line#'].astype(float), 0).astype(int).astype(str)
+            df['GL#'] = np.where(df['GL#'] == 'N.A.', '666666', df['GL#'])
+            
+            # 從文件名獲取年月
+            try:
+                ym = int(name[0:6])
+            except ValueError:
+                self.logger.warning(f"無法從文件名 {name} 獲取年月值，使用默認值0")
+                ym = 0
+                
+            self.logger.info(f"完成導入PR數據與基本填充處理, 形狀: {df.shape}")
+            return df, ym
+            
+        except Exception as e:
+            self.logger.error(f"導入數據文件 {name} 時出錯: {str(e)}", exc_info=True)
+            raise
+
+    def import_procurement(self, url: str) -> pd.DataFrame:
+        """導入採購底稿
+        
+        Args:
+            url: 文件路徑
+            
+        Returns:
+            pd.DataFrame: 採購底稿數據
+        """
+        try:
+            self.logger.info(f"正在導入採購底稿(PR): {url}")
+            
+            if url.lower().endswith('.csv'):
+                df = pd.read_csv(url, header=0, dtype=str, encoding='utf-8-sig')
+            else:
+                df = pd.read_excel(url, header=0, dtype=str)
+                
+            df.encoding = 'big5'
+            df['PR Line'] = df['PR#'].astype(str) + "-" + df['Line#'].astype(str)
+            
+            self.logger.info(f"成功導入採購底稿(PR), 形狀: {df.shape}")
+            return df
+            
+        except Exception as e:
+            self.logger.error(f"導入採購底稿時出錯: {str(e)}", exc_info=True)
+            raise
+
+    def import_previous_wp(self, url: str) -> pd.DataFrame:
+        """導入前期底稿
+        
+        Args:
+            url: 文件路徑
+            
+        Returns:
+            pd.DataFrame: 前期底稿數據
+        """
+        try:
+            self.logger.info(f"正在導入前期底稿: {url}")
+            
+            y = pd.read_excel(url, dtype=str)
+            y['Line#'] = round(y['Line#'].astype(float), 0).astype(int).astype(str)
+            
+            if 'PO#' in y.columns:
+                y['PO Line'] = y['PO#'].astype(str) + "-" + y['Line#'].astype(str)
+            else:
+                y['PR Line'] = y['PR#'].astype(str) + "-" + y['Line#'].astype(str)
+                
+            self.logger.info(f"成功導入前期底稿, 形狀: {y.shape}")
+            return y
+            
+        except Exception as e:
+            self.logger.error(f"導入前期底稿時出錯: {str(e)}", exc_info=True)
+            raise
+        
