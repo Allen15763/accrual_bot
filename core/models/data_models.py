@@ -16,6 +16,7 @@ class EntityType(Enum):
     MOB = "MOB"
     SPT = "SPT"
     SPX = "SPX"
+    SPE = "SPE"
 
 
 class ProcessingType(Enum):

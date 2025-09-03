@@ -10,8 +10,19 @@ from typing import Optional, Dict, Any
 from pathlib import Path
 
 from .base_exporter import BaseExporter
-from core.models.config_models import ExportConfig
-from utils.logging import Logger
+try:
+    from ...core.models.config_models import ExportConfig
+    from ...utils.logging import Logger
+except ImportError:
+    # 如果相對導入失敗，使用絕對導入
+    import sys
+    
+    # 添加accrual_bot目錄到sys.path
+    current_dir = Path(__file__).parent.parent.parent
+    if str(current_dir) not in sys.path:
+        sys.path.insert(0, str(current_dir))
+    from core.models.config_models import ExportConfig
+    from utils.logging import Logger
 
 
 class CSVExporter(BaseExporter):

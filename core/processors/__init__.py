@@ -12,7 +12,7 @@ from .mob_po_processor import MobPOProcessor
 from .mob_pr_processor import MobPRProcessor
 from .spt_po_processor import SptPOProcessor
 from .spt_pr_processor import SptPRProcessor
-from .spx_ppe_processor import SpxPpeProcessor
+from .spx_ppe_processor import SpxPpeProcessor, PPEProcessingFiles
 
 __all__ = [
     'BaseDataProcessor',
@@ -24,5 +24,6 @@ __all__ = [
     'MobPRProcessor',
     'SptPOProcessor',
     'SptPRProcessor',
-    'SpxPpeProcessor'
+    'SpxPpeProcessor',
+    'PPEProcessingFiles'
 ]

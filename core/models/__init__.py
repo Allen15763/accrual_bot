@@ -9,7 +9,10 @@ from .data_models import (
     PRData,
     ProcessingResult,
     ValidationResult,
-    FieldMapping
+    FieldMapping,
+    EntityType,
+    ProcessingType
+
 )
 
 from .config_models import (
@@ -24,6 +27,8 @@ __all__ = [
     'ProcessingResult',
     'ValidationResult',
     'FieldMapping',
+    'EntityType',
+    'ProcessingType',
     'ProcessingConfig',
     'EntityConfig',
     'ExportConfig'

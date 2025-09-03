@@ -10,5 +10,6 @@ __all__ = [
     'BaseDataImporter',
     'GoogleSheetsImporter',
     'AsyncGoogleSheetsImporter',
-    'ExcelImporter'
+    'ExcelImporter',
+    'AsyncDataImporter'
 ]

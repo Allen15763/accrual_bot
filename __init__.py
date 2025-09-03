@@ -1,5 +1,5 @@
 """
-Accrual Bot v2.0
+Accrual Bot v1.0
 企業應收應付帳款自動化處理系統
 
 重構版本，採用模組化設計，提供：
@@ -18,9 +18,9 @@ Accrual Bot v2.0
 """
 
 # 版本信息
-__version__ = "2.0.0"
-__author__ = "SEA Finance Automation Team"
-__description__ = "Enterprise Accrual Processing Automation System"
+__version__ = "1.0.0"
+__author__ = "lia@sea.com"
+__description__ = "Enterprise Accounting Processing Automation System"
 
 # 核心模組導入
 from .utils import *
@@ -45,7 +45,12 @@ __all__ = [
     'BaseDataProcessor',
     'BasePOProcessor',
     'BasePRProcessor',
-    'SpxProcessor',
+
+    # 業務實體
+    'create_entity',
+    'create_entity_by_name',
+    'EntityType',
+    'ProcessingType'
     
     # 數據導入器
     'BaseDataImporter',
