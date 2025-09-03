@@ -824,7 +824,8 @@ class BaseDataProcessor:
                 df.loc[combined_cond, tag_column] = '已完成_租金'
 
                 # 租金已入帳
-                # df.loc[(df[tag_column] == '已完成_租金') & (df['GL DATE'].isna()), tag_column] = '已入帳'
+                booked_in_ap = (~df['GL DATE'].isna()) & ((df['GL DATE'] != '') | (df['GL DATE'] != 'nan'))
+                df.loc[(df[tag_column] == '已完成_租金') & (booked_in_ap), tag_column] = '已入帳'
 
                 uncompleted_rent = (
                     ((df['Remarked by Procurement'] != 'error') &
@@ -873,8 +874,11 @@ class BaseDataProcessor:
 
                 doesnt_contain_fa = (~pr_general_fa & ~po_general_fa)
                 specific_pattern = (pr_specific_pattern | po_specific_pattern)
-                df.loc[(df['PO Supplier'].isin(asset_suppliers)) & (doesnt_contain_fa & specific_pattern), 
-                       tag_column] = 'Pending_validating'
+                ignore_closed = ~df[tag_column].str.contains('關', na=False)
+                mask = ((df['PO Supplier'].isin(asset_suppliers)) & 
+                        (doesnt_contain_fa | specific_pattern) & 
+                        (ignore_closed))
+                df.loc[mask, tag_column] = 'Pending_validating'
                 
                 self.logger.info("成功給予第一階段狀態")
                 return df
@@ -954,9 +958,6 @@ class BaseDataProcessor:
                 combined_cond = is_non_labeled & mask_descerm_equals_current & mask_account_rent & mask_ops_rent
                 df.loc[combined_cond, tag_column] = '已完成_租金'
 
-                # 租金已入帳
-                # df.loc[(df[tag_column] == '已完成_租金') & (df['GL DATE'].isna()), tag_column] = '已入帳'
-
                 uncompleted_rent = (
                     ((df['Remarked by Procurement'] != 'error') &
                      is_non_labeled &
@@ -988,6 +989,15 @@ class BaseDataProcessor:
                 combined_cond = is_non_labeled & mask_ops_intermediary & mask_desc_contains_intermediary & \
                     (df['Expected Received Month_轉換格式'] > date)
                 df.loc[combined_cond, tag_column] = '未完成_intermediary'
+
+                # PR的智取櫃與繳費機，不會在PR驗收不估
+                kiosk_suppliers: list = self.config_manager.get_list(self.entity_type, 'kiosk_suppliers')
+                locker_suppliers: list = self.config_manager.get_list(self.entity_type, 'locker_suppliers')
+                asset_suppliers: list = kiosk_suppliers + locker_suppliers
+                ignore_closed = ~df[tag_column].str.contains('關', na=False)
+                mask = ((df['PR Supplier'].isin(asset_suppliers)) & 
+                        (ignore_closed))
+                df.loc[mask, tag_column] = '智取櫃與繳費機'
 
                 self.logger.info("成功給予第一階段狀態")
                 return df

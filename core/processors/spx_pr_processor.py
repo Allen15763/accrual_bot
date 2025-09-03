@@ -135,7 +135,7 @@ class SpxPRProcessor(BasePRProcessor):
         try:
             # 獲取採購底稿中的Remarked by Procurement
             map_dict = self.get_mapping_dict(df_procu, 'PR Line', 'Remarked by Procurement')
-            df['Remarked by Procurement'] = df['PR Line'].map(map_dict)
+            df['Remarked by Procurement'] = df['PR Line'].map(map_dict).fillna('no info in Remarked by Procurement')
             
             # 獲取採購底稿中的Noted by Procurement
             map_dict = self.get_mapping_dict(df_procu, 'PR Line', 'Noted by Procurement')
@@ -325,7 +325,7 @@ class SpxPRProcessor(BasePRProcessor):
             # 清理nan值
             columns_to_clean = [
                 '是否估計入帳', 'PR Product Code Check', 'PR狀態',
-                'Accr. Amount', '是否為FA', 'Region_c', 'Dep.'
+                'Accr. Amount', '是否為FA', 'Region_c', 'Dep.', 'Remarked by 上月 FN'
             ]
             df = self.clean_nan_values(df, columns_to_clean)
             
@@ -406,12 +406,13 @@ class SpxPRProcessor(BasePRProcessor):
             df['檔案日期'] = date
             
             # 解析日期並評估狀態
-            df = self.parse_date_from_description(df)
-            df = self.evaluate_status_based_on_dates_integrated(df, 'PR狀態')
+            df = self.apply_date_logic(df)
             
             # 更新估計入帳標識
             df_spx_closing = self.get_closing_note()
             df = self.give_status_stage_1(df, df_spx_closing, date)
+            df = self.erm_pr(df, date, ref_ac, ref_liability)
+            df = self.evaluate_status_based_on_dates_integrated(df, 'PR狀態')  # 這個類似PO的erm方法，要放在stage1後面
             df = self.update_estimation_based_on_status(df, 'PR狀態')
             
             # 判斷科目代碼
@@ -523,3 +524,175 @@ class SpxPRProcessor(BasePRProcessor):
             self.logger.error(f"導入前期底稿時出錯: {str(e)}", exc_info=True)
             raise
         
+    def erm_pr(self, df: pd.DataFrame, ym: int, ref_a: pd.DataFrame, ref_b: pd.DataFrame) -> pd.DataFrame:
+        """處理SPX特有的ERM邏輯
+        
+        Args:
+            df: PO DataFrame
+            ym: 年月
+            ref_a: 科目參考數據
+            ref_b: 負債參考數據
+            
+        Returns:
+            pd.DataFrame: 處理後的DataFrame
+        """
+        try:
+            # 設置檔案日期
+            df['檔案日期'] = ym
+            
+            # 定義ERM狀態條件
+
+            # 條件：已完成
+            condition_completed = (
+                ((df['Remarked by Procurement'].str.contains('(?i)已完成|rent', na=False)) | 
+                 (df['Remarked by 上月 FN'].str.contains('(?i)已完成', na=False))) &
+                ((df['PR狀態'].isna()) | (df['PR狀態'] == 'nan')) &
+                (df['Expected Received Month_轉換格式'].between(
+                    df['YMs of Item Description'].str[:6].astype('int32'),
+                    df['YMs of Item Description'].str[7:].astype('int32'),
+                    inclusive='both'
+                )) &
+                (df['Expected Received Month_轉換格式'] <= df['檔案日期'])
+            )
+            
+            # 條件：未完成
+            condition_incomplete = (
+                (df['Remarked by Procurement'] != 'error') &
+                ((df['PR狀態'].isna()) | (df['PR狀態'] == 'nan')) &
+                (df['Expected Received Month_轉換格式'].between(
+                    df['YMs of Item Description'].str[:6].astype('int32'),
+                    df['YMs of Item Description'].str[7:].astype('int32'),
+                    inclusive='both'
+                )) &
+                (df['Expected Received Month_轉換格式'] > df['檔案日期'])
+            )
+            
+            # 條件：範圍錯誤_租金
+            condition_range_error_lease = (
+                (df['Remarked by Procurement'] != 'error') &
+                ((df['PR狀態'].isna()) | (df['PR狀態'] == 'nan')) &
+                (df['Expected Received Month_轉換格式'].between(
+                    df['YMs of Item Description'].str[:6].astype('int32'),
+                    df['YMs of Item Description'].str[7:].astype('int32'),
+                    inclusive='both'
+                ) == False) &
+                (df['YMs of Item Description'] != '100001,100002') & 
+                (df['Item Description'].str.contains('(?i)租金', na=False))
+            )
+
+            # 條件：範圍錯誤_薪資
+            condition_range_error_salary = (
+                (df['Remarked by Procurement'] != 'error') &
+                ((df['PR狀態'].isna()) | (df['PR狀態'] == 'nan')) &
+                (df['Expected Received Month_轉換格式'].between(
+                    df['YMs of Item Description'].str[:6].astype('int32'),
+                    df['YMs of Item Description'].str[7:].astype('int32'),
+                    inclusive='both'
+                ) == False) &
+                (df['YMs of Item Description'] != '100001,100002') & 
+                (df['Item Description'].str.contains('(?i)派遣|Salary|Agency Fee', na=False))
+            )
+
+            # 條件：範圍錯誤
+            condition_range_error = (
+                (df['Remarked by Procurement'] != 'error') &
+                ((df['PR狀態'].isna()) | (df['PR狀態'] == 'nan')) &
+                (df['Expected Received Month_轉換格式'].between(
+                    df['YMs of Item Description'].str[:6].astype('int32'),
+                    df['YMs of Item Description'].str[7:].astype('int32'),
+                    inclusive='both'
+                ) == False) &
+                (df['YMs of Item Description'] != '100001,100002')
+            )
+            
+            # 組合所有條件
+            conditions = [
+                condition_completed,
+                condition_incomplete,
+                condition_range_error_lease,
+                condition_range_error_salary,
+                condition_range_error,
+            ]
+            
+            # 對應的結果
+            results = [
+                '已完成',
+                '未完成',
+                'error(Description Period is out of ERM)_租金',
+                'error(Description Period is out of ERM)_薪資',
+                'error(Description Period is out of ERM)',
+
+            ]
+            
+            # 應用條件
+            df['PR狀態'] = np.select(conditions, results, default=df['PR狀態'])
+            
+            # 處理格式錯誤
+            mask_format_error = (
+                ((df['PR狀態'].isna()) | (df['PR狀態'] == 'nan')) & 
+                (df['YMs of Item Description'] == '100001,100002')
+            )
+            df.loc[mask_format_error, 'PR狀態'] = '格式錯誤，退單'
+            
+            # 根據PR狀態設置估計入帳 - SPX邏輯：已完成->入帳，其餘N
+            mask_completed = (df['PR狀態'].str.contains('已完成', na=False))
+            df.loc[mask_completed, '是否估計入帳'] = 'Y'
+            df.loc[~mask_completed, '是否估計入帳'] = 'N'
+            
+            need_to_accrual = df['是否估計入帳'] == 'Y'
+            
+            # 設置Account code
+            df.loc[need_to_accrual, 'Account code'] = df.loc[need_to_accrual, 'GL#']
+            
+            # 設置Account Name
+            df['Account Name'] = pd.merge(
+                df, ref_a, how='left',
+                left_on='Account code', right_on='Account'
+            ).loc[:, 'Account Desc']
+            
+            # 設置Product code - SPX固定值
+            df.loc[need_to_accrual, 'Product code'] = "LG_SPX_OWN"
+            
+            # 設置Region_c - SPX固定值
+            df.loc[need_to_accrual, 'Region_c'] = "TW"
+            
+            # 設置Dep. - SPX特有邏輯
+            isin_dept_account = df['Account code'].astype(str).isin(self.dept_accounts)
+            df.loc[need_to_accrual & isin_dept_account, 'Dep.'] = \
+                df.loc[need_to_accrual & isin_dept_account, 'Department'].str[:3]
+            df.loc[need_to_accrual & ~isin_dept_account, 'Dep.'] = '000'
+            
+            # 設置Currency_c
+            df.loc[need_to_accrual, 'Currency_c'] = df.loc[need_to_accrual, 'Currency']
+            
+            # 設置Accr. Amount
+            df.loc[need_to_accrual, 'Accr. Amount'] = df.loc[need_to_accrual, 'Entry Amount']
+            
+            # 設置Liability
+            df['Liability'] = pd.merge(
+                df, ref_b, how='left',
+                left_on='Account code', right_on='Account'
+            ).loc[:, 'Liability_y']
+            
+            # 設置PR Product Code Check
+            if 'Product code' in df.columns and 'Project' in df.columns:
+                mask_product_code = df['Product code'].notnull()
+                try:
+                    product_match = df.loc[mask_product_code, 'Project'].str.findall(r'^(\w+(?:))').apply(
+                        lambda x: x[0] if len(x) > 0 else ''
+                    ) == df.loc[mask_product_code, 'Product code']
+                    
+                    df.loc[mask_product_code, 'PR Product Code Check'] = np.where(
+                        product_match, 'good', 'bad'
+                    )
+                except Exception as e:
+                    self.logger.error(f"設置PR Product Code Check時出錯: {str(e)}", exc_info=True)
+                    raise ValueError("設置PR Product Code Check時出錯")
+            
+            self.logger.info("成功處理SPX ERM邏輯")
+            return df
+            
+        except Exception as e:
+            self.logger.error(f"處理SPX ERM邏輯時出錯: {str(e)}", exc_info=True)
+            raise ValueError("處理SPX ERM邏輯時出錯")
+    
