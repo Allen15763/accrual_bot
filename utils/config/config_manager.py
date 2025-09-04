@@ -127,18 +127,37 @@ class ConfigManager:
         
         # 避免重複添加處理器
         if not self._simple_logger.handlers:
-            # 創建控制台處理器
+            # 控制台處理器
             console_handler = logging.StreamHandler(sys.stdout)
             console_handler.setLevel(logging.INFO)
             
-            # 設置簡單的格式
             formatter = logging.Formatter(
                 '[%(asctime)s] %(levelname)s %(name)s: %(message)s',
                 datefmt='%Y-%m-%d %H:%M:%S'
             )
             console_handler.setFormatter(formatter)
-            
             self._simple_logger.addHandler(console_handler)
+            
+            # 檔案處理器 - 使用固定路徑，避免依賴配置
+            try:
+                # 使用專案根目錄下的 logs 資料夾
+                log_dir = Path(__file__).cwd() / 'logs'
+                timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                print(f"stdout [{timestamp}] INFO ConfigManager: log_dir: {log_dir}", file=sys.stdout)
+                log_dir.mkdir(parents=True, exist_ok=True)
+                
+                log_file = log_dir / f"config_manager_{datetime.datetime.now().strftime('%Y%m%d')}.log"
+                
+                file_handler = logging.FileHandler(log_file, encoding='utf-8')
+                file_handler.setLevel(logging.DEBUG)
+                file_handler.setFormatter(formatter)
+                self._simple_logger.addHandler(file_handler)
+                
+            except Exception as err:
+                # 檔案日誌失敗不影響整體運作
+                timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                print(f"stderr [{timestamp}] ERROR ConfigManager: {err}", file=sys.stderr)
+                pass
             # 避免向上傳播，防止重複輸出
             self._simple_logger.propagate = False
     
