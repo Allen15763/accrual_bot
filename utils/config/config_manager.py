@@ -220,7 +220,7 @@ class ConfigManager:
                     Path.cwd() / 'accrual_bot' / 'config' / 'config.ini',
                     # 3. 直接從當前工作目錄
                     Path.cwd() / 'config' / 'config.ini',
-                    # 4. 使用彈性路徑解析
+                    # 4. 使用彈性路徑解析(詳下)
                 ]
                 
                 # 使用彈性路徑解析作為備選
@@ -237,25 +237,104 @@ class ConfigManager:
             if not config_path or not os.path.exists(config_path):
                 # 如果還是找不到，記錄所有嘗試的路徑並使用預設配置
                 attempted_paths = [str(p) for p in possible_paths] if 'possible_paths' in locals() else [config_path]
-                sys.stderr.write(f"配置檔案不存在，嘗試過的路徑: {attempted_paths}\n")
-                sys.stderr.write("使用預設配置\n")
+                self._log_warning(f"配置檔案不存在，嘗試過的路徑: {attempted_paths}，使用預設配置")
                 self._set_default_config()
                 return
             
             # 加載配置
             self._config.read(config_path, encoding='utf-8')
-            
-            # 轉換為字典格式便於使用
+            # 轉為字典方面使用; self._config_data
             self._convert_to_dict()
             
-            # 記錄成功載入的路徑
-            print(f"✅ 成功載入配置檔案: {config_path}")
+            # 記錄成功載入 - 改進的日誌記錄
+            self._log_info(f"成功載入配置檔案: {config_path}")
             
         except Exception as e:
-            # 使用stderr記錄錯誤，避免print
-            sys.stderr.write(f"載入配置檔案時出錯: {e}\n")
-            # 設定預設配置
+            self._log_error(f"載入配置檔案時出錯: {e}")
             self._set_default_config()
+
+    def _log_info(self, message: str) -> None:
+        """記錄資訊訊息"""
+        try:
+            # 嘗試使用專案的日誌工具
+            from ...utils.logging import get_logger
+            logger = get_logger(__name__)
+            logger.info(message)
+        except ImportError:
+            try:
+                import sys
+                
+                # 添加accrual_bot目錄到sys.path
+                current_dir = Path(__file__).parent.parent.parent
+                if str(current_dir) not in sys.path:
+                    sys.path.insert(0, str(current_dir))
+
+                """
+                任何地方使用from utils.logging import get_logger載入日誌時，
+                第一次call都會重新進入一次config_manager.py
+                因為在logging模組裡面有from ..config.config_manager import config_manager用於載入全域變數。
+
+                因為先觸發循環載入，所以會先進入Exception as err，然後單例避免了重複物件建立。
+                """
+                from utils.logging import get_logger
+                logger = get_logger(__name__)
+                logger.info(message)
+                
+            except Exception as err:
+                # 備選：格式化的標準輸出
+                import datetime
+                timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                sys.stdout.write(f"[{timestamp}] INFO ConfigManager: {err}\n")
+                sys.stdout.write(f"[{timestamp}] INFO ConfigManager: {message}\n")
+                sys.stdout.flush()
+
+    def _log_warning(self, message: str) -> None:
+        """記錄警告訊息"""
+        try:
+            from ...utils.logging import get_logger
+            logger = get_logger(__name__)
+            logger.warning(message)
+        except ImportError:
+            try:
+                import sys
+                
+                # 添加accrual_bot目錄到sys.path
+                current_dir = Path(__file__).parent.parent.parent
+                if str(current_dir) not in sys.path:
+                    sys.path.insert(0, str(current_dir))
+
+                from utils.logging import get_logger
+                logger = get_logger(__name__)
+                logger.warning(message)
+
+            except Exception as err:
+                import datetime
+                timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                sys.stderr.write(f"[{timestamp}] WARNING ConfigManager: {message}\n")
+
+    def _log_error(self, message: str) -> None:
+        """記錄錯誤訊息"""
+        try:
+            from ...utils.logging import get_logger
+            logger = get_logger(__name__)
+            logger.error(message)
+        except ImportError:
+            try:
+                import sys
+                
+                # 添加accrual_bot目錄到sys.path
+                current_dir = Path(__file__).parent.parent.parent
+                if str(current_dir) not in sys.path:
+                    sys.path.insert(0, str(current_dir))
+
+                from utils.logging import get_logger
+                logger = get_logger(__name__)
+                logger.error(message)
+
+            except Exception as err:
+                import datetime
+                timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                sys.stderr.write(f"[{timestamp}] ERROR ConfigManager: {message}\n")
     
     def _convert_to_dict(self) -> None:
         """將配置轉換為字典格式"""
