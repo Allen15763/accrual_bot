@@ -6,6 +6,8 @@
 import os
 import sys
 import configparser
+import logging
+import datetime
 from typing import Dict, List, Any, Optional, Union
 from pathlib import Path
 
@@ -110,8 +112,35 @@ class ConfigManager:
             
         self._config = configparser.ConfigParser()
         self._config_data = {}
+        self._simple_logger = None  # 簡單日誌記錄器
+        self._setup_simple_logger()  # 先設置簡單日誌
         self._load_config()
         self._initialized = True
+    
+    def _setup_simple_logger(self) -> None:
+        """
+        設置簡單的日誌記錄器，避免循環導入
+        使用Python內建的logging模組，不依賴自定義的日誌系統
+        """
+        self._simple_logger = logging.getLogger('config_manager')
+        self._simple_logger.setLevel(logging.INFO)
+        
+        # 避免重複添加處理器
+        if not self._simple_logger.handlers:
+            # 創建控制台處理器
+            console_handler = logging.StreamHandler(sys.stdout)
+            console_handler.setLevel(logging.INFO)
+            
+            # 設置簡單的格式
+            formatter = logging.Formatter(
+                '[%(asctime)s] %(levelname)s %(name)s: %(message)s',
+                datefmt='%Y-%m-%d %H:%M:%S'
+            )
+            console_handler.setFormatter(formatter)
+            
+            self._simple_logger.addHandler(console_handler)
+            # 避免向上傳播，防止重複輸出
+            self._simple_logger.propagate = False
     
     def _load_config(self) -> None:
         """
@@ -254,87 +283,32 @@ class ConfigManager:
             self._set_default_config()
 
     def _log_info(self, message: str) -> None:
-        """記錄資訊訊息"""
-        try:
-            # 嘗試使用專案的日誌工具
-            from ...utils.logging import get_logger
-            logger = get_logger(__name__)
-            logger.info(message)
-        except ImportError:
-            try:
-                import sys
-                
-                # 添加accrual_bot目錄到sys.path
-                current_dir = Path(__file__).parent.parent.parent
-                if str(current_dir) not in sys.path:
-                    sys.path.insert(0, str(current_dir))
-
-                """
-                任何地方使用from utils.logging import get_logger載入日誌時，
-                第一次call都會重新進入一次config_manager.py
-                因為在logging模組裡面有from ..config.config_manager import config_manager用於載入全域變數。
-
-                因為先觸發循環載入，所以會先進入Exception as err，然後單例避免了重複物件建立。
-                """
-                from utils.logging import get_logger
-                logger = get_logger(__name__)
-                logger.info(message)
-                
-            except Exception as err:
-                # 備選：格式化的標準輸出
-                import datetime
-                timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                sys.stdout.write(f"[{timestamp}] INFO ConfigManager: {err}\n")
-                sys.stdout.write(f"[{timestamp}] INFO ConfigManager: {message}\n")
-                sys.stdout.flush()
+        """記錄資訊訊息 - 使用簡單日誌，避免循環導入"""
+        if self._simple_logger:
+            self._simple_logger.info(message)
+        else:
+            # 備選：直接輸出到標準輸出
+            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            sys.stdout.write(f"stdout [{timestamp}] INFO ConfigManager: {message}\n")
+            sys.stdout.flush()
 
     def _log_warning(self, message: str) -> None:
-        """記錄警告訊息"""
-        try:
-            from ...utils.logging import get_logger
-            logger = get_logger(__name__)
-            logger.warning(message)
-        except ImportError:
-            try:
-                import sys
-                
-                # 添加accrual_bot目錄到sys.path
-                current_dir = Path(__file__).parent.parent.parent
-                if str(current_dir) not in sys.path:
-                    sys.path.insert(0, str(current_dir))
-
-                from utils.logging import get_logger
-                logger = get_logger(__name__)
-                logger.warning(message)
-
-            except Exception as err:
-                import datetime
-                timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                sys.stderr.write(f"[{timestamp}] WARNING ConfigManager: {message}\n")
+        """記錄警告訊息 - 使用簡單日誌，避免循環導入"""
+        if self._simple_logger:
+            self._simple_logger.warning(message)
+        else:
+            # 備選：輸出到標準錯誤
+            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            sys.stderr.write(f"stderr [{timestamp}] WARNING ConfigManager: {message}\n")
 
     def _log_error(self, message: str) -> None:
-        """記錄錯誤訊息"""
-        try:
-            from ...utils.logging import get_logger
-            logger = get_logger(__name__)
-            logger.error(message)
-        except ImportError:
-            try:
-                import sys
-                
-                # 添加accrual_bot目錄到sys.path
-                current_dir = Path(__file__).parent.parent.parent
-                if str(current_dir) not in sys.path:
-                    sys.path.insert(0, str(current_dir))
-
-                from utils.logging import get_logger
-                logger = get_logger(__name__)
-                logger.error(message)
-
-            except Exception as err:
-                import datetime
-                timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                sys.stderr.write(f"[{timestamp}] ERROR ConfigManager: {message}\n")
+        """記錄錯誤訊息 - 使用簡單日誌，避免循環導入"""
+        if self._simple_logger:
+            self._simple_logger.error(message)
+        else:
+            # 備選：輸出到標準錯誤
+            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            print(f"stderr [{timestamp}] ERROR ConfigManager: {message}", file=sys.stderr)
     
     def _convert_to_dict(self) -> None:
         """將配置轉換為字典格式"""
@@ -581,13 +555,8 @@ class ConfigManager:
             # 如果解析失敗，fallback 到原始路徑
             if resolved_cert_path is None:
                 resolved_cert_path = cert_path_config
-                # 記錄警告（如果有 logger 的話）
-                try:
-                    import logging
-                    logger = logging.getLogger(__name__)
-                    logger.warning(f"無法解析憑證路徑: {cert_path_config}，使用原始路徑")
-                except Exception as err:
-                    pass
+                # 記錄警告
+                self._log_warning(f"無法解析憑證路徑: {cert_path_config}，使用原始路徑")
         
         return {
             'certificate_path': resolved_cert_path,
