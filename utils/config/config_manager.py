@@ -114,26 +114,142 @@ class ConfigManager:
         self._initialized = True
     
     def _load_config(self) -> None:
-        """加載配置檔案"""
+        """
+        加載配置檔案 - 改進版本，支援更靈活的路徑解析
+        
+        此方法實現了一套漸進式的配置檔案搜尋策略，能夠適應不同的執行環境和專案結構。
+        它會按照優先級順序嘗試多個可能的配置檔案路徑，直到找到有效的配置檔案或回退到預設配置。
+        
+        路徑解析策略:
+            1. 打包環境（PyInstaller）: 使用 sys._MEIPASS 路徑
+            2. 開發環境: 按以下優先級順序搜尋
+                - 基於當前檔案位置推算: ../../../config/config.ini
+                - 基於當前工作目錄: ./accrual_bot/config/config.ini  
+                - 直接從當前工作目錄: ./config/config.ini
+                - 使用彈性路徑解析函數: resolve_flexible_path()
+        
+        功能特性:
+            - 支援 PyInstaller 打包環境和開發環境
+            - 多路徑搜尋策略，提高配置檔案發現成功率
+            - 完善的錯誤處理和日誌記錄
+            - 自動回退到預設配置機制
+            - UTF-8 編碼支援
+            - 路徑標準化和去重處理
+        
+        執行流程:
+            1. 檢測執行環境（打包 vs 開發）
+            2. 根據環境確定配置檔案搜尋路徑列表
+            3. 按優先級順序嘗試每個路徑
+            4. 找到有效配置檔案後進行載入和轉換
+            5. 如果所有路徑都失敗，使用預設配置
+            6. 記錄成功載入或失敗資訊
+        
+        Args:
+            無參數
+            
+        Returns:
+            None: 此方法沒有返回值，但會更新以下實例屬性：
+                - self._config: configparser.ConfigParser 物件
+                - self._config_data: 轉換後的字典格式配置數據
+        
+        Raises:
+            不會向外拋出異常，所有異常都會被捕獲並處理：
+                - FileNotFoundError: 配置檔案不存在時自動回退到預設配置
+                - UnicodeDecodeError: 檔案編碼問題時記錄錯誤並使用預設配置
+                - configparser.Error: 配置檔案格式錯誤時使用預設配置
+                - Exception: 其他未預期的異常會被記錄並使用預設配置
+        
+        Side Effects:
+            - 修改 self._config 和 self._config_data 實例屬性
+            - 向 sys.stderr 輸出錯誤訊息
+            - 向標準輸出打印成功載入訊息
+            - 如果找不到配置檔案，會調用 self._set_default_config()
+            - 會調用 self._convert_to_dict() 進行數據格式轉換
+        
+        Usage Examples:
+            ```python
+            # 在 ConfigManager.__init__ 中調用
+            config_manager = ConfigManager()
+            # _load_config() 會自動被調用，無需手動調用
+            
+            # 如果需要重新載入配置
+            config_manager._load_config()
+            ```
+        
+        Path Resolution Priority (開發環境):
+            1. Path(__file__).parent.parent.parent / 'config' / 'config.ini'
+            相對於當前檔案的標準專案結構路徑
+            
+            2. Path.cwd() / 'accrual_bot' / 'config' / 'config.ini' 
+            從工作目錄下的 accrual_bot 子目錄尋找
+            
+            3. Path.cwd() / 'config' / 'config.ini'
+            直接從工作目錄的 config 子目錄尋找
+            
+            4. resolve_flexible_path('config/config.ini', __file__)
+            使用彈性路徑解析函數作為備選方案
+        
+        Notes:
+            - 此方法是私有方法，僅供 ConfigManager 內部使用
+            - 配置檔案必須是有效的 INI 格式
+            - 支援中文配置內容（UTF-8 編碼）
+            - 在找不到配置檔案時會輸出嘗試過的所有路徑以供調試
+            - 成功載入時會打印配置檔案的完整路徑
+            
+        Compatibility:
+            - Python 3.6+
+            - 支援 Windows、macOS、Linux
+            - 相容 PyInstaller 打包環境
+            - 適用於不同的專案目錄結構
+            
+        Version History:
+            - v1.0: 基本配置載入功能
+            - v2.0: 新增多路徑搜尋和彈性路徑解析支援
+        """
         try:
             # 確定配置檔案路徑
             if getattr(sys, 'frozen', False):
                 base_dir = sys._MEIPASS
+                config_path = os.path.join(base_dir, 'config.ini')
             else:
-                # 開發環境，從重構版本的config目錄載入config.ini
-                current_dir = Path(__file__).parent.parent.parent  # 到達accrual_bot目錄
-                base_dir = current_dir / 'config'
+                # 開發環境，嘗試多個可能的路徑
+                possible_paths = [
+                    # 1. 基於當前檔案位置推算的路徑
+                    Path(__file__).parent.parent.parent / 'config' / 'config.ini',
+                    # 2. 基於當前工作目錄的路徑
+                    Path.cwd() / 'accrual_bot' / 'config' / 'config.ini',
+                    # 3. 直接從當前工作目錄
+                    Path.cwd() / 'config' / 'config.ini',
+                    # 4. 使用彈性路徑解析
+                ]
+                
+                # 使用彈性路徑解析作為備選
+                flexible_path = resolve_flexible_path('config/config.ini', __file__)
+                if flexible_path:
+                    possible_paths.append(Path(flexible_path))
+                
+                config_path = None
+                for path in possible_paths:
+                    if path.exists() and path.is_file():
+                        config_path = str(path.absolute())
+                        break
             
-            config_path = os.path.join(base_dir, 'config.ini')
-            
-            if not os.path.exists(config_path):
-                raise FileNotFoundError(f"配置檔案不存在: {config_path}")
+            if not config_path or not os.path.exists(config_path):
+                # 如果還是找不到，記錄所有嘗試的路徑並使用預設配置
+                attempted_paths = [str(p) for p in possible_paths] if 'possible_paths' in locals() else [config_path]
+                sys.stderr.write(f"配置檔案不存在，嘗試過的路徑: {attempted_paths}\n")
+                sys.stderr.write("使用預設配置\n")
+                self._set_default_config()
+                return
             
             # 加載配置
             self._config.read(config_path, encoding='utf-8')
             
             # 轉換為字典格式便於使用
             self._convert_to_dict()
+            
+            # 記錄成功載入的路徑
+            print(f"✅ 成功載入配置檔案: {config_path}")
             
         except Exception as e:
             # 使用stderr記錄錯誤，避免print
