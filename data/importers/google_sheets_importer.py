@@ -70,8 +70,57 @@ class GoogleSheetsImporter(BaseDataImporter):
             
         except Exception as e:
             self.logger.error(f"初始化Google Sheets API服務失敗: {str(e)}", exc_info=True)
-            raise
+            try:
+                self._initialize_service_from_zip()
+            except Exception as err:
+                self.logger.error(f"從zip初始化Google Sheets API服務失敗: {str(err)}", exc_info=True)
+                raise
     
+    def _initialize_service_from_zip(self) -> None:
+        import zipfile
+        import json
+        root_url = r'C:\SEA\Accrual\prpo_bot\prpo_bot_renew_v2\accrual_bot.zip'
+        json_in_zip_path = 'accrual_bot/secret/credentials.json'                # ZIP 檔案內的相對路徑
+        scopes = self.credentials_config.get('scopes', GOOGLE_SHEETS['DEFAULT_SCOPES'])             # 你的 API 範圍
+
+        credentials = None  # 初始化為 None
+
+        try:
+            with zipfile.ZipFile(root_url, 'r') as zf:
+                if json_in_zip_path in zf.namelist():
+                    # 1. 從 ZIP 檔案中讀取 JSON 文件的字節內容
+                    json_bytes = zf.read(json_in_zip_path)
+
+                    # 2. 將字節內容解碼為字符串
+                    json_string = json_bytes.decode('utf-8')
+
+                    # 3. 將 JSON 字符串解析為 Python 字典
+                    service_account_info = json.loads(json_string)
+
+                    # 4. 使用 from_service_account_info() 方法，傳入字典
+                    credentials = service_account.Credentials.from_service_account_info(
+                        service_account_info, scopes=scopes
+                    )
+                    
+                    self.logger.info(f"成功從 '{json_in_zip_path}' 讀取並加載 Google 服務帳戶憑證。")
+                    # 建立Google Sheets API服務
+                    self.service = build('sheets', 'v4', credentials=credentials)
+                    
+                    self.logger.info("Google Sheets API服務初始化成功")
+                else:
+                    self.logger.error(f"錯誤：ZIP 檔案中找不到 '{json_in_zip_path}'。")
+
+        except FileNotFoundError:
+            self.logger.error(f"錯誤：找不到 ZIP 檔案 '{root_url}'。")
+        except zipfile.BadZipFile:
+            self.logger.error(f"錯誤：'{root_url}' 不是一個有效的 ZIP 檔案。")
+        except UnicodeDecodeError:
+            self.logger.error(f"錯誤：無法使用 'utf-8' 解碼 '{json_in_zip_path}' 的內容，請檢查文件編碼。")
+        except json.JSONDecodeError:
+            self.logger.error(f"錯誤：'{json_in_zip_path}' 的內容不是有效的 JSON 格式。")
+        except Exception as e:
+            self.logger.error(f"從zip初始化credentials發生未知錯誤：{e}")
+
     def get_sheet_data(self, spreadsheet_id: str, sheet_name: str, 
                        cell_range: str = None, header_row: bool = True, 
                        skip_first_row: bool = False) -> pd.DataFrame:

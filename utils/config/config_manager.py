@@ -285,9 +285,55 @@ class ConfigManager:
             if not config_path or not os.path.exists(config_path):
                 # 如果還是找不到，記錄所有嘗試的路徑並使用預設配置
                 attempted_paths = [str(p) for p in possible_paths] if 'possible_paths' in locals() else [config_path]
-                self._log_warning(f"配置檔案不存在，嘗試過的路徑: {attempted_paths}，使用預設配置")
-                self._set_default_config()
-                return
+                self._log_warning(f"配置檔案不存在，嘗試過的路徑: {attempted_paths}，嘗試讀取zip內ini檔")
+
+                try:
+                    import zipfile
+
+                    root_url = r'C:\SEA\Accrual\prpo_bot\prpo_bot_renew_v2\accrual_bot.zip'  # 硬編碼到原始package url
+                    ini_in_zip_path = 'accrual_bot/config/config.ini'                       # 固定，除非專案架構異動
+                    # 1. 打開 ZIP 檔案
+                    with zipfile.ZipFile(root_url, 'r') as zf:
+                        # 2. 檢查 ini_in_zip_path 是否存在於 ZIP 檔案中
+                        if ini_in_zip_path in zf.namelist():
+                            # 3. 從 ZIP 檔案中讀取 ini 文件的內容
+                            # zf.read(ini_in_zip_path) 會返回字節數據
+                            ini_bytes = zf.read(ini_in_zip_path)
+
+                            # 4. 將字節數據轉換為字符串（需要解碼）
+                            # 然後使用 io.StringIO 將字符串包裝成一個類文件對象
+                            # configparser.read_string() 或 configparser.read_file() 都可以處理
+                            ini_string = ini_bytes.decode('utf-8')
+
+                            # 使用 read_string 直接從字符串讀取
+                            self._config.read_string(ini_string)
+                            # 或者使用 io.StringIO 模擬文件對象給 read_file
+                            # config_file_like = io.StringIO(ini_string)
+                            # _config.read_file(config_file_like)
+                            self._convert_to_dict()
+                            
+                            self._log_info(f"成功從 '{ini_in_zip_path}' 讀取配置。")
+                            return
+                        else:
+                            self._log_info(f"錯誤：ZIP 檔案中找不到 '{ini_in_zip_path}'。")
+                            self._log_info(f"ZIP 檔案內容列表：{zf.namelist()}")
+
+                except FileNotFoundError:
+                    self._log_error(f"錯誤：找不到 ZIP 檔案 '{root_url}'。使用預設配置")
+                    self._set_default_config()
+                    return
+                except zipfile.BadZipFile:
+                    self._log_error(f"錯誤：'{root_url}' 不是一個有效的 ZIP 檔案。使用預設配置")
+                    self._set_default_config()
+                    return
+                except UnicodeDecodeError:
+                    self._log_error(f"錯誤：無法使用 'utf-8' 解碼 '{ini_in_zip_path}' 的內容，請檢查文件編碼。使用預設配置")
+                    self._set_default_config()
+                    return
+                except Exception as e:
+                    self._log_error(f"發生未知錯誤：{e} 使用預設配置")
+                    self._set_default_config()
+                    return
             
             # 加載配置
             self._config.read(config_path, encoding='utf-8')
