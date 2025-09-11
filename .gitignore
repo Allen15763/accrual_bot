@@ -1,3 +1,4 @@
+secret/
 Pipfile
 Pipfile.lock
 test_*.py
