@@ -11,7 +11,7 @@ from typing import Tuple, List, Dict, Optional, Union, Any
 try:
     from .po_processor import BasePOProcessor
     from ...utils.logging import get_logger
-    from ...utils import get_unique_filename
+    from ...utils import get_unique_filename, classify_description, give_account_by_keyword
     from ...data.importers.google_sheets_importer import GoogleSheetsImporter
     from ...data.importers.async_data_importer import AsyncDataImporter  # 新增
 except ImportError:
@@ -26,7 +26,7 @@ except ImportError:
     
     from core.processors.po_processor import BasePOProcessor
     from utils.logging import get_logger
-    from utils import get_unique_filename
+    from utils import get_unique_filename, classify_description, give_account_by_keyword
     from data.importers.google_sheets_importer import GoogleSheetsImporter
     from data.importers.async_data_importer import AsyncDataImporter  # 新增
 
@@ -453,7 +453,7 @@ class SpxPOProcessor(BasePOProcessor):
             ).loc[:, 'Account Desc']
             
             # 設置Product code - SPX固定值
-            df.loc[need_to_accrual, 'Product code'] = "LG_SPX_OWN"
+            df.loc[need_to_accrual, 'Product code'] = df.loc[need_to_accrual, 'Product Code']
             
             # 設置Region_c - SPX固定值
             df.loc[need_to_accrual, 'Region_c'] = "TW"
@@ -748,6 +748,13 @@ class SpxPOProcessor(BasePOProcessor):
                 df = self.apply_validation_data_to_po(df, locker_non_discount, locker_discount, kiosk_data)
             # 格式化數據
             df = self.reformate(df)
+
+            df['CATEGORY'] = df['Item Description'].apply(classify_description)
+            # 暫時全放提供使用者參考不驗證"是否估計入帳"
+            df = give_account_by_keyword(df, 'Item Description', export_keyword=True)
+            # df['Predicted_Account'] = np.where(df['是否估計入帳'] == 'Y', df['Predicted_Account'], None)
+            # df['Matched_Keyword'] = np.where(df['是否估計入帳'] == 'Y', df['Matched_Keyword'], None)
+            df = self.is_installment(df)
             
             # 導出文件
             self._save_output(df, file_name)
@@ -853,6 +860,7 @@ class SpxPOProcessor(BasePOProcessor):
             # 定義聚合欄位
             agg_cols = [
                 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'DA', 
+                'XA', 'XB', 'XC', 'XD', 'XE', 'XF',
                 '超出櫃體安裝費', '超出櫃體運費', '裝運費'
             ]
             
@@ -1091,6 +1099,13 @@ class SpxPOProcessor(BasePOProcessor):
                 'K': r'locker\s*K(?![A-Za-z0-9])',
                 # DA類（控制主櫃）
                 'DA': r'locker\s*控制主[櫃|機]',
+                # X類
+                'XA': r'locker\s*XA(?![A-Za-z0-9])',
+                'XB': r'locker\s*XB(?![A-Za-z0-9])',
+                'XC': r'locker\s*XC(?![A-Za-z0-9])',
+                'XD': r'locker\s*XD(?![A-Za-z0-9])',
+                'XE': r'locker\s*XE(?![A-Za-z0-9])',
+                'XF': r'locker\s*XF(?![A-Za-z0-9])',
                 # 特殊種類
                 '裝運費': r'locker\s*安裝運費',
                 '超出櫃體安裝費': r'locker\s*超出櫃體安裝費', 
@@ -1203,7 +1218,8 @@ class SpxPOProcessor(BasePOProcessor):
             
             # 按照優先級順序檢查模式（特殊類型優先，避免誤匹配）
             priority_order = ['DA', '裝運費', '超出櫃體安裝費', '超出櫃體運費', 
-                              'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K']
+                              'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K',
+                              'XA', 'XB', 'XC', 'XD', 'XE', 'XF']
             
             for cabinet_type in priority_order:
                 if cabinet_type in patterns:
@@ -1324,7 +1340,7 @@ class SpxPOProcessor(BasePOProcessor):
         df_copy.loc[need_to_accrual, 'Account Name'] = 'AP,FA Clear Account'
         
         # 設置Product code - SPX固定值
-        df_copy.loc[need_to_accrual, 'Product code'] = "LG_SPX_OWN"
+        df_copy.loc[need_to_accrual, 'Product code'] = df_copy.loc[need_to_accrual, 'Product Code']
         
         # 設置Region_c - SPX固定值
         df_copy.loc[need_to_accrual, 'Region_c'] = "TW"
@@ -1449,3 +1465,20 @@ class SpxPOProcessor(BasePOProcessor):
         except Exception as e:
             self.logger.error(f"保存輸出檔案失敗: {e}")
             return None
+        
+    def is_installment(self, df: pd.DataFrame) -> pd.DataFrame:
+        df_copy = df.copy()
+        mask1 = df_copy['Item Description'].str.contains('裝修')
+        mask2 = df_copy['Item Description'].str.contains('第[一|二|三]期款項')
+
+        conditions = [
+            (mask1 & mask2),      # Condition for 'Installment'
+            (mask1)               # Condition for 'General' (if not an installment)
+        ]
+        choices = [
+            '分期',               # Value if condition 1 is met
+            '一般'                # Value if condition 2 is met
+        ]
+
+        df_copy['裝修一般/分期'] = np.select(conditions, choices, default=None)
+        return df_copy

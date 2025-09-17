@@ -108,3 +108,25 @@ format = "%(asctime)s %(levelname)s: %(message)s"
 [credentials]
 certificate_path = "./secret/credentials.json"
 scopes = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
+
+# 會計科目與關鍵字的對應規則
+[account_rules]
+"520012" = '繳費機租賃費|印表機租金|Plastic pallet|事務機租賃|Water dispenser rental|事務機移機'
+"520013" = '\^Leased\^'  # 注意: TOML 中反斜線需要轉義，所以 \^ 變成 \\^
+"520014" = 'Cleaning fee|消毒|removal fee|SOC Daily necessities|保全服務費|防治|封鈔袋'
+"520016" = '文具用品|破壞袋|Office Stationery|stationery and consumables|生活用品|營運用品|paper|PDA Gungrip|PDA LCD Protector'
+"520017" = 'tape|膠帶|退貨組_|物流袋|膠膜'
+"520018" = '門市室內標示|intermediary fee|貼紙|政府審查規費Interior Decoration application fee'
+"520019" = 'PDA|滅火器工程|Office Hardware|門市小圓招|門市斜坡架|APP新安裝|監視器工程|Guardrail equipment|CCTV|門市貨架增設|門市寄件設備零件|門市智慧監控直立主機|門市智慧監控授權卡片|門市智慧監控硬碟'
+"520025" = '倉庫管理費'
+"520026" = '維護費|關轉工程|保養工程|維修|撤櫃|智取店撤除|APP 其他檢修|退租撤店工程|監視器改善工程|Repair|replacement|maintenance'
+"520028" = 'Bottled water'
+"520030" = 'Warehouse Temp Salary|派車費用'
+"520033" = 'Stacker|pallet truck|Stacker rental|堆高機'
+"520036" = '管理費'
+"520037" = 'Shopee Xpress Temp'
+"600301" = 'Employee Welfare Medical Fee'
+"610104" = '計張費'
+"610105" = 'APP 人數上限擴充'
+"610110" = 'SPX門市發票代傳至財政部及營業稅申報檔相關服務'
+"650005" = 'shipping fee|Logistics Fee'

@@ -475,3 +475,112 @@ def memory_efficient_operation(df: pd.DataFrame, operation: callable,
         
     except Exception as e:
         raise ValueError(f"記憶體高效操作時出錯: {str(e)}")
+    
+def classify_description(description: str) -> str:
+    """
+    Classifies a description string into a category based on regex patterns.
+
+    Args:
+        description: The description string to classify.
+
+    Returns:
+        The category label for the description.
+    """
+    # Define the regex patterns and their corresponding labels
+    patterns = {
+        # --- 新增與調整的分類 ---
+        'Management Fee': r'管理費',
+        'Employee Welfare': r'(?i)^(?!.*Postage and Courier).*(?:Welfare|體檢)',
+        'Equipment Rental': r'(?i)租賃費|租賃第|月租費',
+        'IT Hardware': r'(?i)IT - EE - FS|cisco|meraki',
+        'Transportation Fees': r'(?i)^(?!.*Travel).*(?:etag|紅單|ticket)',
+        'Printing & Stationery': r'(?i)^(?!.*Postage and Courier).*(?:Printing and Stationery|影印|stationery|tape|膠帶|文宣)',
+        'Legal/Consulting Fees': r'(?i)^(?!.*Travel).*(?:legal consultant|公證)',
+
+        # --- 原有的分類 ---
+        'Rental': r'(?i)rental|租金',
+        'Deposit': r'押金設算息|押金',
+        'Logistics': r'(?i)^(?!.*(?:安裝運費|櫃體運費)).*(?:logistics|shipping fee|運費|運什費)',
+        'Salary & Agency Fee': r'(?i)salary|agency fee',
+        'Utilities': r'(?i)^(?!.*Supplies).*(?:水費|電費|internet|telephone|telecom|飲水|Utilities|Electricity)',
+        # 排除 "Travel" 的維修費用
+        'Repair & Maintenance': r'(?i)^(?!.*Travel).*(?:維修|修繕|工程|cleaning)',
+        'Supplies': r'(?i)supplies|consumables|equipment|mouse|battery|pda|cctv|pallet|硬體|hardware|手工具|標示',
+        'Travel Expense': r'(?i)Travel Exp.',
+        'Insurance': r'(?i)insurance|保險',
+        'Postage & Courier': r'(?i)postage and courier|郵資',
+        # 將服務費放在較後面，避免攔截掉更具體的項目
+        'Service Fee': r'(?i)service fee|服務費|service charge',
+    }
+
+    # Iterate through the patterns and return the first match
+    for label, pattern in patterns.items():
+        if re.search(pattern, description):
+            return label
+
+    # If no pattern matches, classify as Miscellaneous
+    return 'Miscellaneous'
+
+def give_account_by_keyword(df, column_name, rules=None, export_keyword=False):
+    """
+    根據指定欄位中的關鍵字，為 DataFrame 新增科目代碼欄位。
+    可選擇性地匯出匹配到的關鍵字。
+
+    Args:
+        df (pd.DataFrame): 要處理的 DataFrame。
+        column_name (str): 包含關鍵字描述的欄位名稱。
+        rules (list): 一個包含 (account, regex_pattern) 元組的規則列表。
+        export_keyword (bool, optional): 如果為 True，則會額外新增一個 'Matched_Keyword' 欄位。
+                                         預設為 False。
+
+    Returns:
+        pd.DataFrame: 'Predicted_Account' 和 (可選的) 'Matched_Keyword' 欄位的 DataFrame。
+    """
+    # 步驟 1: 規則列表現在從函數參數傳入，不再硬編碼。
+    import tomllib
+
+    def load_rules_from_toml(file_path):
+        """
+        從指定的 TOML 檔案中載入規則。
+
+        Args:
+            file_path (str): TOML 檔案的路徑。
+
+        Returns:
+            list: 一個包含 (account, regex_pattern) 元組的列表。
+        """
+        with open(file_path, "rb") as f:
+            data = tomllib.load(f)
+        # 將字典轉換為原始程式碼所使用的 (key, value) 元組列表格式
+        rules = list(data.get('account_rules', {}).items())
+        return rules
+    rules = load_rules_from_toml(r"C:\SEA\Accrual\prpo_bot\accrual_bot\accrual_bot\config\stagging.toml")
+    
+    # 步驟 2: 修改輔助函數，使其返回 (科目, 匹配到的關鍵字) 的元組 (tuple)
+    def find_match_details(text):
+        if not isinstance(text, str):
+            return None, None
+
+        for account, keywords_regex in rules:
+            # re.search 返回一個 match object，如果沒有匹配則返回 None
+            match = re.search(keywords_regex, text, re.IGNORECASE)
+            if match:
+                # match.group(0) 會返回整個匹配到的字串
+                return account, match.group(0)
+
+        # 如果所有規則都沒匹配到，返回兩個 None
+        return None, None
+
+    # 步驟 3: 應用函數並根據 export_keyword 參數決定輸出
+    # .apply 會返回一個包含 (account, keyword) 元組的 Series
+    results = df[column_name].apply(find_match_details)
+
+    # 將元組 Series 拆分成兩個新的欄位
+    # .str[0] 提取每個元組的第一個元素 (科目)
+    # .str[1] 提取每個元組的第二個元素 (關鍵字)
+    df['Predicted_Account'] = results.str[0]
+
+    if export_keyword:
+        df['Matched_Keyword'] = results.str[1]
+
+    return df
