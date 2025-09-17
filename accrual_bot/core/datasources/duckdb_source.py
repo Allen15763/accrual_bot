@@ -1,5 +1,5 @@
 """
-DuckDB數據源實現
+DuckDB數據源實現 - 修復併發問題版本
 """
 
 import pandas as pd
@@ -10,6 +10,8 @@ import asyncio
 import logging
 import json
 import threading
+import os
+import time
 from concurrent.futures import ThreadPoolExecutor
 
 try:
@@ -21,7 +23,7 @@ except ImportError:
 
 
 class DuckDBSource(DataSource):
-    """DuckDB數據源"""
+    """DuckDB數據源 - 修復版本"""
     
     # 類級別的線程池
     _executor = ThreadPoolExecutor(max_workers=2)  # DuckDB連接較重，減少線程數
@@ -41,6 +43,9 @@ class DuckDBSource(DataSource):
         # 使用線程本地存儲來管理連接，避免線程間共享連接
         self._local = threading.local()
         self._lock = threading.Lock()  # 用於保護連接創建
+        self._async_lock = asyncio.Lock()  # 異步操作鎖
+        self._closed = False
+        self._connections = set()  # 追蹤所有連接
         
         # 初始化主連接
         self._init_connection()
@@ -51,10 +56,19 @@ class DuckDBSource(DataSource):
             self.logger.info(f"Initializing DuckDB: {self.db_path}")
             # 主線程連接
             self._main_conn = duckdb.connect(self.db_path, read_only=self.read_only)
+            self._connections.add(self._main_conn)
             
             # 設置一些優化參數
             self._main_conn.execute("SET memory_limit='4GB'")
             self._main_conn.execute("SET threads TO 4")
+            
+            # 如果是文件數據庫，啟用WAL模式提高併發性能
+            if self.db_path != ':memory:' and not self.read_only:
+                try:
+                    self._main_conn.execute("PRAGMA journal_mode=WAL;")
+                    self.logger.debug("Enabled WAL mode for better concurrency")
+                except Exception as wal_error:
+                    self.logger.warning(f"Could not enable WAL mode: {wal_error}")
             
             self.logger.info("Successfully initialized DuckDB")
         except Exception as e:
@@ -66,18 +80,29 @@ class DuckDBSource(DataSource):
         獲取當前線程的連接
         每個線程都有自己的連接，避免線程安全問題
         """
+        if self._closed:
+            raise RuntimeError("DuckDB connection has been closed")
+            
         # 檢查當前線程是否已有連接
-        if not hasattr(self._local, 'conn'):
+        if not hasattr(self._local, 'conn') or self._local.conn is None:
             with self._lock:
                 # 雙重檢查
-                if not hasattr(self._local, 'conn'):
+                if not hasattr(self._local, 'conn') or self._local.conn is None:
                     # 為當前線程創建新連接
                     self.logger.debug(f"Creating new connection for thread {threading.current_thread().name}")
                     self._local.conn = duckdb.connect(self.db_path, read_only=self.read_only)
+                    self._connections.add(self._local.conn)
                     
                     # 設置優化參數
                     self._local.conn.execute("SET memory_limit='4GB'")
                     self._local.conn.execute("SET threads TO 4")
+                    
+                    # 如果是文件數據庫，啟用WAL模式
+                    if self.db_path != ':memory:' and not self.read_only:
+                        try:
+                            self._local.conn.execute("PRAGMA journal_mode=WAL;")
+                        except Exception:
+                            pass  # 忽略WAL模式錯誤
         
         return self._local.conn
     
@@ -108,19 +133,25 @@ class DuckDBSource(DataSource):
             try:
                 conn = self._get_connection()
                 self.logger.debug(f"Executing query: {query[:100]}...")
-                result = conn.execute(query).df()
+                
+                # 使用事務確保讀取一致性
+                with conn.begin():
+                    result = conn.execute(query).df()
+                
                 self.logger.info(f"Query returned {len(result)} rows")
                 return result
             except Exception as e:
                 self.logger.error(f"Query execution failed: {str(e)}")
                 raise
         
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(self._executor, execute_query)
+        # 使用異步鎖確保併發安全
+        async with self._async_lock:
+            loop = asyncio.get_event_loop()
+            return await loop.run_in_executor(self._executor, execute_query)
     
     async def write(self, data: pd.DataFrame, **kwargs) -> bool:
         """
-        異步寫入數據
+        異步寫入數據 - 改進版本，確保事務完整性
         
         Args:
             data: 要寫入的DataFrame
@@ -136,41 +167,68 @@ class DuckDBSource(DataSource):
         mode = kwargs.get('mode', 'replace')  # replace, append
         
         def write_data():
+            conn = None
             try:
                 conn = self._get_connection()
                 self.logger.info(f"Writing {len(data)} rows to table {table_name}")
                 
-                # 註冊DataFrame到當前連接
-                conn.register('temp_df', data)
-                
-                if mode == 'replace':
-                    # 刪除並重建表
-                    conn.execute(f"DROP TABLE IF EXISTS {table_name}")
-                    conn.execute(f"CREATE TABLE {table_name} AS SELECT * FROM temp_df")
-                elif mode == 'append':
-                    # 檢查表是否存在
-                    tables = conn.execute("SHOW TABLES").df()
-                    if table_name in tables['name'].values:
-                        # 追加到現有表
-                        conn.execute(f"INSERT INTO {table_name} SELECT * FROM temp_df")
-                    else:
-                        # 創建新表
+                # 使用顯式事務確保數據完整性
+                with conn.begin():
+                    # 註冊DataFrame到當前連接
+                    conn.register('temp_df', data)
+                    
+                    if mode == 'replace':
+                        # 刪除並重建表
+                        conn.execute(f"DROP TABLE IF EXISTS {table_name}")
                         conn.execute(f"CREATE TABLE {table_name} AS SELECT * FROM temp_df")
-                else:
-                    raise ValueError(f"Unsupported write mode: {mode}")
+                    elif mode == 'append':
+                        # 檢查表是否存在
+                        try:
+                            tables = conn.execute("SHOW TABLES").df()
+                            table_exists = table_name in tables['name'].values if not tables.empty else False
+                        except Exception:
+                            # 如果SHOW TABLES失敗，嘗試查詢表
+                            try:
+                                conn.execute(f"SELECT 1 FROM {table_name} LIMIT 1")
+                                table_exists = True
+                            except Exception:
+                                table_exists = False
+                        
+                        if table_exists:
+                            # 追加到現有表
+                            conn.execute(f"INSERT INTO {table_name} SELECT * FROM temp_df")
+                        else:
+                            # 創建新表
+                            conn.execute(f"CREATE TABLE {table_name} AS SELECT * FROM temp_df")
+                    else:
+                        raise ValueError(f"Unsupported write mode: {mode}")
+                    
+                    # 確保事務提交前數據已寫入
+                    conn.commit()
                 
                 # 清理臨時表
-                conn.unregister('temp_df')
+                try:
+                    conn.unregister('temp_df')
+                except Exception:
+                    pass  # 忽略清理錯誤
                 
                 self.logger.info(f"Successfully wrote data to {table_name}")
                 return True
                 
             except Exception as e:
                 self.logger.error(f"Failed to write data: {str(e)}")
+                # 如果有事務，嘗試回滾
+                if conn:
+                    try:
+                        conn.rollback()
+                    except Exception:
+                        pass
                 return False
         
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(self._executor, write_data)
+        # 使用異步鎖確保寫入操作的原子性
+        async with self._async_lock:
+            loop = asyncio.get_event_loop()
+            return await loop.run_in_executor(self._executor, write_data)
     
     def get_metadata(self) -> Dict[str, Any]:
         """
@@ -189,7 +247,7 @@ class DuckDBSource(DataSource):
         try:
             # 獲取所有表
             tables = conn.execute("SHOW TABLES").df()
-            metadata['tables'] = tables.to_dict('records')
+            metadata['tables'] = tables.to_dict('records') if not tables.empty else []
             metadata['num_tables'] = len(tables)
             
             # 獲取數據庫大小（如果是文件數據庫）
@@ -207,7 +265,7 @@ class DuckDBSource(DataSource):
     
     async def execute(self, sql: str, params: Optional[Tuple] = None) -> pd.DataFrame:
         """
-        執行任意SQL語句
+        執行任意SQL語句 - 改進版本
         
         Args:
             sql: SQL語句
@@ -221,25 +279,27 @@ class DuckDBSource(DataSource):
                 conn = self._get_connection()
                 self.logger.debug(f"Executing SQL: {sql[:100]}...")
                 
-                if params:
-                    result = conn.execute(sql, params)
-                else:
-                    result = conn.execute(sql)
-                
-                # 嘗試獲取結果（某些語句可能沒有結果）
-                try:
-                    df = result.df()
-                    return df
-                except Exception as err:
-                    self.logger.error(f'{err}')
-                    return pd.DataFrame()
+                # 使用事務確保SQL執行的原子性
+                with conn.begin():
+                    if params:
+                        result = conn.execute(sql, params)
+                    else:
+                        result = conn.execute(sql)
                     
+                    # 嘗試獲取結果（某些語句可能沒有結果）
+                    try:
+                        df = result.df()
+                        return df
+                    except Exception:
+                        return pd.DataFrame()
+                        
             except Exception as e:
                 self.logger.error(f"SQL execution failed: {str(e)}")
                 raise
         
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(self._executor, execute_sql)
+        async with self._async_lock:
+            loop = asyncio.get_event_loop()
+            return await loop.run_in_executor(self._executor, execute_sql)
     
     async def create_table(self, table_name: str, schema: Dict[str, str]) -> bool:
         """
@@ -291,8 +351,12 @@ class DuckDBSource(DataSource):
         Returns:
             List[str]: 表名列表
         """
-        result = await self.execute("SHOW TABLES")
-        return result['name'].tolist() if 'name' in result.columns else []
+        try:
+            result = await self.execute("SHOW TABLES")
+            return result['name'].tolist() if 'name' in result.columns else []
+        except Exception as e:
+            self.logger.error(f"Failed to list tables: {str(e)}")
+            return []
     
     async def get_table_info(self, table_name: str) -> Dict[str, Any]:
         """
@@ -325,9 +389,9 @@ class DuckDBSource(DataSource):
                 """)
                 if not size_result.empty and size_result['size_bytes'].iloc[0] is not None:
                     info['size_bytes'] = int(size_result['size_bytes'].iloc[0])
-            except Exception as err:
+            except Exception:
                 # 某些版本的DuckDB可能不支援這個函數
-                self.logger.error(f'{err}')
+                pass
             
         except Exception as e:
             self.logger.warning(f"Could not get table info: {str(e)}")
@@ -464,19 +528,52 @@ class DuckDBSource(DataSource):
             return False
     
     async def close(self):
-        """關閉數據庫連接"""
-        # 關閉主連接
-        if hasattr(self, '_main_conn'):
-            self._main_conn.close()
-            self._main_conn = None
-        
-        # 關閉所有線程本地連接
-        if hasattr(self, '_local'):
-            if hasattr(self._local, 'conn'):
-                self._local.conn.close()
-                delattr(self._local, 'conn')
-        
-        self.logger.info("Closed DuckDB connections")
+        """關閉數據庫連接 - 改進版本，確保資源清理"""
+        async with self._async_lock:
+            if self._closed:
+                return
+                
+            self._closed = True
+            
+            try:
+                # 等待所有正在執行的操作完成
+                await asyncio.sleep(0.1)
+                
+                # 關閉所有追蹤的連接
+                for conn in list(self._connections):
+                    try:
+                        if conn:
+                            conn.close()
+                    except Exception as e:
+                        self.logger.warning(f"Error closing connection: {e}")
+                
+                self._connections.clear()
+                
+                # 關閉主連接
+                if hasattr(self, '_main_conn') and self._main_conn:
+                    try:
+                        self._main_conn.close()
+                        self._main_conn = None
+                    except Exception as e:
+                        self.logger.warning(f"Error closing main connection: {e}")
+                
+                # 清理線程本地連接
+                if hasattr(self, '_local'):
+                    if hasattr(self._local, 'conn') and self._local.conn:
+                        try:
+                            self._local.conn.close()
+                            delattr(self._local, 'conn')
+                        except Exception as e:
+                            self.logger.warning(f"Error closing local connection: {e}")
+                
+                self.logger.info("Closed DuckDB connections")
+                
+                # Windows下額外等待文件釋放
+                if self.db_path != ':memory:' and os.name == 'nt':
+                    await asyncio.sleep(0.5)
+                    
+            except Exception as e:
+                self.logger.error(f"Error during cleanup: {str(e)}")
     
     @classmethod
     def create_memory_db(cls, **kwargs) -> 'DuckDBSource':
@@ -524,3 +621,33 @@ class DuckDBSource(DataSource):
         """清理類級別的線程池（在程式結束時調用）"""
         if hasattr(cls, '_executor'):
             cls._executor.shutdown(wait=True)
+
+
+# 工具函數：安全的檔案清理
+def safe_file_cleanup(file_path: Path, max_retries: int = 3, delay: float = 0.5) -> bool:
+    """
+    安全的檔案清理，處理Windows文件鎖定問題
+    
+    Args:
+        file_path: 要刪除的檔案路徑
+        max_retries: 最大重試次數
+        delay: 重試間隔（秒）
+        
+    Returns:
+        bool: 是否成功刪除
+    """
+    for attempt in range(max_retries):
+        try:
+            if file_path.exists():
+                file_path.unlink()
+            return True
+        except (PermissionError, OSError) as e:
+            if attempt < max_retries - 1:
+                time.sleep(delay)
+            else:
+                # 最後一次嘗試失敗，記錄警告但不拋出異常
+                logging.getLogger(__name__).warning(
+                    f"無法刪除檔案 {file_path}: {e}，跳過清理"
+                )
+                return False
+    return False
