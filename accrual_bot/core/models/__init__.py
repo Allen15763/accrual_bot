@@ -16,7 +16,6 @@ from .data_models import (
 )
 
 from .config_models import (
-    ProcessingConfig,
     EntityConfig,
     ExportConfig
 )
@@ -29,7 +28,6 @@ __all__ = [
     'FieldMapping',
     'EntityType',
     'ProcessingType',
-    'ProcessingConfig',
     'EntityConfig',
     'ExportConfig'
 ]
