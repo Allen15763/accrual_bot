@@ -1,5 +1,5 @@
 """
-DuckDB數據源實現 - 修復併發問題版本
+DuckDB數據源實現 - 保守修復版本
 """
 
 import pandas as pd
@@ -23,10 +23,10 @@ except ImportError:
 
 
 class DuckDBSource(DataSource):
-    """DuckDB數據源 - 修復版本"""
+    """DuckDB數據源 - 保守修復版本"""
     
-    # 類級別的線程池
-    _executor = ThreadPoolExecutor(max_workers=2)  # DuckDB連接較重，減少線程數
+    # 類級別的線程池 - 增加線程數以支持更好的併發
+    _executor = ThreadPoolExecutor(max_workers=4)  # 增加線程數
     
     def __init__(self, config: DataSourceConfig):
         """
@@ -43,9 +43,7 @@ class DuckDBSource(DataSource):
         # 使用線程本地存儲來管理連接，避免線程間共享連接
         self._local = threading.local()
         self._lock = threading.Lock()  # 用於保護連接創建
-        self._async_lock = asyncio.Lock()  # 異步操作鎖
         self._closed = False
-        self._connections = set()  # 追蹤所有連接
         
         # 初始化主連接
         self._init_connection()
@@ -56,19 +54,10 @@ class DuckDBSource(DataSource):
             self.logger.info(f"Initializing DuckDB: {self.db_path}")
             # 主線程連接
             self._main_conn = duckdb.connect(self.db_path, read_only=self.read_only)
-            self._connections.add(self._main_conn)
             
             # 設置一些優化參數
             self._main_conn.execute("SET memory_limit='4GB'")
             self._main_conn.execute("SET threads TO 4")
-            
-            # 如果是文件數據庫，啟用WAL模式提高併發性能
-            if self.db_path != ':memory:' and not self.read_only:
-                try:
-                    self._main_conn.execute("PRAGMA journal_mode=WAL;")
-                    self.logger.debug("Enabled WAL mode for better concurrency")
-                except Exception as wal_error:
-                    self.logger.warning(f"Could not enable WAL mode: {wal_error}")
             
             self.logger.info("Successfully initialized DuckDB")
         except Exception as e:
@@ -77,8 +66,7 @@ class DuckDBSource(DataSource):
     
     def _get_connection(self) -> duckdb.DuckDBPyConnection:
         """
-        獲取當前線程的連接
-        每個線程都有自己的連接，避免線程安全問題
+        獲取當前線程的連接，添加重連機制
         """
         if self._closed:
             raise RuntimeError("DuckDB connection has been closed")
@@ -90,19 +78,30 @@ class DuckDBSource(DataSource):
                 if not hasattr(self._local, 'conn') or self._local.conn is None:
                     # 為當前線程創建新連接
                     self.logger.debug(f"Creating new connection for thread {threading.current_thread().name}")
-                    self._local.conn = duckdb.connect(self.db_path, read_only=self.read_only)
-                    self._connections.add(self._local.conn)
-                    
-                    # 設置優化參數
-                    self._local.conn.execute("SET memory_limit='4GB'")
-                    self._local.conn.execute("SET threads TO 4")
-                    
-                    # 如果是文件數據庫，啟用WAL模式
-                    if self.db_path != ':memory:' and not self.read_only:
-                        try:
-                            self._local.conn.execute("PRAGMA journal_mode=WAL;")
-                        except Exception:
-                            pass  # 忽略WAL模式錯誤
+                    try:
+                        self._local.conn = duckdb.connect(self.db_path, read_only=self.read_only)
+                        
+                        # 設置優化參數
+                        self._local.conn.execute("SET memory_limit='4GB'")
+                        self._local.conn.execute("SET threads TO 4")
+                        
+                    except Exception as e:
+                        self.logger.error(f"Failed to create connection: {e}")
+                        raise
+        
+        # 檢查連接是否有效，如果無效則重新創建
+        try:
+            # 簡單的連接測試
+            self._local.conn.execute("SELECT 1").fetchone()
+        except Exception:
+            self.logger.warning("Connection invalid, recreating...")
+            try:
+                self._local.conn = duckdb.connect(self.db_path, read_only=self.read_only)
+                self._local.conn.execute("SET memory_limit='4GB'")
+                self._local.conn.execute("SET threads TO 4")
+            except Exception as e:
+                self.logger.error(f"Failed to recreate connection: {e}")
+                raise
         
         return self._local.conn
     
@@ -130,28 +129,35 @@ class DuckDBSource(DataSource):
             query = f"{query} LIMIT {limit}"
         
         def execute_query():
-            try:
-                conn = self._get_connection()
-                self.logger.debug(f"Executing query: {query[:100]}...")
-                
-                # 使用事務確保讀取一致性
-                with conn.begin():
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    conn = self._get_connection()
+                    self.logger.debug(f"Executing query: {query[:100]}...")
                     result = conn.execute(query).df()
-                
-                self.logger.info(f"Query returned {len(result)} rows")
-                return result
-            except Exception as e:
-                self.logger.error(f"Query execution failed: {str(e)}")
-                raise
+                    self.logger.info(f"Query returned {len(result)} rows")
+                    return result
+                except Exception as e:
+                    if attempt < max_retries - 1:
+                        self.logger.warning(f"Query attempt {attempt + 1} failed, retrying: {e}")
+                        # 清除可能損壞的連接
+                        if hasattr(self._local, 'conn'):
+                            try:
+                                self._local.conn.close()
+                            except:
+                                pass
+                            self._local.conn = None
+                        time.sleep(0.1)
+                    else:
+                        self.logger.error(f"Query execution failed after {max_retries} attempts: {str(e)}")
+                        raise
         
-        # 使用異步鎖確保併發安全
-        async with self._async_lock:
-            loop = asyncio.get_event_loop()
-            return await loop.run_in_executor(self._executor, execute_query)
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(self._executor, execute_query)
     
     async def write(self, data: pd.DataFrame, **kwargs) -> bool:
         """
-        異步寫入數據 - 改進版本，確保事務完整性
+        異步寫入數據 - 改進錯誤處理
         
         Args:
             data: 要寫入的DataFrame
@@ -167,13 +173,12 @@ class DuckDBSource(DataSource):
         mode = kwargs.get('mode', 'replace')  # replace, append
         
         def write_data():
-            conn = None
-            try:
-                conn = self._get_connection()
-                self.logger.info(f"Writing {len(data)} rows to table {table_name}")
-                
-                # 使用顯式事務確保數據完整性
-                with conn.begin():
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    conn = self._get_connection()
+                    self.logger.info(f"Writing {len(data)} rows to table {table_name}")
+                    
                     # 註冊DataFrame到當前連接
                     conn.register('temp_df', data)
                     
@@ -203,32 +208,32 @@ class DuckDBSource(DataSource):
                     else:
                         raise ValueError(f"Unsupported write mode: {mode}")
                     
-                    # 確保事務提交前數據已寫入
-                    conn.commit()
-                
-                # 清理臨時表
-                try:
-                    conn.unregister('temp_df')
-                except Exception:
-                    pass  # 忽略清理錯誤
-                
-                self.logger.info(f"Successfully wrote data to {table_name}")
-                return True
-                
-            except Exception as e:
-                self.logger.error(f"Failed to write data: {str(e)}")
-                # 如果有事務，嘗試回滾
-                if conn:
+                    # 清理臨時表
                     try:
-                        conn.rollback()
+                        conn.unregister('temp_df')
                     except Exception:
-                        pass
-                return False
+                        pass  # 忽略清理錯誤
+                    
+                    self.logger.info(f"Successfully wrote data to {table_name}")
+                    return True
+                    
+                except Exception as e:
+                    if attempt < max_retries - 1:
+                        self.logger.warning(f"Write attempt {attempt + 1} failed, retrying: {e}")
+                        # 清除可能損壞的連接
+                        if hasattr(self._local, 'conn'):
+                            try:
+                                self._local.conn.close()
+                            except:
+                                pass
+                            self._local.conn = None
+                        time.sleep(0.1)
+                    else:
+                        self.logger.error(f"Write failed after {max_retries} attempts: {str(e)}")
+                        return False
         
-        # 使用異步鎖確保寫入操作的原子性
-        async with self._async_lock:
-            loop = asyncio.get_event_loop()
-            return await loop.run_in_executor(self._executor, write_data)
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(self._executor, write_data)
     
     def get_metadata(self) -> Dict[str, Any]:
         """
@@ -237,14 +242,14 @@ class DuckDBSource(DataSource):
         Returns:
             Dict[str, Any]: 元數據信息
         """
-        conn = self._get_connection()
-        
-        metadata = {
-            'db_path': self.db_path,
-            'read_only': self.read_only
-        }
-        
         try:
+            conn = self._get_connection()
+            
+            metadata = {
+                'db_path': self.db_path,
+                'read_only': self.read_only
+            }
+            
             # 獲取所有表
             tables = conn.execute("SHOW TABLES").df()
             metadata['tables'] = tables.to_dict('records') if not tables.empty else []
@@ -260,12 +265,13 @@ class DuckDBSource(DataSource):
             
         except Exception as e:
             self.logger.warning(f"Could not retrieve metadata: {str(e)}")
+            metadata = {'db_path': self.db_path, 'read_only': self.read_only}
         
         return metadata
     
     async def execute(self, sql: str, params: Optional[Tuple] = None) -> pd.DataFrame:
         """
-        執行任意SQL語句 - 改進版本
+        執行任意SQL語句 - 改進錯誤處理
         
         Args:
             sql: SQL語句
@@ -275,12 +281,12 @@ class DuckDBSource(DataSource):
             pd.DataFrame: 執行結果（如果有）
         """
         def execute_sql():
-            try:
-                conn = self._get_connection()
-                self.logger.debug(f"Executing SQL: {sql[:100]}...")
-                
-                # 使用事務確保SQL執行的原子性
-                with conn.begin():
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    conn = self._get_connection()
+                    self.logger.debug(f"Executing SQL: {sql[:100]}...")
+                    
                     if params:
                         result = conn.execute(sql, params)
                     else:
@@ -293,13 +299,23 @@ class DuckDBSource(DataSource):
                     except Exception:
                         return pd.DataFrame()
                         
-            except Exception as e:
-                self.logger.error(f"SQL execution failed: {str(e)}")
-                raise
+                except Exception as e:
+                    if attempt < max_retries - 1:
+                        self.logger.warning(f"SQL attempt {attempt + 1} failed, retrying: {e}")
+                        # 清除可能損壞的連接
+                        if hasattr(self._local, 'conn'):
+                            try:
+                                self._local.conn.close()
+                            except:
+                                pass
+                            self._local.conn = None
+                        time.sleep(0.1)
+                    else:
+                        self.logger.error(f"SQL execution failed after {max_retries} attempts: {str(e)}")
+                        raise
         
-        async with self._async_lock:
-            loop = asyncio.get_event_loop()
-            return await loop.run_in_executor(self._executor, execute_sql)
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(self._executor, execute_sql)
     
     async def create_table(self, table_name: str, schema: Dict[str, str]) -> bool:
         """
@@ -528,52 +544,38 @@ class DuckDBSource(DataSource):
             return False
     
     async def close(self):
-        """關閉數據庫連接 - 改進版本，確保資源清理"""
-        async with self._async_lock:
-            if self._closed:
-                return
-                
-            self._closed = True
+        """關閉數據庫連接 - 改進版本"""
+        if self._closed:
+            return
             
-            try:
-                # 等待所有正在執行的操作完成
-                await asyncio.sleep(0.1)
-                
-                # 關閉所有追蹤的連接
-                for conn in list(self._connections):
+        self._closed = True
+        
+        try:
+            # 關閉主連接
+            if hasattr(self, '_main_conn') and self._main_conn:
+                try:
+                    self._main_conn.close()
+                    self._main_conn = None
+                except Exception as e:
+                    self.logger.warning(f"Error closing main connection: {e}")
+            
+            # 關閉線程本地連接
+            if hasattr(self, '_local'):
+                if hasattr(self._local, 'conn') and self._local.conn:
                     try:
-                        if conn:
-                            conn.close()
+                        self._local.conn.close()
+                        delattr(self._local, 'conn')
                     except Exception as e:
-                        self.logger.warning(f"Error closing connection: {e}")
+                        self.logger.warning(f"Error closing local connection: {e}")
+            
+            self.logger.info("Closed DuckDB connections")
+            
+            # Windows下額外等待文件釋放
+            if self.db_path != ':memory:' and os.name == 'nt':
+                await asyncio.sleep(0.3)
                 
-                self._connections.clear()
-                
-                # 關閉主連接
-                if hasattr(self, '_main_conn') and self._main_conn:
-                    try:
-                        self._main_conn.close()
-                        self._main_conn = None
-                    except Exception as e:
-                        self.logger.warning(f"Error closing main connection: {e}")
-                
-                # 清理線程本地連接
-                if hasattr(self, '_local'):
-                    if hasattr(self._local, 'conn') and self._local.conn:
-                        try:
-                            self._local.conn.close()
-                            delattr(self._local, 'conn')
-                        except Exception as e:
-                            self.logger.warning(f"Error closing local connection: {e}")
-                
-                self.logger.info("Closed DuckDB connections")
-                
-                # Windows下額外等待文件釋放
-                if self.db_path != ':memory:' and os.name == 'nt':
-                    await asyncio.sleep(0.5)
-                    
-            except Exception as e:
-                self.logger.error(f"Error during cleanup: {str(e)}")
+        except Exception as e:
+            self.logger.error(f"Error during cleanup: {str(e)}")
     
     @classmethod
     def create_memory_db(cls, **kwargs) -> 'DuckDBSource':
