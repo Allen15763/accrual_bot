@@ -24,13 +24,17 @@ from .business import (
 # MOB特定步驟
 from .mob_steps import (
     MOBStatusStep,
-    MOBAccrualStep
+    MOBAccrualStep,
+    MOBDepartmentStep,
+    MOBValidationStep
 )
 
 # SPT特定步驟
 from .spt_steps import (
     SPTStatusStep,
-    SPTDepartmentStep
+    SPTDepartmentStep,
+    SPTAccrualStep,
+    SPTValidationStep
 )
 
 # SPX特定步驟
@@ -38,7 +42,9 @@ from .spx_steps import (
     SPXDepositCheckStep,
     SPXClosingListIntegrationStep,
     SPXRentProcessingStep,
-    SPXAssetValidationStep
+    SPXAssetValidationStep,
+    SPXComplexStatusStep,
+    SPXPPEProcessingStep
 )
 
 __all__ = [
@@ -59,14 +65,20 @@ __all__ = [
     # MOB
     'MOBStatusStep',
     'MOBAccrualStep',
+    'MOBDepartmentStep',
+    'MOBValidationStep',
     
     # SPT
     'SPTStatusStep',
     'SPTDepartmentStep',
+    'SPTAccrualStep',
+    'SPTValidationStep',
     
     # SPX
     'SPXDepositCheckStep',
     'SPXClosingListIntegrationStep',
     'SPXRentProcessingStep',
-    'SPXAssetValidationStep'
+    'SPXAssetValidationStep',
+    'SPXComplexStatusStep',
+    'SPXPPEProcessingStep'
 ]
