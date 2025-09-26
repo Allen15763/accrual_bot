@@ -4,8 +4,8 @@
 """
 
 from typing import Dict, List, Optional
-from ..pipeline import Pipeline, PipelineBuilder
-from ..steps import *
+from .pipeline import Pipeline, PipelineBuilder
+from .steps import *
 from .config_manager import PipelineConfigManager
 from .entity_strategies import EntityStrategyFactory
 

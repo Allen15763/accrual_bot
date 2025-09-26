@@ -7,9 +7,9 @@ from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Optional
 import asyncio
 
-from ..pipeline import Pipeline, PipelineBuilder
-from ..context import ProcessingContext
-from ..steps import *
+from .pipeline import Pipeline, PipelineBuilder
+from .context import ProcessingContext
+from .steps import *
 from .config_manager import PipelineConfigManager, EntityConfig
 
 

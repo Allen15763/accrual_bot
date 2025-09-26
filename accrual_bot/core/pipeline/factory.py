@@ -197,70 +197,70 @@ class PipelineFactory:
         builder = PipelineBuilder(f"{entity_type}_Full_PO", entity_type)
         
         pipeline = (builder
-                   .with_description(f"Full PO processing pipeline for {entity_type}")
-                   .with_stop_on_error(False)  # 繼續執行以收集更多錯誤
-                   .add_steps(
-                       # 數據準備
-                       DataCleaningStep(
-                           name="Clean_Data",
-                           columns_to_clean=['Item Description', 'GL#', 'Department'],
-                           required=True
-                       ),
-                       
-                       # 整合輔助數據
-                       DataIntegrationStep(
-                           name="Integrate_Previous_WP",
-                           source_name="previous_workpaper",
-                           join_columns=['PO#'],
-                           required=False
-                       ),
-                       
-                       DataIntegrationStep(
-                           name="Integrate_Procurement",
-                           source_name="procurement",
-                           join_columns=['PO#'],
-                           required=False
-                       ),
-                       
-                       # 日期處理
-                       DateFormattingStep(
-                           name="Format_Dates",
-                           date_columns={
-                               'Expected Receive Month': '%b-%y',
-                               'Submission Date': '%d-%b-%y',
-                               'PO Create Date': '%Y-%m-%d'
-                           }
-                       ),
-                       
-                       DateParsingStep(
-                           name="Parse_Description_Dates"
-                       ),
-                       
-                       # 狀態評估
-                       StatusEvaluationStep(
-                           name="Evaluate_Status",
-                           entity_type=entity_type
-                       ),
-                       
-                       # 會計調整
-                       AccountingAdjustmentStep(
-                           name="Accounting_Adjustment"
-                       ),
-                       
-                       # 驗證
-                       ValidationStep(
-                           name="Validate_Results",
-                           validations=['required_columns', 'data_types', 'business_rules']
-                       ),
-                       
-                       # 導出
-                       ExportStep(
-                           name="Export_Results",
-                           format="excel",
-                           required=False
-                       )
-                   )
-                   .build())
+                    .with_description(f"Full PO processing pipeline for {entity_type}")
+                    .with_stop_on_error(False)  # 繼續執行以收集更多錯誤
+                    .add_steps(
+                        # 數據準備
+                        DataCleaningStep(
+                            name="Clean_Data",
+                            columns_to_clean=['Item Description', 'GL#', 'Department'],
+                            required=True
+                        ),
+                        
+                        # 整合輔助數據
+                        DataIntegrationStep(
+                            name="Integrate_Previous_WP",
+                            source_name="previous_workpaper",
+                            join_columns=['PO#'],
+                            required=False
+                        ),
+                        
+                        DataIntegrationStep(
+                            name="Integrate_Procurement",
+                            source_name="procurement",
+                            join_columns=['PO#'],
+                            required=False
+                        ),
+                        
+                        # 日期處理
+                        DateFormattingStep(
+                            name="Format_Dates",
+                            date_columns={
+                                'Expected Receive Month': '%b-%y',
+                                'Submission Date': '%d-%b-%y',
+                                'PO Create Date': '%Y-%m-%d'
+                            }
+                        ),
+                        
+                        DateParsingStep(
+                            name="Parse_Description_Dates"
+                        ),
+                        
+                        # 狀態評估
+                        StatusEvaluationStep(
+                            name="Evaluate_Status",
+                            entity_type=entity_type
+                        ),
+                        
+                        # 會計調整
+                        AccountingAdjustmentStep(
+                            name="Accounting_Adjustment"
+                        ),
+                        
+                        # 驗證
+                        ValidationStep(
+                            name="Validate_Results",
+                            validations=['required_columns', 'data_types', 'business_rules']
+                        ),
+                        
+                        # 導出
+                        ExportStep(
+                            name="Export_Results",
+                            format="excel",
+                            required=False
+                        )
+                    )
+                    .build())
         
         return pipeline
     
@@ -413,18 +413,22 @@ class PipelineFactory:
 # 註冊預設步驟類型
 def register_default_steps():
     """註冊預設的步驟類型"""
-    from .steps import (
-        DataCleaningStep,
-        DateFormattingStep,
-        StatusEvaluationStep,
-        AccountingAdjustmentStep
-    )
-    
-    # 註冊基礎步驟
-    StepRegistry.register("data_cleaning", DataCleaningStep)
-    StepRegistry.register("date_formatting", DateFormattingStep)
-    StepRegistry.register("status_evaluation", StatusEvaluationStep)
-    StepRegistry.register("accounting_adjustment", AccountingAdjustmentStep)
+    try:
+        from .steps import (
+            DataCleaningStep,
+            DateFormattingStep,
+            StatusEvaluationStep,
+            AccountingAdjustmentStep
+        )
+        
+        # 註冊基礎步驟
+        StepRegistry.register("data_cleaning", DataCleaningStep)
+        StepRegistry.register("date_formatting", DateFormattingStep)
+        StepRegistry.register("status_evaluation", StatusEvaluationStep)
+        StepRegistry.register("accounting_adjustment", AccountingAdjustmentStep)
+    except ImportError as e:
+        # 如果步驟模組不存在，不要失敗
+        logging.warning(f"Could not import default steps: {e}")
     
     # 註冊工廠函數（用於更複雜的步驟創建）
     def create_conditional_step(**kwargs):

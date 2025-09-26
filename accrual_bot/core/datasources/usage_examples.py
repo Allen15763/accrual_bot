@@ -293,6 +293,56 @@ async def main():
     print("所有範例執行完成！")
     print("=" * 60)
 
+"""
+Refer C:\SEA\Accrual\prpo_bot\accrual_bot\accrual_bot\core\datasources\README.md
+4. **併發操作**
+
+用await觸發async method,USE asyncio.gather實現IO任務併發
+"""
+async def concurrent_test():
+    """這個函數現在只專注於執行一次讀取任務並返回結果"""
+    # po_file = r"C:\SEA\Accrual\prpo_bot\resources\頂一下\202503\SPT\raw\202503_purchase_order_20250704_100921 - 複製.csv"
+    # source = DataSourceFactory.create_from_file(po_file)
+    po_file = r"C:\SEA\Accrual\prpo_bot\resources\頂一下\202503\SPT\raw\PO_for前期載入.xlsx"
+    source = DataSourceFactory.create_from_file(po_file, sheet_name=0)
+    print(f"任務開始: 讀取 {po_file}")
+    df = await source.read()
+    print(f"任務完成: 讀取到 {len(df)} 筆資料")
+    return df
+
+async def main_():
+    import time
+    start_time = time.time()
+    
+    # --- 錯誤的線性方法 ---
+    print("\n--- 開始線性執行 (Sequential) ---")
+    await concurrent_test()
+    await concurrent_test()
+    await concurrent_test()
+    await concurrent_test()
+    print(f"線性執行耗時: {time.time() - start_time:.2f} 秒\n")  # 預計 > 2 秒
+    
+    start_time_concurrent = time.time()
+
+    # --- 正確的併發方法 ---
+    print("--- 開始併發執行 (Concurrent) ---")
+    # 創建一個任務列表，但此時還不執行
+    tasks = [
+        concurrent_test(),
+        concurrent_test(),
+        concurrent_test(),
+        concurrent_test()
+    ]
+    
+    # asyncio.gather 會併發地運行所有任務
+    results = await asyncio.gather(*tasks)
+    
+    print(f"\n併發執行耗時: {time.time() - start_time_concurrent:.2f} 秒")  # 預計約 1 秒
+    
+    # results 是一個列表，包含了每個任務的返回值
+    print(f"共收集到 {len(results)} 個 DataFrame 結果。")
+    df1, df2, df3, df4 = results
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    # asyncio.run(main())
+    asyncio.run(main_())
