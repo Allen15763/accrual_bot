@@ -25,9 +25,9 @@ __description__ = "Enterprise Accounting Processing Automation System with Pipel
 # 不自動導入所有模組，避免循環依賴
 # 使用者需要明確導入所需模組
 # # 核心模組導入
-# from .utils import *
-# from .core import *
-# from .data import *
+from .utils import *
+from .core import *
+from .data import *
 
 # 基本導入（安全的）
 try:

@@ -166,9 +166,10 @@ class ExcelSource(DataSource):
         
         # 嘗試獲取工作表信息
         try:
-            excel_file = pd.ExcelFile(self.file_path, engine='openpyxl')
-            metadata['sheet_names'] = excel_file.sheet_names
-            metadata['num_sheets'] = len(excel_file.sheet_names)
+            # 使用上下文管理器確保pd.ExcelFile正確關閉
+            with pd.ExcelFile(self.file_path, engine='openpyxl') as excel_file:
+                metadata['sheet_names'] = excel_file.sheet_names
+                metadata['num_sheets'] = len(excel_file.sheet_names)
         except Exception as e:
             self.logger.warning(f"Could not read sheet information: {str(e)}")
             metadata['sheet_names'] = []
@@ -185,8 +186,9 @@ class ExcelSource(DataSource):
         """
         def get_sheets_sync():
             try:
-                excel_file = pd.ExcelFile(self.file_path, engine='openpyxl')
-                return excel_file.sheet_names
+                # 使用上下文管理器確保pd.ExcelFile正確關閉
+                with pd.ExcelFile(self.file_path, engine='openpyxl') as excel_file:
+                    return excel_file.sheet_names
             except Exception as e:
                 self.logger.error(f"Error getting sheet names: {str(e)}")
                 return []

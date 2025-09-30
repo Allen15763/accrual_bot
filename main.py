@@ -12,6 +12,50 @@ sys.path.insert(0, str(current_dir))
 from accrual_bot import get_logger
 logger = get_logger('test_script')
 
+# TEST NEW MODULE
+import asyncio
+from accrual_bot.core.datasources import (
+    DataSourceFactory, 
+    DataSourceConfig, 
+    DataSourceType,
+    DuckDBSource,
+    ExcelSource
+)
+
+async def example_1_basic_usage():
+    """範例1: 基本使用 - 讀取現有的PR/PO檔案"""
+    print("\n=== 範例1: 基本使用 ===")
+    
+    # 從Excel檔案讀取
+    po_file = r"C:\SEA\Accrual\prpo_bot\resources\頂一下\202503\MOBA\raw\202503_purchase_order_20250204_151523.csv"
+    
+    # 方法1: 使用工廠自動判斷類型
+    source = DataSourceFactory.create_from_file(po_file)
+    
+    # 讀取數據
+    df = await source.read()
+    print(f"讀取到 {len(df)} 筆PO資料")
+    print(f"欄位: {df.columns.tolist()[:5]}...")  # 顯示前5個欄位
+    
+    # 篩選數據（使用pandas query語法）
+    filtered_df = await source.read(query="Amount > 10000")
+    print(f"金額大於10000的記錄: {len(filtered_df)} 筆")
+    
+    return df
+
+async def run_async_function(is_confurrent=True) -> list:
+    if is_confurrent:
+        tasks = [
+            example_1_basic_usage(),
+            example_1_basic_usage()
+        ]
+        results = await asyncio.gather(*tasks)
+        return results
+    
+    else:
+        return await example_1_basic_usage()
+    
+
 def test_mob_entity():
     """測試MOB實體功能"""
     logger.info("=== 測試MOB實體 ===")
@@ -372,3 +416,5 @@ if __name__ == "__main__":
 
     # test_mob_entity()
     # test_spt_entity()
+
+    asyncio.run(run_async_function())
