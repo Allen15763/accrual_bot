@@ -64,7 +64,7 @@ class SPTStatusStep(PipelineStep):
                 step_name=self.name,
                 status=StepStatus.SUCCESS,
                 data=df,
-                message=f"SPT status evaluation completed",
+                message="SPT status evaluation completed",
                 metadata={
                     'status_counts': status_counts,
                     'cross_month_items': cross_month_count

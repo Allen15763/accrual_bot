@@ -162,7 +162,7 @@ class Pipeline:
                 failed = True
                 self.logger.error(f"Pipeline failed with {len(failed_steps)} failed steps")
             else:
-                self.logger.info(f"Pipeline completed successfully")
+                self.logger.info("Pipeline completed successfully")
             
             # 構建執行結果
             execution_result = {
@@ -427,10 +427,10 @@ class PipelineExecutor:
         return self.pipelines.get(name)
     
     async def execute_pipeline(self,
-                              name: str,
-                              data: pd.DataFrame,
-                              processing_date: int,
-                              **kwargs) -> Dict[str, Any]:
+                               name: str,
+                               data: pd.DataFrame,
+                               processing_date: int,
+                               **kwargs) -> Dict[str, Any]:
         """
         執行指定Pipeline
         
@@ -481,10 +481,10 @@ class PipelineExecutor:
             self._running_pipelines.discard(name)
     
     async def execute_multiple(self,
-                              pipelines: List[str],
-                              data: pd.DataFrame,
-                              processing_date: int,
-                              **kwargs) -> Dict[str, Dict[str, Any]]:
+                               pipelines: List[str],
+                               data: pd.DataFrame,
+                               processing_date: int,
+                               **kwargs) -> Dict[str, Dict[str, Any]]:
         """
         執行多個Pipeline
         

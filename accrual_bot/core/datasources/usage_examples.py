@@ -348,9 +348,9 @@ async def main_():
 # 測試腳本
 async def test_memory_db():
     """測試內存數據庫 - 修復後應該正常工作"""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("測試 1: 內存數據庫")
-    print("="*60)
+    print("=" * 60)
     
     source = DuckDBSource.create_memory_db()
     
@@ -360,20 +360,20 @@ async def test_memory_db():
         'value': [10, 20, 30]
     })
     
-    print(f"\n1. 寫入數據...")
+    print("\n1. 寫入數據...")
     await source.write(df, table_name='test')
     print(f"   ✅ 寫入 {len(df)} 行")
     
-    print(f"\n2. 讀取數據...")
+    print("\n2. 讀取數據...")
     result = await source.read("SELECT * FROM test")
     print(f"   ✅ 讀取 {len(result)} 行")
     print(f"   數據預覽:\n{result}")
     
-    print(f"\n3. 查詢測試...")
+    print("\n3. 查詢測試...")
     filtered = await source.read("SELECT * FROM test WHERE value > 15")
     print(f"   ✅ 條件查詢返回 {len(filtered)} 行")
     
-    print(f"\n4. 列出表...")
+    print("\n4. 列出表...")
     tables = await source.list_tables()
     print(f"   ✅ 找到表: {tables}")
     
@@ -384,9 +384,9 @@ async def test_memory_db():
 
 async def test_file_db():
     """測試文件數據庫"""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("測試 2: 文件數據庫")
-    print("="*60)
+    print("=" * 60)
     
     db_path = 'test_file.db'
     
@@ -402,11 +402,11 @@ async def test_file_db():
         'age': [25, 30, 35]
     })
     
-    print(f"\n1. 寫入數據...")
+    print("\n1. 寫入數據...")
     await source.write(df, table_name='users')
     print(f"   ✅ 寫入 {len(df)} 行")
     
-    print(f"\n2. 讀取數據...")
+    print("\n2. 讀取數據...")
     result = await source.read("SELECT * FROM users")
     print(f"   ✅ 讀取 {len(result)} 行")
     print(f"   數據預覽:\n{result}")
@@ -414,7 +414,7 @@ async def test_file_db():
     await source.close()
     
     # 重新打開驗證持久化
-    print(f"\n3. 重新打開數據庫驗證持久化...")
+    print("\n3. 重新打開數據庫驗證持久化...")
     source2 = DuckDBSource.create_file_db(db_path)
     result2 = await source2.read("SELECT * FROM users")
     print(f"   ✅ 讀取 {len(result2)} 行（持久化成功）")
@@ -428,9 +428,9 @@ async def test_file_db():
 
 async def test_concurrent():
     """測試併發操作"""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("測試 3: 併發操作")
-    print("="*60)
+    print("=" * 60)
     db_path = 'test_file.db'
     # source = DuckDBSource.create_memory_db()
     source = DuckDBSource.create_file_db(db_path)
@@ -443,7 +443,7 @@ async def test_concurrent():
     await source.write(df, table_name='concurrent_test')
     print(f"\n準備數據: {len(df)} 行")
     
-    print(f"\n執行 10 個併發讀取...")
+    print("\n執行 10 個併發讀取...")
     tasks = [
         source.read("SELECT * FROM concurrent_test WHERE id < 10"),
         source.read("SELECT * FROM concurrent_test WHERE id >= 10 AND id < 20"),
@@ -469,9 +469,9 @@ async def test_concurrent():
 
 async def test_append_mode():
     """測試追加模式"""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("測試 4: 追加模式")
-    print("="*60)
+    print("=" * 60)
     
     db_path = 'test_file.db'
     # source = DuckDBSource.create_memory_db()
@@ -504,9 +504,9 @@ async def test_append_mode():
 
 async def phase_1_test():
     """運行所有測試"""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("DuckDB 重構版本 - 完整測試套件")
-    print("="*60)
+    print("=" * 60)
     
     try:
         # 測試 1: 內存數據庫（關鍵測試）
@@ -521,9 +521,9 @@ async def phase_1_test():
         # 測試 4: 追加模式
         await test_append_mode()
         
-        print("\n" + "="*60)
+        print("\n" + "=" * 60)
         print("🎉 所有phase_1測試通過！")
-        print("="*60)
+        print("=" * 60)
         
     except Exception as e:
         print(f"\n❌ 測試失敗: {e}")
@@ -534,9 +534,9 @@ async def phase_1_test():
 ###################################################################################################
 async def test_transaction_context_manager():
     """測試 1: Transaction context manager"""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("測試 1: Transaction Context Manager")
-    print("="*60)
+    print("=" * 60)
     
     db_path = 'test_transaction.db'
     if Path(db_path).exists():
@@ -586,9 +586,9 @@ async def test_transaction_context_manager():
 
 async def test_write_atomic():
     """測試 2: 原子寫入"""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("測試 2: 原子寫入 (write_atomic)")
-    print("="*60)
+    print("=" * 60)
     
     db_path = 'test_atomic.db'
     if Path(db_path).exists():
@@ -631,9 +631,9 @@ async def test_write_atomic():
 
 async def test_execute_transaction_complex():
     """測試 3: 複雜 transaction 操作"""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("測試 3: 複雜 Transaction 操作")
-    print("="*60)
+    print("=" * 60)
     
     db_path = 'test_complex.db'
     if Path(db_path).exists():
@@ -668,7 +668,7 @@ async def test_execute_transaction_complex():
     inventory = await source.read("SELECT * FROM inventory")
     audit = await source.read("SELECT * FROM audit_log")
     
-    print(f"\n結果驗證:")
+    print("\n結果驗證:")
     print(f"   Orders: {len(orders)} 行")
     print(f"   Inventory: {len(inventory)} 行")
     print(f"   Audit log: {len(audit)} 行")
@@ -683,9 +683,9 @@ async def test_execute_transaction_complex():
 
 async def test_concurrent_transactions():
     """測試 4: 併發 transaction（文件DB）- 不重疊操作"""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("測試 4: 併發 Transaction（文件DB）")
-    print("="*60)
+    print("=" * 60)
     
     db_path = 'test_concurrent_tx.db'
     if Path(db_path).exists():
@@ -734,7 +734,7 @@ async def test_concurrent_transactions():
     # 驗證總額不變
     initial_total = df['balance'].sum()
     final_total = final['balance'].sum()
-    print(f"\n總額驗證:")
+    print("\n總額驗證:")
     print(f"   初始總額: {initial_total}")
     print(f"   最終總額: {final_total}")
     print(f"   ✅ 總額{'相等' if initial_total == final_total else '不相等'}")
@@ -747,9 +747,9 @@ async def test_concurrent_transactions():
 
 async def test_concurrent_conflict_handling():
     """測試 4b: Transaction 衝突處理（預期行為）"""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("測試 4b: Transaction 衝突處理")
-    print("="*60)
+    print("=" * 60)
     
     db_path = 'test_conflict.db'
     if Path(db_path).exists():
@@ -777,18 +777,18 @@ async def test_concurrent_conflict_handling():
     successes = sum(1 for r in results if r is True)
     failures = sum(1 for r in results if isinstance(r, Exception))
     
-    print(f"\n結果:")
+    print("\n結果:")
     print(f"   成功: {successes} 個")
     print(f"   失敗（衝突）: {failures} 個")
-    print(f"   ✅ 這是正常行為！Transaction 衝突檢測工作正常")
+    print("   ✅ 這是正常行為！Transaction 衝突檢測工作正常")
     
     # 驗證最終狀態
     final = await source.read("SELECT * FROM accounts WHERE account_id = 1")
     expected_balance = 1000 + (100 * successes)
     actual_balance = final['balance'].iloc[0]
     
-    print(f"\n最終狀態:")
-    print(f"   初始餘額: 1000")
+    print("\n最終狀態:")
+    print("   初始餘額: 1000")
     print(f"   成功交易: {successes} 筆 x 100 = {100 * successes}")
     print(f"   預期餘額: {expected_balance}")
     print(f"   實際餘額: {actual_balance}")
@@ -806,9 +806,9 @@ async def test_concurrent_conflict_handling():
 
 async def test_transaction_rollback():
     """測試 5: Transaction 回滾機制"""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("測試 5: Transaction 回滾機制")
-    print("="*60)
+    print("=" * 60)
     
     db_path = 'test_rollback.db'
     if Path(db_path).exists():
@@ -855,9 +855,9 @@ async def test_transaction_rollback():
 
 async def phase_2_test():
     """運行所有 Phase 2 測試"""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("Phase 2: Transaction 支持 - 完整測試")
-    print("="*60)
+    print("=" * 60)
     
     try:
         await test_transaction_context_manager()
@@ -867,9 +867,9 @@ async def phase_2_test():
         await test_concurrent_conflict_handling()
         await test_transaction_rollback()
         
-        print("\n" + "="*60)
+        print("\n" + "=" * 60)
         print("🎉 Phase 2 所有測試通過！")
-        print("="*60)
+        print("=" * 60)
         print("\n✅ Transaction context manager")
         print("✅ 原子寫入 (write_atomic)")
         print("✅ 複雜 transaction 操作")

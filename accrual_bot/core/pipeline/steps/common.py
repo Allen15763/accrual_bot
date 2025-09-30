@@ -54,7 +54,8 @@ class DataCleaningStep(PipelineStep):
                 status=StepStatus.SUCCESS,
                 data=df,
                 message=f"Cleaned {len(df)} rows",
-                metadata={'cleaned_columns': len(self.columns_to_clean) if self.columns_to_clean else len(string_columns)}
+                metadata={
+                    'cleaned_columns': len(self.columns_to_clean) if self.columns_to_clean else len(string_columns)}
             )
             
         except Exception as e:
@@ -267,7 +268,8 @@ class ValidationStep(PipelineStep):
             if col in context.data.columns:
                 try:
                     pd.to_numeric(context.data[col], errors='coerce')
-                except:
+                except Exception as err:
+                    self.logger.error(f"_validate_data_types Failed: {err}")
                     result.add_warning(f"Column {col} contains non-numeric values")
     
     def _validate_business_rules(self, context: ProcessingContext, result: ValidationResult):

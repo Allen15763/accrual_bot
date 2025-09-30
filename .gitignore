@@ -52,6 +52,10 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
+*.csv
+*.parquet
+*.db
+*.duckdb
 
 # PyInstaller
 #  Usually these files are written by a python script from a template

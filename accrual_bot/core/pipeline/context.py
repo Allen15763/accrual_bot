@@ -316,4 +316,7 @@ class ProcessingContext:
         }
     
     def __repr__(self) -> str:
-        return f"ProcessingContext(entity={self.metadata.entity_type}, date={self.metadata.processing_date}, type={self.metadata.processing_type})"
+        entity_ = self.metadata.entity_type
+        date_ = self.metadata.processing_date
+        type_ = self.metadata.processing_type
+        return f"ProcessingContext(entity={entity_}, date={date_}, type={type_})"

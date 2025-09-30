@@ -12,6 +12,8 @@ import logging
 from datetime import datetime
 import pandas as pd
 
+from .context import ProcessingContext
+
 
 class StepStatus(Enum):
     """步驟執行狀態"""
@@ -268,7 +270,7 @@ class ConditionalStep(PipelineStep):
                 self.logger.info(f"Condition not met, executing {self.false_step.name}")
                 return await self.false_step(context)
             else:
-                self.logger.info(f"Condition not met, skipping")
+                self.logger.info("Condition not met, skipping")
                 return StepResult(
                     step_name=self.name,
                     status=StepStatus.SKIPPED,

@@ -56,7 +56,7 @@ class MOBStatusStep(PipelineStep):
                 step_name=self.name,
                 status=StepStatus.SUCCESS,
                 data=df,
-                message=f"MOB status evaluation completed",
+                message="MOB status evaluation completed",
                 metadata={'status_counts': status_counts}
             )
             

@@ -44,7 +44,7 @@ class SPXDepositCheckStep(PipelineStep):
                 (df['GL#'] == '199999')
             )
             
-            df['押金標記'] = np.where(deposit_mask, 'Y', np.nan)
+            df['押金標記'] = np.where(deposit_mask, 'Y', None)
             
             # 押金項目特殊處理
             df.loc[deposit_mask, '押金類型'] = df.loc[deposit_mask, 'Item Description'].apply(
@@ -132,7 +132,7 @@ class SPXClosingListIntegrationStep(PipelineStep):
                 
                 # 創建關單標記
                 closed_ids = set(closing_list[id_col].unique())
-                df['關單標記'] = df[id_col].isin(closed_ids).map({True: 'Y', False: np.nan})
+                df['關單標記'] = df[id_col].isin(closed_ids).map({True: 'Y', False: None})
                 
                 # 合併關單詳細資訊
                 if 'Closing_Date' in closing_list.columns:
@@ -152,7 +152,7 @@ class SPXClosingListIntegrationStep(PipelineStep):
                 self.logger.info(f"Integrated {len(closed_ids)} closed items")
             else:
                 self.logger.warning("No closing list data available")
-                df['關單標記'] = np.nan
+                df['關單標記'] = None
             
             context.update_data(df)
             
@@ -215,7 +215,7 @@ class SPXRentProcessingStep(PipelineStep):
                 )
             )
             
-            df['租金標記'] = np.where(rent_mask, 'Y', np.nan)
+            df['租金標記'] = np.where(rent_mask, 'Y', None)
             
             # 租金分類
             df.loc[rent_mask, '租金類型'] = df.loc[rent_mask, 'Item Description'].apply(
@@ -310,7 +310,8 @@ class SPXRentProcessingStep(PipelineStep):
                     return '當期租金-預估'
                 else:
                     return '預付租金-不預估'
-            except:
+            except Exception as err:
+                self.logger.error(f"SPX evaluate_rent_accrual failed: {str(err)}")
                 pass
         
         return '待判斷'
