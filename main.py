@@ -215,14 +215,23 @@ def test_spx_po_processing():
             # 'procurement_pr': r"G:\.shortcut-targets-by-id\1am-NBNd2ffKOuVY0b81CBrFd4dxss3QP\Financial Data - LG\02_Accounts Payable\SPX_Closing Data\2025(新路徑-已完成)\202507\未結PRPO\For robot\202507_PR_PQ.xlsx",
             # 'ops_validation': r"C:\Users\lia\Downloads\SPX智取櫃及繳費機驗收明細(For FN)_2507.xlsx"
 
-            'po_file': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202508\SPX未結For 機器人\202508_purchase_order.csv",
-            'po_file_name': "202508_purchase_order.csv",
-            'previous_wp': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202508\SPX未結For 機器人\202507_PO_FN.xlsx",
-            'procurement': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202508\SPX未結For 機器人\202508_PO_PQ.xlsx",
-            'ap_invoice': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202508\SPX未結For 機器人\AP_Invoice_Match_Monitoring_Ext (NEW).xlsx",
-            'previous_wp_pr': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202508\SPX未結For 機器人\202507_PR_FN.xlsx",
-            'procurement_pr': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202508\SPX未結For 機器人\202508_PR_PQ.xlsx",
-            'ops_validation': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202508\SPX未結For 機器人\SPX智取櫃及繳費機驗收明細(For FN)_2508_修復.xlsx"
+            # 'po_file': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202508\SPX未結For 機器人\202508_purchase_order.csv",
+            # 'po_file_name': "202508_purchase_order.csv",
+            # 'previous_wp': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202508\SPX未結For 機器人\202507_PO_FN.xlsx",
+            # 'procurement': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202508\SPX未結For 機器人\202508_PO_PQ.xlsx",
+            # 'ap_invoice': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202508\SPX未結For 機器人\AP_Invoice_Match_Monitoring_Ext (NEW).xlsx",
+            # 'previous_wp_pr': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202508\SPX未結For 機器人\202507_PR_FN.xlsx",
+            # 'procurement_pr': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202508\SPX未結For 機器人\202508_PR_PQ.xlsx",
+            # 'ops_validation': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202508\SPX未結For 機器人\SPX智取櫃及繳費機驗收明細(For FN)_2508_修復.xlsx"
+
+            'po_file': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202509\202509_purchase_order.csv",
+            'po_file_name': "202509_purchase_order.csv",
+            'previous_wp': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202509\202508_PO_FN.xlsx",
+            'procurement': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202509\202509_PO_PQ.xlsx",
+            'ap_invoice': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202509\202509_AP_Invoice_Match_Monitoring_Ext.xlsx",
+            'previous_wp_pr': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202509\202508_PR_FN.xlsx",
+            'procurement_pr': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202509\202509_PR_PQ.xlsx",
+            'ops_validation': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202509\SPX智取櫃及繳費機驗收明細(For FN)_2509.xlsx"
 
             # 'po_file': r"G:\.shortcut-targets-by-id\1am-NBNd2ffKOuVY0b81CBrFd4dxss3QP\Financial Data - LG\02_Accounts Payable\SPX_Closing Data\2025(新路徑-已完成)\202507\未結PRPO\For robot\202507_purchase_order.csv",
             # 'po_file_name': "202507_purchase_order.csv",
@@ -297,10 +306,15 @@ def test_spx_pr_processing():
             # 'procurement_pr': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202508\SPX未結For 機器人\202508_PR_PQ.xlsx",
             # 'previous_wp_pr': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202508\SPX未結For 機器人\202507_PR_FN.xlsx"
 
-            'pr_file': r"G:\.shortcut-targets-by-id\1am-NBNd2ffKOuVY0b81CBrFd4dxss3QP\Financial Data - LG\02_Accounts Payable\SPX_Closing Data\2025(新路徑-已完成)\202507\未結PRPO\For robot\202507_purchase_request.csv",
-            'pr_file_name': "202507_purchase_request.csv",
-            'procurement_pr': r"G:\.shortcut-targets-by-id\1am-NBNd2ffKOuVY0b81CBrFd4dxss3QP\Financial Data - LG\02_Accounts Payable\SPX_Closing Data\2025(新路徑-已完成)\202507\未結PRPO\For robot\202507_PR_PQ.xlsx",
-            'previous_wp_pr': r"G:\.shortcut-targets-by-id\1am-NBNd2ffKOuVY0b81CBrFd4dxss3QP\Financial Data - LG\02_Accounts Payable\SPX_Closing Data\2025(新路徑-已完成)\202507\未結PRPO\For robot\202506_PR_FN.xlsx"
+            # 'pr_file': r"G:\.shortcut-targets-by-id\1am-NBNd2ffKOuVY0b81CBrFd4dxss3QP\Financial Data - LG\02_Accounts Payable\SPX_Closing Data\2025(新路徑-已完成)\202507\未結PRPO\For robot\202507_purchase_request.csv",
+            # 'pr_file_name': "202507_purchase_request.csv",
+            # 'procurement_pr': r"G:\.shortcut-targets-by-id\1am-NBNd2ffKOuVY0b81CBrFd4dxss3QP\Financial Data - LG\02_Accounts Payable\SPX_Closing Data\2025(新路徑-已完成)\202507\未結PRPO\For robot\202507_PR_PQ.xlsx",
+            # 'previous_wp_pr': r"G:\.shortcut-targets-by-id\1am-NBNd2ffKOuVY0b81CBrFd4dxss3QP\Financial Data - LG\02_Accounts Payable\SPX_Closing Data\2025(新路徑-已完成)\202507\未結PRPO\For robot\202506_PR_FN.xlsx"
+
+            'pr_file': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202509\202509_purchase_request.xlsx",
+            'pr_file_name': "202509_purchase_request.xlsx",
+            'procurement_pr': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202509\202509_PR_PQ.xlsx",
+            'previous_wp_pr': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202509\202508_PR_FN.xlsx"
         }
         
         # 檢查檔案是否存在
@@ -417,4 +431,4 @@ if __name__ == "__main__":
     # test_mob_entity()
     # test_spt_entity()
 
-    asyncio.run(run_async_function())
+    # asyncio.run(run_async_function())
