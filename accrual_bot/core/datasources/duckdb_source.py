@@ -79,7 +79,8 @@ class DuckDBSource(DataSource):
                     self._local.conn = duckdb.connect(':memory:', read_only=self.read_only)
                     self._local.conn.execute("SET memory_limit='4GB'")
                     self._local.conn.execute("SET threads TO 4")
-                    self.logger.debug(f"Created persistent memory connection for thread {threading.current_thread().name}")
+                    self.logger.debug(
+                        f"Created persistent memory connection for thread {threading.current_thread().name}")
         
         # 健康檢查
         try:
@@ -240,7 +241,7 @@ class DuckDBSource(DataSource):
             return await asyncio.to_thread(_read_with_retry)
         except AttributeError:
             # Python 3.8 fallback
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             return await loop.run_in_executor(self._executor, _read_with_retry)
     
     async def write(self, data: pd.DataFrame, **kwargs) -> bool:
@@ -305,7 +306,7 @@ class DuckDBSource(DataSource):
         try:
             return await asyncio.to_thread(_write_with_retry)
         except AttributeError:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             return await loop.run_in_executor(self._executor, _write_with_retry)
     
     async def execute(self, sql: str, params: Optional[Tuple] = None) -> pd.DataFrame:
@@ -343,7 +344,7 @@ class DuckDBSource(DataSource):
         try:
             return await asyncio.to_thread(_execute_with_retry)
         except AttributeError:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             return await loop.run_in_executor(self._executor, _execute_with_retry)
     
     # ===== Phase 2: Transaction 相關方法 =====
@@ -410,7 +411,7 @@ class DuckDBSource(DataSource):
         try:
             return await asyncio.to_thread(_write_atomic_with_retry)
         except AttributeError:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             return await loop.run_in_executor(self._executor, _write_atomic_with_retry)
     
     async def execute_transaction(self, operations: List[Union[str, Tuple[str, Tuple]]]) -> bool:
@@ -448,7 +449,7 @@ class DuckDBSource(DataSource):
                         self.logger.debug(f"  [{i+1}/{len(operations)}] {sql[:80]}...")
                         conn.execute(sql)
                 
-                self.logger.info(f"Transaction completed successfully")
+                self.logger.info("Transaction completed successfully")
                 return True
         
         def _execute_transaction_with_retry():
@@ -457,7 +458,7 @@ class DuckDBSource(DataSource):
         try:
             return await asyncio.to_thread(_execute_transaction_with_retry)
         except AttributeError:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             return await loop.run_in_executor(self._executor, _execute_transaction_with_retry)
     
     async def close(self):

@@ -107,7 +107,7 @@ class ParquetSource(DataSource):
                 self.logger.error(f"Error reading Parquet file: {str(e)}")
                 raise
         
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(self._executor, read_parquet_sync)
     
     async def write(self, data: pd.DataFrame, **kwargs) -> bool:
@@ -161,7 +161,7 @@ class ParquetSource(DataSource):
                 self.logger.error(f"Error writing Parquet file: {str(e)}")
                 return False
         
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(self._executor, write_parquet_sync)
     
     def get_metadata(self) -> Dict[str, Any]:
@@ -248,7 +248,7 @@ class ParquetSource(DataSource):
                 self.logger.error(f"Error reading row groups: {str(e)}")
                 raise
         
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(self._executor, read_groups_sync)
     
     async def get_schema(self) -> pa.Schema:
@@ -269,7 +269,7 @@ class ParquetSource(DataSource):
                 self.logger.error(f"Error getting schema: {str(e)}")
                 return None
         
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(self._executor, get_schema_sync)
     
     async def append_data(self, data: pd.DataFrame) -> bool:

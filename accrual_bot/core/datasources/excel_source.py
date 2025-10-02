@@ -100,7 +100,7 @@ class ExcelSource(DataSource):
                 raise
         
         # 使用類級別的線程池執行器
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(self._executor, read_excel_sync)
     
     async def write(self, data: pd.DataFrame, **kwargs) -> bool:
@@ -148,7 +148,7 @@ class ExcelSource(DataSource):
                 self.logger.error(f"Error writing Excel file: {str(e)}")
                 return False
         
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(self._executor, write_excel_sync)
     
     def get_metadata(self) -> Dict[str, Any]:
@@ -193,7 +193,7 @@ class ExcelSource(DataSource):
                 self.logger.error(f"Error getting sheet names: {str(e)}")
                 return []
         
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(self._executor, get_sheets_sync)
     
     async def read_all_sheets(self) -> Dict[str, pd.DataFrame]:

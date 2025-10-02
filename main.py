@@ -370,7 +370,7 @@ def ppe_test():
         logger.info("\n測試方法1: 向後相容的呼叫方式")
         result1 = spx_entity.process_ppe_working_paper(
             contract_filing_list_url=test_file_url, 
-            current_month=202508
+            current_month=202509
         )
         
         if hasattr(result1, 'success'):
@@ -378,6 +378,7 @@ def ppe_test():
             logger.info(f"訊息: {result1.message}")
             logger.info(f"總記錄數: {result1.total_records}")
             logger.info(f"處理時間: {result1.processing_time:.2f} 秒" if result1.processing_time else "處理時間: N/A")
+            result1.processed_data.to_excel(r'C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202509\raw for run PPE\年限表_202509.xlsx', index=False)
             
             if result1.errors:
                 logger.error("錯誤列表:")

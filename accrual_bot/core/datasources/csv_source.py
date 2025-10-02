@@ -108,7 +108,7 @@ class CSVSource(DataSource):
                 raise
         
         # 使用類級別的線程池執行器
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(self._executor, read_csv_sync)
     
     async def write(self, data: pd.DataFrame, **kwargs) -> bool:
@@ -147,7 +147,7 @@ class CSVSource(DataSource):
                 self.logger.error(f"Error writing CSV file: {str(e)}")
                 return False
         
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(self._executor, write_csv_sync)
     
     def get_metadata(self) -> Dict[str, Any]:
@@ -220,7 +220,7 @@ class CSVSource(DataSource):
                 self.logger.error(f"Error reading CSV in chunks: {str(e)}")
                 raise
         
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(self._executor, read_chunks_sync)
     
     async def append_data(self, data: pd.DataFrame) -> bool:

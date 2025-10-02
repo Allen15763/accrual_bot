@@ -5,7 +5,7 @@
 
 from .base import DataSource, DataSourceType
 from .config import DataSourceConfig
-from .factory import DataSourceFactory
+from .factory import DataSourceFactory, DataSourcePool
 
 # 具體實現
 from .excel_source import ExcelSource
@@ -18,6 +18,7 @@ __all__ = [
     'DataSourceType',
     'DataSourceConfig',
     'DataSourceFactory',
+    'DataSourcePool',
     'ExcelSource',
     'CSVSource',
     'ParquetSource',

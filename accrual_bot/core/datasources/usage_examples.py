@@ -151,7 +151,9 @@ async def example_4_spx_specific():
     print("\n=== 範例4: SPX特定處理 ===")
     
     # 創建DuckDB用於SPX數據
-    db = DuckDBSource.create_memory_db()
+    # db = DuckDBSource.create_memory_db()
+    db_path = Path('spx_test.db')
+    db = DuckDBSource.create_file_db(db_path)
     
     # 模擬SPX PO數據
     spx_po_data = pd.DataFrame({
@@ -188,6 +190,7 @@ async def example_4_spx_specific():
     print(f"租金相關項目: {len(rent_items)} 筆")
     
     await db.close()
+    db_path.unlink()
     return assets_to_validate
 
 
@@ -885,7 +888,7 @@ async def phase_2_test():
 
 
 if __name__ == "__main__":
-    # asyncio.run(main())
-    # asyncio.run(main_())
-    # asyncio.run(phase_1_test())
+    asyncio.run(main())
+    # asyncio.run(main_())  # 測試gather併發用
+    asyncio.run(phase_1_test())
     asyncio.run(phase_2_test())
