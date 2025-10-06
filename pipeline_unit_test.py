@@ -297,8 +297,8 @@ async def main():
     if all_pass:
         print("✅ 所有測試通過！Pipeline系統運作正常。")
         print("\n建議下一步：")
-        print("1. 查看 test_pipeline_data/ 目錄中的測試資料")
-        print("2. 執行 python accrual_bot/examples.py 查看更多範例")
+        print("1. 查看 accrual_bot/test_pipeline_data/ 目錄中的測試資料")
+        print("2. 執行 python accrual_bot/pipeline_examples.py 查看更多範例")
         print("3. 使用實際資料測試完整流程")
         return 0
     else:
@@ -308,3 +308,19 @@ async def main():
 if __name__ == "__main__":
     exit_code = asyncio.run(main())
     sys.exit(exit_code)
+
+    # # 創建驗證腳本；確認配置不同了
+    # def verify_config_consistency():
+    #     # 比較兩個配置管理器的輸出
+    #     from accrual_bot.utils import config_manager as old_cm
+    #     from accrual_bot.core.pipeline.config_manager import PipelineConfigManager
+        
+    #     new_cm = PipelineConfigManager()
+        
+    #     # 驗證FA帳戶
+    #     for entity in ['MOB', 'SPT', 'SPX']:
+    #         old_fa = old_cm.get_fa_accounts(entity.lower())
+    #         new_fa = new_cm.get_entity_config(entity).fa_accounts
+    #         assert old_fa == new_fa, f"{entity} FA帳戶不一致"
+
+    # verify_config_consistency()
