@@ -30,6 +30,8 @@ from accrual_bot.core.datasources import (
     DataSourceType
 )
 from accrual_bot.utils.config import config_manager
+from accrual_bot.utils.helpers.data_utils import create_mapping_dict
+from accrual_bot.utils.config.constants import STATUS_VALUES
 
 
 class SPXDataLoadingStep(PipelineStep):
@@ -604,14 +606,14 @@ class ColumnAdditionStep(PipelineStep):
             
             # 添加基礎欄位 (調用原 processor 的邏輯)
             # 這裡可以直接調用原有的方法，或在此處重新實作
-            df = self._add_basic_columns(df, m)
+            df, previous_month = self._add_basic_columns(df, m)
             
             # 添加 SPX 特定欄位
-            df['memo'] = np.nan
-            df['GL DATE'] = np.nan
-            df['Remarked by Procurement PR'] = np.nan
-            df['Noted by Procurement PR'] = np.nan
-            df['Remarked by 上月 FN PR'] = np.nan
+            df['memo'] = None
+            df['GL DATE'] = None
+            df['Remarked by Procurement PR'] = None
+            df['Noted by Procurement PR'] = None
+            df['Remarked by 上月 FN PR'] = None
             
             # 更新月份變數
             context.set_variable('processing_month', m)
@@ -690,7 +692,7 @@ class ColumnAdditionStep(PipelineStep):
                 df_copy['PO Line'] = df_copy['PO#'].astype(str) + '-' + df_copy['Line#'].astype(str)
             
             # 添加標記和備註欄位
-            self._add_remark_columns(df_copy, month)
+            self._add_remark_columns(df_copy)
             
             # 添加計算欄位
             self._add_calculation_columns(df_copy)
@@ -705,14 +707,14 @@ class ColumnAdditionStep(PipelineStep):
             self.logger.error(f"添加基本列時出錯: {str(e)}", exc_info=True)
             raise ValueError("添加基本列時出錯")
     
-    def _add_remark_columns(self, df: pd.DataFrame, month: int) -> None:
+    def _add_remark_columns(self, df: pd.DataFrame) -> None:
         """添加備註相關欄位"""
         columns_to_add = [
             'Remarked by Procurement',
             'Noted by Procurement', 
             'Remarked by FN',
             'Noted by FN',
-            f'Remarked by {self.calculate_month(month)}月 Procurement',
+            'Remarked by 上月 Procurement',
             'Remarked by 上月 FN',
             'PO狀態'
         ]
@@ -759,8 +761,9 @@ class ColumnAdditionStep(PipelineStep):
         Returns:
             pd.Series: 是否為FA的結果
         """
+        fa_accounts: List = config_manager.get_list('FA_ACCOUNTS', 'spx')
         if 'GL#' in df.columns:
-            return np.where(df['GL#'].astype(str).isin([str(x) for x in self.fa_accounts]), 'Y', '')
+            return np.where(df['GL#'].astype(str).isin([str(x) for x in fa_accounts]), 'Y', '')
         return pd.Series('', index=df.index)
     
     def _determine_sm_status(self, df: pd.DataFrame) -> pd.Series:
@@ -776,13 +779,10 @@ class ColumnAdditionStep(PipelineStep):
         if 'GL#' not in df.columns:
             return pd.Series('N', index=df.index)
         
-        if self.entity_type == 'MOB':
-            return np.where(df['GL#'].astype(str).str.startswith('65'), "Y", "N")
-        else:  # SPT or SPX
-            return np.where(
-                (df['GL#'].astype(str) == '650003') | (df['GL#'].astype(str) == '450014'), 
-                "Y", "N"
-            )
+        return np.where(
+            (df['GL#'].astype(str) == '650003') | (df['GL#'].astype(str) == '450014'), 
+            "Y", "N"
+        )
     
     async def validate_input(self, context: ProcessingContext) -> bool:
         """驗證輸入"""
@@ -792,6 +792,432 @@ class ColumnAdditionStep(PipelineStep):
         
         return True
 
+# =============================================================================
+# 步驟 4: AP Invoice 整合步驟
+# 替代原始: get_period_from_ap_invoice()
+# =============================================================================
+
+class APInvoiceIntegrationStep(PipelineStep):
+    """
+    AP Invoice 整合步驟
+    
+    功能:
+    從 AP Invoice 數據中提取 GL DATE 並填入 PO 數據
+    排除月份 m 之後的期間
+    
+    輸入: DataFrame + AP Invoice auxiliary data
+    輸出: DataFrame with GL DATE column
+    """
+    
+    def __init__(self, name: str = "APInvoiceIntegration", **kwargs):
+        super().__init__(name, description="Integrate AP Invoice GL DATE", **kwargs)
+    
+    async def execute(self, context: ProcessingContext) -> StepResult:
+        """執行 AP Invoice 整合"""
+        try:
+            df = context.data.copy()
+            df_ap = context.get_auxiliary_data('ap_invoice')
+            yyyymm = context.get_variable('processing_date')
+            
+            if df_ap is None or df_ap.empty:
+                self.logger.warning("No AP Invoice data available, skipping")
+                return StepResult(
+                    step_name=self.name,
+                    status=StepStatus.SKIPPED,
+                    data=df,
+                    message="No AP Invoice data"
+                )
+            
+            self.logger.info("Processing AP Invoice integration...")
+            
+            # 移除缺少 'PO Number' 的行
+            df_ap = df_ap.dropna(subset=['PO Number']).reset_index(drop=True)
+            
+            # 創建組合鍵
+            df_ap['po_line'] = (
+                df_ap['Company'].astype(str) + '-' + 
+                df_ap['PO Number'].astype(str) + '-' + 
+                df_ap['PO_LINE_NUMBER'].astype(str)
+            )
+            
+            # 轉換 Period 為 yyyymm 格式
+            df_ap['period'] = (
+                pd.to_datetime(df_ap['Period'], format='%b-%y', errors='coerce')
+                .dt.strftime('%Y%m')
+                .fillna('0')
+                .astype('int32')
+            )
+            
+            df_ap['match_type'] = df_ap['Match Type'].fillna('system_filled')
+            
+            # 只保留期間在 yyyymm 之前的 AP 發票
+            df_ap = (
+                df_ap.loc[df_ap['period'] <= yyyymm, :]
+                .sort_values(by=['po_line', 'period'])
+                .drop_duplicates(subset='po_line', keep='last')
+                .reset_index(drop=True)
+            )
+            
+            # 合併到主 DataFrame
+            df = df.merge(
+                df_ap[['po_line', 'period', 'match_type']], 
+                left_on='PO Line', 
+                right_on='po_line', 
+                how='left'
+            )
+            
+            df['GL DATE'] = df['period']
+            df.drop(columns=['po_line', 'period'], inplace=True)
+            
+            context.update_data(df)
+            
+            matched_count = df['GL DATE'].notna().sum()
+            
+            self.logger.info(f"AP Invoice integration completed: {matched_count} records matched")
+            
+            return StepResult(
+                step_name=self.name,
+                status=StepStatus.SUCCESS,
+                data=df,
+                message=f"Integrated GL DATE for {matched_count} records",
+                metadata={
+                    'matched_records': int(matched_count),
+                    'total_records': len(df)
+                }
+            )
+            
+        except Exception as e:
+            self.logger.error(f"AP Invoice integration failed: {str(e)}", exc_info=True)
+            context.add_error(f"AP Invoice integration failed: {str(e)}")
+            return StepResult(
+                step_name=self.name,
+                status=StepStatus.FAILED,
+                error=e,
+                message=str(e)
+            )
+    
+    async def validate_input(self, context: ProcessingContext) -> bool:
+        """驗證輸入"""
+        if context.data is None or context.data.empty:
+            self.logger.error("No data for AP Invoice integration")
+            return False
+        
+        if 'PO Line' not in context.data.columns:
+            self.logger.error("Missing 'PO Line' column")
+            return False
+        
+        return True
+    
+# =============================================================================
+# 步驟 5: 前期底稿整合步驟
+# 替代原始: judge_previous()
+# =============================================================================
+
+class PreviousWorkpaperIntegrationStep(PipelineStep):
+    """
+    前期底稿整合步驟
+    
+    功能:
+    1. 整合前期 PO 底稿
+    2. 整合前期 PR 底稿
+    3. 處理 memo 欄位
+    
+    輸入: DataFrame + Previous WP (PO and PR)
+    輸出: DataFrame with previous workpaper info
+    """
+    
+    def __init__(self, name: str = "PreviousWorkpaperIntegration", **kwargs):
+        super().__init__(name, description="Integrate previous workpaper", **kwargs)
+    
+    async def execute(self, context: ProcessingContext) -> StepResult:
+        """執行前期底稿整合"""
+        try:
+            df = context.data.copy()
+            previous_wp = context.get_auxiliary_data('previous')
+            previous_wp_pr = context.get_auxiliary_data('previous_pr')
+            m = context.get_variable('processing_month')
+            
+            if previous_wp is None and previous_wp_pr is None:
+                self.logger.warning("No previous workpaper data available, skipping")
+                return StepResult(
+                    step_name=self.name,
+                    status=StepStatus.SKIPPED,
+                    data=df,
+                    message="No previous workpaper data"
+                )
+            
+            self.logger.info("Processing previous workpaper integration...")
+            
+            # 處理 PO 前期底稿
+            if previous_wp is not None and not previous_wp.empty:
+                df = self._process_previous_po(df, previous_wp, m)
+                self.logger.info("Previous PO workpaper integrated")
+            
+            # 處理 PR 前期底稿
+            if previous_wp_pr is not None and not previous_wp_pr.empty:
+                df = self._process_previous_pr(df, previous_wp_pr)
+                self.logger.info("Previous PR workpaper integrated")
+            
+            context.update_data(df)
+            
+            return StepResult(
+                step_name=self.name,
+                status=StepStatus.SUCCESS,
+                data=df,
+                message="Previous workpaper integrated successfully",
+                metadata={
+                    'po_integrated': previous_wp is not None,
+                    'pr_integrated': previous_wp_pr is not None
+                }
+            )
+            
+        except Exception as e:
+            self.logger.error(f"Previous workpaper integration failed: {str(e)}", exc_info=True)
+            context.add_error(f"Previous workpaper integration failed: {str(e)}")
+            return StepResult(
+                step_name=self.name,
+                status=StepStatus.FAILED,
+                error=e,
+                message=str(e)
+            )
+    
+    def _process_previous_po(self, df: pd.DataFrame, previous_wp: pd.DataFrame, m: int) -> pd.DataFrame:
+        """處理前期 PO 底稿"""
+        # 調用父類邏輯處理基本的前期底稿整合
+        # 這裡需要實現類似 BasePOProcessor.process_previous_workpaper 的邏輯
+        try:
+            if previous_wp is None or previous_wp.empty:
+                self.logger.info("前期底稿為空，跳過處理")
+                return df
+            
+            # 重命名前期底稿中的列
+            previous_wp_renamed = previous_wp.rename(
+                columns={
+                    'Remarked by FN': 'Remarked by FN_l',
+                    'Remarked by Procurement': 'Remark by PR Team_l'
+                }
+            )
+
+            # 獲取前期FN備註
+            if 'PO Line' in df.columns:
+                fn_mapping = create_mapping_dict(previous_wp_renamed, 'PO Line', 'Remarked by FN_l')
+                df['Remarked by 上月 FN'] = df['PO Line'].map(fn_mapping)
+                
+                # 獲取前期採購備註
+                procurement_mapping = create_mapping_dict(
+                    previous_wp_renamed, 'PO Line', 'Remark by PR Team_l'
+                )
+                df['Remarked by 上月 Procurement'] = \
+                    df['PO Line'].map(procurement_mapping)
+            
+            # 處理 memo 欄位
+            if 'memo' in previous_wp.columns and 'PO Line' in df.columns:
+                memo_mapping = dict(zip(previous_wp['PO Line'], previous_wp['memo']))
+                df['memo'] = df['PO Line'].map(memo_mapping)
+            
+            # 處理前期 FN 備註
+            if 'Remarked by FN' in previous_wp.columns:
+                fn_mapping = dict(zip(previous_wp['PO Line'], previous_wp['Remarked by FN']))
+                df['Remarked by 上月 FN'] = df['PO Line'].map(fn_mapping)
+            return df
+    
+        except Exception as e:
+            self.logger.error(f"處理前期底稿時出錯: {str(e)}", exc_info=True)
+            raise ValueError("處理前期底稿時出錯")
+    
+    def _process_previous_pr(self, df: pd.DataFrame, previous_wp_pr: pd.DataFrame) -> pd.DataFrame:
+        """處理前期 PR 底稿"""
+        # 重命名前期 PR 底稿中的列
+        if 'Remarked by FN' in previous_wp_pr.columns:
+            previous_wp_pr = previous_wp_pr.rename(
+                columns={'Remarked by FN': 'Remarked by FN_l'}
+            )
+        
+        # 獲取前期 PR FN 備註
+        if 'Remarked by FN_l' in previous_wp_pr.columns and 'PR Line' in df.columns:
+            pr_fn_mapping = dict(zip(previous_wp_pr['PR Line'], previous_wp_pr['Remarked by FN_l']))
+            df['Remarked by 上月 FN PR'] = df['PR Line'].map(pr_fn_mapping)
+        
+        return df
+    
+    async def validate_input(self, context: ProcessingContext) -> bool:
+        """驗證輸入"""
+        if context.data is None or context.data.empty:
+            self.logger.error("No data for previous workpaper integration")
+            return False
+        
+        return True
+
+
+# =============================================================================
+# 步驟 6: 採購底稿整合步驟
+# 替代原始: judge_procurement()
+# =============================================================================
+
+class ProcurementIntegrationStep(PipelineStep):
+    """
+    採購底稿整合步驟
+    
+    功能:
+    1. 整合採購 PO 底稿
+    2. 整合採購 PR 底稿
+    3. 移除 SPT 模組給的狀態（SPX 有自己的狀態邏輯）
+    
+    輸入: DataFrame + Procurement WP (PO and PR)
+    輸出: DataFrame with procurement info
+    """
+    
+    def __init__(self, name: str = "ProcurementIntegration", **kwargs):
+        super().__init__(name, description="Integrate procurement workpaper", **kwargs)
+    
+    async def execute(self, context: ProcessingContext) -> StepResult:
+        """執行採購底稿整合"""
+        try:
+            df = context.data.copy()
+            procurement = context.get_auxiliary_data('procurement_po')
+            procurement_pr = context.get_auxiliary_data('procurement_pr')
+            
+            if procurement is None and procurement_pr is None:
+                self.logger.warning("No procurement data available, skipping")
+                return StepResult(
+                    step_name=self.name,
+                    status=StepStatus.SKIPPED,
+                    data=df,
+                    message="No procurement data"
+                )
+            
+            self.logger.info("Processing procurement integration...")
+            
+            # 處理 PO 採購底稿
+            if procurement is not None and not procurement.empty:
+                df = self._process_procurement_po(df, procurement)
+                self.logger.info("Procurement PO integrated")
+            
+            # 處理 PR 採購底稿
+            if procurement_pr is not None and not procurement_pr.empty:
+                df = self._process_procurement_pr(df, procurement_pr)
+                self.logger.info("Procurement PR integrated")
+            
+            context.update_data(df)
+            
+            return StepResult(
+                step_name=self.name,
+                status=StepStatus.SUCCESS,
+                data=df,
+                message="Procurement integrated successfully",
+                metadata={
+                    'po_integrated': procurement is not None,
+                    'pr_integrated': procurement_pr is not None
+                }
+            )
+            
+        except Exception as e:
+            self.logger.error(f"Procurement integration failed: {str(e)}", exc_info=True)
+            context.add_error(f"Procurement integration failed: {str(e)}")
+            return StepResult(
+                step_name=self.name,
+                status=StepStatus.FAILED,
+                error=e,
+                message=str(e)
+            )
+    
+    def _process_procurement_po(self, df: pd.DataFrame, procurement: pd.DataFrame) -> pd.DataFrame:
+        """處理採購 PO 底稿"""
+        # 調用父類邏輯處理基本的採購底稿整合
+        # 這裡需要實現類似 BasePOProcessor.process_procurement_workpaper 的邏輯
+        try:
+            if procurement is None or procurement.empty:
+                self.logger.info("採購底稿為空，跳過處理")
+                return df
+            
+            # 重命名採購底稿中的列
+            procurement_wp_renamed = procurement.rename(
+                columns={
+                    'Remarked by Procurement': 'Remark by PR Team',
+                    'Noted by Procurement': 'Noted by PR'
+                }
+            )
+            
+            # 通過PO Line獲取備註
+            if 'PO Line' in df.columns:
+                procurement_mapping = create_mapping_dict(
+                    procurement_wp_renamed, 'PO Line', 'Remark by PR Team'
+                )
+                df['Remarked by Procurement'] = df['PO Line'].map(procurement_mapping)
+                
+                noted_mapping = create_mapping_dict(
+                    procurement_wp_renamed, 'PO Line', 'Noted by PR'
+                )
+                df['Noted by Procurement'] = df['PO Line'].map(noted_mapping)
+            
+            # 通過PR Line獲取備註（如果PO Line沒有匹配到）
+            if 'PR Line' in df.columns:
+                pr_procurement_mapping = create_mapping_dict(
+                    procurement_wp_renamed, 'PR Line', 'Remark by PR Team'
+                )
+                
+                # 只更新尚未匹配的記錄
+                df['Remarked by Procurement'] = \
+                    (df.apply(lambda x: pr_procurement_mapping.get(x['PR Line'], None) 
+                              if x['Remarked by Procurement'] is np.nan else x['Remarked by Procurement'], axis=1))
+            
+            # 設置FN備註為採購備註
+            df['Remarked by FN'] = df['Remarked by Procurement']
+            
+            # 標記不在採購底稿中的PO
+            if 'PO Line' in df.columns and 'PR Line' in df.columns:
+                po_list = procurement_wp_renamed.get('PO Line', pd.Series([])).tolist()
+                pr_list = procurement_wp_renamed.get('PR Line', pd.Series([])).tolist()
+                
+                mask_not_in_wp = (
+                    (~df['PO Line'].isin(po_list)) & 
+                    (~df['PR Line'].isin(pr_list))
+                )
+                df.loc[mask_not_in_wp, 'PO狀態'] = STATUS_VALUES['NOT_IN_PROCUREMENT']
+            
+            # 獲取採購備註
+            if 'Remarked by Procurement' in procurement.columns and 'PO Line' in df.columns:
+                procurement_mapping = dict(zip(procurement['PO Line'], procurement['Remarked by Procurement']))
+                df['Remarked by Procurement'] = df['PO Line'].map(procurement_mapping)
+            
+            # 移除 SPT 模組給的狀態（SPX 有自己的狀態邏輯）
+            if 'PO狀態' in df.columns:
+                df.loc[df['PO狀態'] == 'Not In Procurement WP', 'PO狀態'] = pd.NA
+            
+            return df
+    
+        except Exception as e:
+            self.logger.error(f"處理採購底稿時出錯: {str(e)}", exc_info=True)
+            raise ValueError("處理採購底稿時出錯")
+    
+    def _process_procurement_pr(self, df: pd.DataFrame, procurement_pr: pd.DataFrame) -> pd.DataFrame:
+        """處理採購 PR 底稿"""
+        # 重命名 PR 採購底稿中的列
+        procurement_pr = procurement_pr.rename(
+            columns={
+                'Remarked by Procurement': 'Remark by PR Team',
+                'Noted by Procurement': 'Noted by PR'
+            }
+        )
+        
+        # 獲取 PR 採購底稿中的備註
+        if 'Remark by PR Team' in procurement_pr.columns and 'PR Line' in df.columns:
+            pr_procurement_mapping = dict(zip(procurement_pr['PR Line'], procurement_pr['Remark by PR Team']))
+            df['Remarked by Procurement PR'] = df['PR Line'].map(pr_procurement_mapping)
+        
+        if 'Noted by PR' in procurement_pr.columns and 'PR Line' in df.columns:
+            pr_noted_mapping = dict(zip(procurement_pr['PR Line'], procurement_pr['Noted by PR']))
+            df['Noted by Procurement PR'] = df['PR Line'].map(pr_noted_mapping)
+        
+        return df
+    
+    async def validate_input(self, context: ProcessingContext) -> bool:
+        """驗證輸入"""
+        if context.data is None or context.data.empty:
+            self.logger.error("No data for procurement integration")
+            return False
+        
+        return True
 
 # =============================================================================
 # 載入步驟使用範例
@@ -959,7 +1385,7 @@ def create_spx_po_complete_pipeline(file_paths: Dict[str, str]) -> Pipeline:
                     )
                 )
         
-                # ========== 階段 2: 數據準備 ==========
+                # ========== 階段 2: 數據準備與整合 ==========
                 .add_step(
                     SPXProductFilterStep(
                         name="Filter_SPX_Products",
@@ -967,6 +1393,12 @@ def create_spx_po_complete_pipeline(file_paths: Dict[str, str]) -> Pipeline:
                         required=True
                     )
                 )
+                .add_step(ColumnAdditionStep(name="Add_Columns", required=True))
+                .add_step(APInvoiceIntegrationStep(name="Integrate_AP_Invoice", required=True))
+                .add_step(PreviousWorkpaperIntegrationStep(name="Integrate_Previous_WP", required=True))
+                .add_step(ProcurementIntegrationStep(name="Integrate_Procurement", required=True))
+
+
                 )
     
     return pipeline.build()
