@@ -8,7 +8,7 @@ from enum import Enum
 from typing import Optional, Any, Dict, List, Union, Callable, TypeVar, Generic
 from dataclasses import dataclass, field
 import asyncio
-import logging
+from accrual_bot.utils.logging import get_logger
 from datetime import datetime
 import pandas as pd
 
@@ -86,7 +86,7 @@ class PipelineStep(ABC, Generic[T]):
         self.required = required
         self.retry_count = retry_count
         self.timeout = timeout
-        self.logger = logging.getLogger(f"Step.{name}")
+        self.logger = get_logger(f"pipeline.{name}")
         self._prerequisites = []
         self._post_actions = []
     

@@ -8,7 +8,8 @@ from enum import Enum
 from typing import Dict, List, Optional, Any, Union
 import pandas as pd
 import asyncio
-import logging
+from accrual_bot.utils.logging import get_logger
+from accrual_bot.core.datasources.config import DataSourceConfig
 from datetime import datetime
 
 
@@ -34,7 +35,7 @@ class DataSource(ABC):
             config: 數據源配置
         """
         self.config = config
-        self.logger = logging.getLogger(self.__class__.__name__)
+        self.logger = get_logger(f"datasource.{self.__class__.__name__}")
         self._cache = None
         self._metadata = {}
         

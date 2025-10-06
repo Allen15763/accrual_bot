@@ -635,22 +635,30 @@ class SpxPOProcessor(BasePOProcessor):
                     file_paths.append(file_path)
                     file_names[file_type] = os.path.basename(file_path)
             
-            # if os.path.isfile(r'C:\SEA\Accrual\prpo_bot\prpo_bot_renew_v2\output\import_results.pkl'):
-            if os.path.isfile(r'C:\SEA\Accrual\prpo_bot\prpo_bot_renew_v2\output\import_results.pkl') is not True:
-                import pickle as pkl
-                with open(r'C:\SEA\Accrual\prpo_bot\prpo_bot_renew_v2\output\import_results.pkl', 'rb') as f:
-                    import_results = pkl.load(f)
-                self.logger.info('Loaded existing files.')
-            else:
-                # 並發導入所有文件 - 與原始版本相同的調用方式
-                import_results = async_importer.concurrent_read_files(
-                    file_types, 
-                    file_paths, 
-                    file_names=file_names,
-                    config={'certificate_path': self.config_manager.get('CREDENTIALS', 'certificate_path'),
-                            'scopes': self.config_manager.get_list('CREDENTIALS', 'scopes')},
-                    ap_columns=self.config_manager.get_list('SPX', 'ap_columns')
-                )
+            # # if os.path.isfile(r'C:\SEA\Accrual\prpo_bot\prpo_bot_renew_v2\output\import_results.pkl'):
+            # if os.path.isfile(r'C:\SEA\Accrual\prpo_bot\prpo_bot_renew_v2\output\import_results.pkl') is not True:
+            #     import pickle as pkl
+            #     with open(r'C:\SEA\Accrual\prpo_bot\prpo_bot_renew_v2\output\import_results.pkl', 'rb') as f:
+            #         import_results = pkl.load(f)
+            #     self.logger.info('Loaded existing files.')
+            # else:
+            #     # 並發導入所有文件 - 與原始版本相同的調用方式
+            #     import_results = async_importer.concurrent_read_files(
+            #         file_types, 
+            #         file_paths, 
+            #         file_names=file_names,
+            #         config={'certificate_path': self.config_manager.get('CREDENTIALS', 'certificate_path'),
+            #                 'scopes': self.config_manager.get_list('CREDENTIALS', 'scopes')},
+            #         ap_columns=self.config_manager.get_list('SPX', 'ap_columns')
+            #     )
+            import_results = async_importer.concurrent_read_files(
+                file_types, 
+                file_paths, 
+                file_names=file_names,
+                config={'certificate_path': self.config_manager.get('CREDENTIALS', 'certificate_path'),
+                        'scopes': self.config_manager.get_list('CREDENTIALS', 'scopes')},
+                ap_columns=self.config_manager.get_list('SPX', 'ap_columns')
+            )
             
             # 檢測並處理原始PO數據
             if 'raw_po' in import_results:

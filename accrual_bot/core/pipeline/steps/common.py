@@ -12,6 +12,17 @@ import os
 from ..base import PipelineStep, StepResult, StepStatus
 from ..context import ProcessingContext, ValidationResult
 
+# === 階段二：工具函數整合 - 引入配置管理器 ===
+try:
+    from ....utils.config import config_manager
+except ImportError:
+    import sys
+    from pathlib import Path
+    current_dir = Path(__file__).parent.parent.parent.parent
+    if str(current_dir) not in sys.path:
+        sys.path.insert(0, str(current_dir))
+    from utils.config import config_manager
+
 
 class DataCleaningStep(PipelineStep):
     """
@@ -149,6 +160,8 @@ class DateParsingStep(PipelineStep):
     
     def __init__(self, name: str = "DateParsing", **kwargs):
         super().__init__(name, description="Parse dates from item description", **kwargs)
+        # 階段二任務2.3：從config.ini讀取正則模式，不使用constants.py
+        self.regex_patterns = config_manager.get_regex_patterns()
     
     async def execute(self, context: ProcessingContext) -> StepResult:
         """

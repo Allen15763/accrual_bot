@@ -10,6 +10,17 @@ from typing import Optional, Dict, List
 from ..base import PipelineStep, StepResult, StepStatus
 from ..context import ProcessingContext
 
+# === 階段二：工具函數整合 - 引入配置和常數 ===
+try:
+    from ....utils.config import config_manager, STATUS_VALUES
+except ImportError:
+    import sys
+    from pathlib import Path
+    current_dir = Path(__file__).parent.parent.parent.parent
+    if str(current_dir) not in sys.path:
+        sys.path.insert(0, str(current_dir))
+    from utils.config import config_manager, STATUS_VALUES
+
 
 class StatusEvaluationStep(PipelineStep):
     """
