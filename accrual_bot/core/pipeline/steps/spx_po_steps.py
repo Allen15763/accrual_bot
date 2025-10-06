@@ -30,7 +30,9 @@ from accrual_bot.core.datasources import (
     DataSourceType
 )
 from accrual_bot.utils.config import config_manager
-from accrual_bot.utils.helpers.data_utils import create_mapping_dict
+from accrual_bot.utils.helpers.data_utils import (create_mapping_dict, 
+                                                  safe_string_operation,
+                                                  extract_date_range_from_description)
 from accrual_bot.utils.config.constants import STATUS_VALUES
 
 
@@ -1219,6 +1221,739 @@ class ProcurementIntegrationStep(PipelineStep):
         
         return True
 
+
+# =============================================================================
+# 步驟 7: 日期邏輯處理步驟
+# 替代原始: apply_date_logic()
+# =============================================================================
+
+class DateLogicStep(PipelineStep):
+    """
+    日期邏輯處理步驟
+    
+    功能:
+    1. 提取和處理 Item Description 中的日期範圍
+    2. 轉換 Expected Received Month 格式
+    
+    輸入: DataFrame
+    輸出: DataFrame with processed date columns
+    """
+    
+    def __init__(self, name: str = "DateLogic", **kwargs):
+        super().__init__(name, description="Process date logic", **kwargs)
+        self.regex_patterns = config_manager.get_regex_patterns()
+    
+    async def execute(self, context: ProcessingContext) -> StepResult:
+        """執行日期邏輯處理"""
+        try:
+            df = context.data.copy()
+            
+            self.logger.info("Processing date logic...")
+            
+            # 調用父類的日期邏輯方法
+            # 這裡需要實現類似 BasePOProcessor.apply_date_logic 的邏輯
+            
+            # 處理分潤合作
+            if 'Item Description' in df.columns:
+                mask_profit_sharing = safe_string_operation(
+                    df['Item Description'], 'contains', '分潤合作', na=False
+                )
+                
+                mask_no_status = (
+                    df['PO狀態'].isna() | (df['PO狀態'] == 'nan')
+                )
+                
+                df.loc[mask_profit_sharing & mask_no_status, 'PO狀態'] = '分潤'
+                
+            # 處理已入帳
+            if 'PO Entry full invoiced status' in df.columns:
+                mask_posted = (
+                    (df['PO狀態'].isna() | (df['PO狀態'] == 'nan')) & 
+                    (df['PO Entry full invoiced status'].astype(str) == '1')
+                )
+                df.loc[mask_posted, 'PO狀態'] = STATUS_VALUES['POSTED']
+                df.loc[df['PO狀態'] == STATUS_VALUES['POSTED'], '是否估計入帳'] = "N"
+            
+            # 解析日期
+            df = self.parse_date_from_description(df)
+                
+            context.update_data(df)
+            
+            self.logger.info("Date logic processing completed")
+            
+            return StepResult(
+                step_name=self.name,
+                status=StepStatus.SUCCESS,
+                data=df,
+                message="Date logic processed successfully"
+            )
+            
+        except Exception as e:
+            self.logger.error(f"Date logic processing failed: {str(e)}", exc_info=True)
+            context.add_error(f"Date logic processing failed: {str(e)}")
+            return StepResult(
+                step_name=self.name,
+                status=StepStatus.FAILED,
+                error=e,
+                message=str(e)
+            )
+    
+    async def validate_input(self, context: ProcessingContext) -> bool:
+        """驗證輸入"""
+        if context.data is None or context.data.empty:
+            self.logger.error("No data for date logic")
+            return False
+        
+        required_columns = ['Item Description']
+        missing = [col for col in required_columns if col not in context.data.columns]
+        if missing:
+            self.logger.error(f"Missing required columns: {missing}")
+            return False
+        
+        return True
+    
+    def parse_date_from_description(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        從描述欄位解析日期範圍
+        
+        Args:
+            df: 包含Item Description的DataFrame
+            
+        Returns:
+            pd.DataFrame: 添加了解析結果的DataFrame
+        """
+        try:
+            df_copy = df.copy()
+            
+            # 將Expected Receive Month轉換為數值格式以便比較
+            if 'Expected Receive Month' in df_copy.columns:
+                df_copy['Expected Received Month_轉換格式'] = pd.to_datetime(
+                    df_copy['Expected Receive Month'], 
+                    format='%b-%y',
+                    errors='coerce'
+                ).dt.strftime('%Y%m').fillna('0').astype('int32')
+            
+            # 解析Item Description中的日期範圍
+            if 'Item Description' in df_copy.columns:
+                df_copy['YMs of Item Description'] = df_copy['Item Description'].apply(
+                    lambda x: extract_date_range_from_description(x, self.regex_patterns)
+                )
+            
+            return df_copy
+            
+        except Exception as e:
+            self.logger.error(f"解析描述中的日期時出錯: {str(e)}", exc_info=True)
+            raise ValueError("解析日期時出錯")
+
+# =============================================================================
+# 步驟 8: 關單清單整合步驟
+# 替代原始: get_closing_note() + partial give_status_stage_1()
+# =============================================================================
+
+class ClosingListIntegrationStep(PipelineStep):
+    """
+    關單清單整合步驟
+    
+    功能:
+    1. 從 Google Sheets 獲取 SPX 關單數據
+    2. 合併多個年份的關單記錄
+    3. 清理和處理數據
+    4. 將關單信息整合到主數據中
+    
+    輸入: DataFrame
+    輸出: DataFrame with closing list info
+    
+    參考: async_data_importer.import_spx_closing_list()
+    """
+    
+    def __init__(self, name: str = "ClosingListIntegration", **kwargs):
+        super().__init__(name, description="Integrate closing list from Google Sheets", **kwargs)
+        self.sheets_importer = None
+    
+    async def execute(self, context: ProcessingContext) -> StepResult:
+        """執行關單清單整合"""
+        try:
+            df = context.data.copy()
+            processing_date = context.metadata.processing_date
+            
+            self.logger.info("Getting SPX closing list from Google Sheets...")
+            
+            # 準備配置
+            config = self._prepare_config()
+            
+            # 獲取關單數據
+            df_spx_closing = self._get_closing_note(config)
+            
+            if df_spx_closing is None or df_spx_closing.empty:
+                self.logger.warning("No closing list data available")
+                context.add_auxiliary_data('closing_list', pd.DataFrame())
+            else:
+                context.add_auxiliary_data('closing_list', df_spx_closing)
+                self.logger.info(f"Loaded {len(df_spx_closing)} closing records")
+            
+            context.update_data(df)
+            
+            return StepResult(
+                step_name=self.name,
+                status=StepStatus.SUCCESS,
+                data=df,
+                message=f"Closing list integrated: {len(df_spx_closing) if df_spx_closing is not None else 0} records",
+                metadata={
+                    'closing_records': len(df_spx_closing) if df_spx_closing is not None else 0
+                }
+            )
+            
+        except Exception as e:
+            self.logger.error(f"Closing list integration failed: {str(e)}", exc_info=True)
+            context.add_error(f"Closing list integration failed: {str(e)}")
+            return StepResult(
+                step_name=self.name,
+                status=StepStatus.FAILED,
+                error=e,
+                message=str(e)
+            )
+    
+    def _prepare_config(self) -> Dict[str, Any]:
+        """準備 Google Sheets API 配置"""
+        
+        config = {
+            'certificate_path': config_manager.get_credentials_config().get('certificate_path', None),
+            'scopes': config_manager.get_credentials_config().get('scopes', None)
+        }
+        
+        return config
+    
+    def _get_closing_note(self, config: Dict[str, Any]) -> pd.DataFrame:
+        """獲取 SPX 關單數據
+        
+        參考 async_data_importer.import_spx_closing_list() 的實現
+        從多個工作表讀取並合併關單記錄
+        """
+        try:
+            # 初始化 Google Sheets Importer
+            from ....data.importers.google_sheets_importer import GoogleSheetsImporter
+            
+            if self.sheets_importer is None:
+                self.sheets_importer = GoogleSheetsImporter(config)
+            
+            # 定義要查詢的工作表
+            # Spreadsheet ID: SPX 關單清單
+            spreadsheet_id = '1wuwyyNtU6dhK7JF2AFJfUJC0ChNScrDza6UQtfE7sCE'
+            
+            queries = [
+                (spreadsheet_id, '2023年_done', 'A:J'),
+                (spreadsheet_id, '2024年', 'A:J'),
+                (spreadsheet_id, '2025年', 'A:J')
+            ]
+            
+            dfs = []
+            for sheet_id, sheet_name, range_value in queries:
+                try:
+                    self.logger.info(f"Reading sheet: {sheet_name}")
+                    df = self.sheets_importer.get_sheet_data(
+                        sheet_id, 
+                        sheet_name, 
+                        range_value,
+                        header_row=True,
+                        skip_first_row=True
+                    )
+                    
+                    if df is not None and not df.empty:
+                        dfs.append(df)
+                        self.logger.info(f"Successfully read {len(df)} records from {sheet_name}")
+                    else:
+                        self.logger.warning(f"Sheet {sheet_name} is empty")
+                        
+                except Exception as e:
+                    self.logger.warning(f"Failed to read sheet {sheet_name}: {str(e)}")
+                    continue
+            
+            if not dfs:
+                self.logger.warning("No closing list data retrieved from any sheet")
+                return pd.DataFrame()
+            
+            # 合併所有 DataFrame
+            combined_df = pd.concat(dfs, ignore_index=True)
+            self.logger.info(f"Combined {len(combined_df)} total records from {len(dfs)} sheets")
+            
+            # 數據清理和重命名
+            combined_df = self._clean_closing_data(combined_df)
+            
+            self.logger.info(f"After cleaning: {len(combined_df)} valid closing records")
+            return combined_df
+            
+        except Exception as e:
+            self.logger.error(f"Error getting closing note: {str(e)}", exc_info=True)
+            return pd.DataFrame()
+    
+    def _clean_closing_data(self, df: pd.DataFrame) -> pd.DataFrame:
+        """清理和處理關單數據
+        
+        參考 async_data_importer.import_spx_closing_list() 的清理邏輯
+        """
+        try:
+            # 移除 Date 為空的記錄
+            df_clean = df.dropna(subset=['Date']).copy()
+            
+            # 重命名欄位
+            df_clean.rename(columns={
+                'Date': 'date',
+                'Type': 'type',
+                'PO Number': 'po_no',
+                'Requester': 'requester',
+                'Supplier': 'supplier',
+                'Line Number / ALL': 'line_no',
+                'Reason': 'reason',
+                'New PR Number': 'new_pr_no',
+                'Remark': 'remark',
+                'Done(V)': 'done_by_fn'
+            }, inplace=True)
+            
+            # 過濾空的日期記錄
+            df_clean = df_clean.query("date != ''").reset_index(drop=True)
+            
+            return df_clean
+            
+        except Exception as e:
+            self.logger.error(f"Error cleaning closing data: {str(e)}")
+            # 如果清理失敗，返回原始數據
+            return df
+    
+    async def validate_input(self, context: ProcessingContext) -> bool:
+        """驗證輸入"""
+        if context.data is None or context.data.empty:
+            self.logger.error("No data for closing list integration")
+            return False
+        
+        return True
+    
+# =============================================================================
+# 步驟 9: 第一階段狀態判斷步驟
+# 替代原始: give_status_stage_1()
+# =============================================================================
+
+class StatusStage1Step(PipelineStep):
+    """
+    第一階段狀態判斷步驟
+    
+    功能:
+    根據關單清單給予初始狀態
+    
+    輸入: DataFrame + Closing list
+    輸出: DataFrame with initial status
+    """
+    
+    def __init__(self, name: str = "StatusStage1", **kwargs):
+        super().__init__(name, description="Evaluate status stage 1", **kwargs)
+    
+    async def execute(self, context: ProcessingContext) -> StepResult:
+        """執行第一階段狀態判斷"""
+        try:
+            df = context.data.copy()
+            df_spx_closing = context.get_auxiliary_data('closing_list')
+            processing_date = context.metadata.processing_date
+            
+            self.logger.info("Evaluating status stage 1...")
+            
+            if df_spx_closing is None or df_spx_closing.empty:
+                self.logger.warning("No closing list data, skipping status stage 1")
+                return StepResult(
+                    step_name=self.name,
+                    status=StepStatus.SKIPPED,
+                    data=df,
+                    message="No closing list data"
+                )
+            
+            # 給予第一階段狀態
+            df = self._give_status_stage_1(df, 
+                                           df_spx_closing, 
+                                           processing_date,
+                                           entity_type=context.metadata.entity_type)
+            
+            context.update_data(df)
+            
+            status_counts = df['PO狀態'].value_counts().to_dict() if 'PO狀態' in df.columns else {}
+            
+            self.logger.info("Status stage 1 evaluation completed")
+            
+            return StepResult(
+                step_name=self.name,
+                status=StepStatus.SUCCESS,
+                data=df,
+                message="Status stage 1 evaluated",
+                metadata={'status_counts': status_counts}
+            )
+            
+        except Exception as e:
+            self.logger.error(f"Status stage 1 evaluation failed: {str(e)}", exc_info=True)
+            context.add_error(f"Status stage 1 evaluation failed: {str(e)}")
+            return StepResult(
+                step_name=self.name,
+                status=StepStatus.FAILED,
+                error=e,
+                message=str(e)
+            )
+    
+    def _give_status_stage_1(self, 
+                             df: pd.DataFrame, 
+                             df_spx_closing: pd.DataFrame, 
+                             date, 
+                             **kwargs) -> pd.DataFrame:
+        #     # 這裡實現類似原始 give_status_stage_1 的邏輯
+        #     # 根據關單清單標記已關單的 PO
+        """給予第一階段狀態 - SPX特有邏輯
+        
+        Args:
+            df: PO/PR DataFrame
+            df_spx_closing: SPX關單數據DataFrame
+            
+        Returns:
+            pd.DataFrame: 處理後的DataFrame
+        """
+        if 'entity_type' in kwargs:
+            entity_type = kwargs.get('entity_type')
+        else:
+            entity_type = 'context transfer error'
+
+        utility_suppliers = config_manager.get(entity_type, 'utility_suppliers')
+        if 'PO狀態' in df.columns:
+            tag_column = 'PO狀態'
+            # 依據已關單條件取得對應的PO#
+            c1, c2 = self.is_closed_spx(df_spx_closing)
+            to_be_close = df_spx_closing.loc[c1, 'po_no'].unique() if c1.any() else []
+            closed = df_spx_closing.loc[c2, 'po_no'].unique() if c2.any() else []
+            
+            # 定義「上月FN」備註關單條件
+            remarked_close_by_fn_last_month = (
+                df['Remarked by 上月 FN'].str.contains('刪|關', na=False) | 
+                df['Remarked by 上月 FN PR'].astype(str).str.contains('刪|關', na=False)
+            )
+            
+            # 統一轉換日期格式
+            df['Remarked by 上月 FN'] = self.convert_date_format_in_remark(df['Remarked by 上月 FN'])
+            df['Remarked by 上月 FN PR'] = self.convert_date_format_in_remark(df['Remarked by 上月 FN PR'])
+            
+            # 條件1：摘要中有押金/保證金/Deposit/找零金，且不是FA相關科目
+            cond1 = \
+                df['Item Description'].str.contains(config_manager.get(entity_type, 'deposit_keywords'), 
+                                                    na=False)
+            is_fa = df['GL#'].astype(str) == config_manager.get('FA_ACCOUNTS', entity_type, '199999')
+            cond_exclude = df['Item Description'].str.contains('(?i)繳費機訂金', na=False)  # 繳費機訂金屬FA
+            df.loc[cond1 & ~is_fa & ~cond_exclude, tag_column] = \
+                config_manager.get(entity_type, 'deposit_keywords_label')
+            
+            # 條件2：供應商與類別對應，做GL調整
+            bao_supplier: list = config_manager.get_list(entity_type, 'bao_supplier')
+            bao_categories: list = config_manager.get_list(entity_type, 'bao_categories')
+            cond2 = (df['PO Supplier'].isin(bao_supplier)) & (df['Category'].isin(bao_categories))
+            df.loc[cond2, tag_column] = 'GL調整'
+            
+            # 條件3：該PO#在待關單清單中
+            cond3 = df['PO#'].astype(str).isin([str(x) for x in to_be_close])
+            df.loc[cond3, tag_column] = '待關單'
+            
+            # 條件4：該PO#在已關單清單中
+            cond4 = df['PO#'].astype(str).isin([str(x) for x in closed])
+            df.loc[cond4, tag_column] = '已關單'
+            
+            # 條件5：上月FN備註含有「刪」或「關」
+            cond5 = remarked_close_by_fn_last_month
+            df.loc[cond5, tag_column] = '參照上月關單'
+            
+            # 條件6：若「Remarked by 上月 FN」含有「入FA」，則提取該數字，並更新狀態(xxxxxx入FA)
+            # 部分完成xxxxxx入FA不計入，前期FN備註如果是部分完成的會掉到erm邏輯判斷
+            cond6 = (
+                (df['Remarked by 上月 FN'].str.contains('入FA', na=False)) & 
+                (~df['Remarked by 上月 FN'].str.contains('部分完成', na=False))
+            )
+            if cond6.any():
+                extracted_fn = self.extract_fa_remark(df.loc[cond6, 'Remarked by 上月 FN'])
+                df.loc[cond6, tag_column] = extracted_fn
+            
+            # 條件7：若「Remarked by 上月 FN PR」含有「入FA」，則提取該數字，並更新狀態
+            cond7 = (
+                (df['Remarked by 上月 FN PR'].astype(str).str.contains('入FA', na=False)) & 
+                (~df['Remarked by 上月 FN PR'].astype(str).str.contains('部分完成', na=False))
+            )
+            if cond7.any():
+                extracted_pr = self.extract_fa_remark(df.loc[cond7, 'Remarked by 上月 FN PR'])
+                df.loc[cond7, tag_column] = extracted_pr
+
+            # 條件8：該筆資料supplier是"台電"、"台水"、"北水"等公共費用
+            cond8 = df['PO Supplier'].fillna('system_filled').str.contains(utility_suppliers)
+            df.loc[cond8, tag_column] = '授扣GL調整'
+
+            # 費用類按申請人篩選
+            is_non_labeled = (df[tag_column].isna()) | (df[tag_column] == '') | (df[tag_column] == 'nan')
+            ops_rent: str = config_manager.get(entity_type, 'ops_for_rent')
+            account_rent: str = config_manager.get(entity_type, 'account_rent')
+            ops_intermediary: str = config_manager.get(entity_type, 'ops_for_intermediary')
+            ops_other: str = config_manager.get(entity_type, 'ops_for_other')
+            
+            mask_erm_equals_current = df['Expected Received Month_轉換格式'] == date
+            mask_account_rent = df['GL#'] == account_rent
+            mask_ops_rent = df['PR Requester'] == ops_rent
+            mask_descerm_equals_current = df['YMs of Item Description'].str[:6].astype(int) == date
+            mask_desc_contains_intermediary = df['Item Description'].fillna('na').str.contains('(?i)intermediary')
+            mask_ops_intermediary = df['PR Requester'] == ops_intermediary
+
+            combined_cond = is_non_labeled & mask_erm_equals_current & mask_account_rent & mask_ops_rent
+            df.loc[combined_cond, tag_column] = '已完成_租金'
+
+            combined_cond = is_non_labeled & mask_descerm_equals_current & mask_account_rent & mask_ops_rent
+            df.loc[combined_cond, tag_column] = '已完成_租金'
+
+            # 租金已入帳
+            booked_in_ap = (~df['GL DATE'].isna()) & ((df['GL DATE'] != '') | (df['GL DATE'] != 'nan'))
+            df.loc[(df[tag_column] == '已完成_租金') & (booked_in_ap), tag_column] = '已入帳'
+
+            uncompleted_rent = (
+                ((df['Remarked by Procurement'] != 'error') &
+                    is_non_labeled &
+                    mask_ops_rent &
+                    mask_account_rent &
+                    (df['Item Description'].str.contains('(?i)租金', na=False))
+                    ) &
+                
+                (
+                    ((df['Expected Received Month_轉換格式'] <= df['YMs of Item Description'].str[:6].astype('int32')) &
+                        (df['Expected Received Month_轉換格式'] > date) &
+                        (df['YMs of Item Description'] != '100001,100002')
+                        ) |
+                    ((df['Expected Received Month_轉換格式'] > df['YMs of Item Description'].str[:6].astype('int32')) &
+                        (df['Expected Received Month_轉換格式'] > date) &
+                        (df['YMs of Item Description'] != '100001,100002')
+                        )
+                )
+                    
+
+            )
+            df.loc[uncompleted_rent, tag_column] = '未完成_租金'
+
+            combined_cond = is_non_labeled & mask_ops_intermediary & mask_desc_contains_intermediary & \
+                ((df['Expected Received Month_轉換格式'] == date) |
+                    ((df['Expected Received Month_轉換格式'] < date) & (df['Remarked by 上月 FN'].str.contains('已完成')))
+                    )
+            df.loc[combined_cond, tag_column] = '已完成_intermediary'
+            
+            combined_cond = is_non_labeled & mask_ops_intermediary & mask_desc_contains_intermediary & \
+                (df['Expected Received Month_轉換格式'] > date)
+            df.loc[combined_cond, tag_column] = '未完成_intermediary'
+
+            # 要判斷OPS驗收數
+            kiosk_suppliers: list = config_manager.get_list(entity_type, 'kiosk_suppliers')
+            locker_suppliers: list = config_manager.get_list(entity_type, 'locker_suppliers')
+            asset_suppliers: list = kiosk_suppliers + locker_suppliers
+
+            # Exclude both general '入FA' but Include specific patterns(部分入)
+            po_general_fa = df['Remarked by 上月 FN'].str.contains('入FA', na=False)
+            po_specific_pattern = df['Remarked by 上月 FN'].str.contains(r'部分完成.*\d{6}入FA', na=False, regex=True)
+
+            pr_general_fa = df['Remarked by 上月 FN PR'].astype(str).str.contains('入FA', na=False)
+            pr_specific_pattern = (df['Remarked by 上月 FN PR']
+                                    .astype(str).str.contains(r'部分完成.*\d{6}入FA', na=False, regex=True))
+
+            doesnt_contain_fa = (~pr_general_fa & ~po_general_fa)
+            specific_pattern = (pr_specific_pattern | po_specific_pattern)
+            ignore_closed = ~df[tag_column].str.contains('關', na=False)
+            mask = ((df['PO Supplier'].isin(asset_suppliers)) & 
+                    (doesnt_contain_fa | specific_pattern) & 
+                    (ignore_closed))
+            df.loc[mask, tag_column] = 'Pending_validating'
+            
+            self.logger.info("成功給予第一階段狀態")
+            return df
+        else:
+            tag_column = 'PR狀態'
+            # 依據已關單條件取得對應的PO#
+            c1, c2 = self.is_closed_spx(df_spx_closing)
+            to_be_close = df_spx_closing.loc[c1, 'new_pr_no'].unique() if c1.any() else []
+            closed = df_spx_closing.loc[c2, 'new_pr_no'].unique() if c2.any() else []
+            
+            # 定義「上月FN」備註關單條件
+            remarked_close_by_fn_last_month = (
+                df['Remarked by 上月 FN'].astype(str).str.contains('刪|關', na=False)
+            )
+            
+            # 統一轉換日期格式
+            df['Remarked by 上月 FN'] = self.convert_date_format_in_remark(df['Remarked by 上月 FN'])
+            
+            # 條件1：摘要中有押金/保證金/Deposit/找零金，且不是FA相關科目
+            cond1 = \
+                df['Item Description'].str.contains(config_manager.get(entity_type, 'deposit_keywords'), 
+                                                    na=False)
+            is_fa = df['GL#'].astype(str) == config_manager.get('FA_ACCOUNTS', entity_type, '199999')
+            cond_exclude = df['Item Description'].str.contains('(?i)繳費機訂金', na=False)  # 繳費機訂金屬FA
+            df.loc[cond1 & ~is_fa & ~cond_exclude, tag_column] = \
+                config_manager.get(entity_type, 'deposit_keywords_label')
+            
+            # 條件2：供應商與類別對應，做GL調整
+            bao_supplier: list = config_manager.get_list(entity_type, 'bao_supplier')
+            bao_categories: list = config_manager.get_list(entity_type, 'bao_categories')
+            cond2 = (df['PR Supplier'].isin(bao_supplier)) & (df['Category'].isin(bao_categories))
+            df.loc[cond2, tag_column] = 'GL調整'
+            
+            # 條件3：該PR#在待關單清單中
+            cond3 = df['PR#'].astype(str).isin([str(x) for x in to_be_close])
+            df.loc[cond3, tag_column] = '待關單'
+            
+            # 條件4：該PR#在已關單清單中
+            cond4 = df['PR#'].astype(str).isin([str(x) for x in closed])
+            df.loc[cond4, tag_column] = '已關單'
+            
+            # 條件5：上月FN備註含有「刪」或「關」
+            cond5 = remarked_close_by_fn_last_month
+            df.loc[cond5, tag_column] = '參照上月關單'
+            
+            # 條件6：若「Remarked by 上月 FN」含有「入FA」，則提取該數字，並更新狀態(xxxxxx入FA)
+            # 部分完成xxxxxx入FA不計入，前期FN備註如果是部分完成的會掉到erm邏輯判斷
+            cond6 = (
+                (df['Remarked by 上月 FN'].astype(str).str.contains('入FA', na=False)) & 
+                (~df['Remarked by 上月 FN'].astype(str).str.contains('部分完成', na=False))
+            )
+            if cond6.any():
+                extracted_fn = self.extract_fa_remark(df.loc[cond6, 'Remarked by 上月 FN'])
+                df.loc[cond6, tag_column] = extracted_fn
+            
+            # 條件8：該筆資料supplier是"台電"、"台水"、"北水"等公共費用
+            cond8 = df['PR Supplier'].fillna('system_filled').str.contains(utility_suppliers)
+            df.loc[cond8, tag_column] = '授扣GL調整'
+
+            # 費用類按申請人篩選
+            is_non_labeled = (df[tag_column].isna()) | (df[tag_column] == '') | (df[tag_column] == 'nan')
+            ops_rent: str = config_manager.get(entity_type, 'ops_for_rent')
+            account_rent: str = config_manager.get(entity_type, 'account_rent')
+            ops_intermediary: str = config_manager.get(entity_type, 'ops_for_intermediary')
+            ops_other: str = config_manager.get(entity_type, 'ops_for_other')
+            
+            mask_erm_equals_current = df['Expected Received Month_轉換格式'] == date
+            mask_account_rent = df['GL#'] == account_rent
+            mask_ops_rent = df['Requester'] == ops_rent
+            mask_descerm_equals_current = df['YMs of Item Description'].str[:6].astype(int) == date
+            mask_desc_contains_intermediary = df['Item Description'].fillna('na').str.contains('(?i)intermediary')
+            mask_ops_intermediary = df['Requester'] == ops_intermediary
+
+            combined_cond = is_non_labeled & mask_erm_equals_current & mask_account_rent & mask_ops_rent
+            df.loc[combined_cond, tag_column] = '已完成_租金'
+
+            combined_cond = is_non_labeled & mask_descerm_equals_current & mask_account_rent & mask_ops_rent
+            df.loc[combined_cond, tag_column] = '已完成_租金'
+
+            uncompleted_rent = (
+                ((df['Remarked by Procurement'] != 'error') &
+                    is_non_labeled &
+                    mask_ops_rent &
+                    mask_account_rent &
+                    (df['Item Description'].str.contains('(?i)租金', na=False))
+                    ) &
+                
+                (
+                    ((df['Expected Received Month_轉換格式'] <= df['YMs of Item Description'].str[:6].astype('int32')) &
+                        (df['Expected Received Month_轉換格式'] > date) &
+                        (df['YMs of Item Description'] != '100001,100002')
+                        ) |
+                    ((df['Expected Received Month_轉換格式'] > df['YMs of Item Description'].str[:6].astype('int32')) &
+                        (df['Expected Received Month_轉換格式'] > date) &
+                        (df['YMs of Item Description'] != '100001,100002')
+                        )
+                )
+
+            )
+            df.loc[uncompleted_rent, tag_column] = '未完成_租金'
+
+            combined_cond = is_non_labeled & mask_ops_intermediary & mask_desc_contains_intermediary & \
+                ((df['Expected Received Month_轉換格式'] == date) |
+                    ((df['Expected Received Month_轉換格式'] < date) & (df['Remarked by 上月 FN']
+                                                                    .astype(str).str.contains('已完成')))
+                    )
+            df.loc[combined_cond, tag_column] = '已完成_intermediary'
+            
+            combined_cond = is_non_labeled & mask_ops_intermediary & mask_desc_contains_intermediary & \
+                (df['Expected Received Month_轉換格式'] > date)
+            df.loc[combined_cond, tag_column] = '未完成_intermediary'
+
+            # PR的智取櫃與繳費機，不會在PR驗收不估
+            kiosk_suppliers: list = config_manager.get_list(entity_type, 'kiosk_suppliers')
+            locker_suppliers: list = config_manager.get_list(entity_type, 'locker_suppliers')
+            asset_suppliers: list = kiosk_suppliers + locker_suppliers
+            ignore_closed = ~df[tag_column].str.contains('關', na=False)
+            mask = ((df['PR Supplier'].isin(asset_suppliers)) & 
+                    (ignore_closed))
+            df.loc[mask, tag_column] = '智取櫃與繳費機'
+
+            self.logger.info("成功給予第一階段狀態")
+            # return df
+        
+        if 'PO#' in df_spx_closing.columns and 'PO#' in df.columns:
+            closed_po_list = df_spx_closing['PO#'].unique().tolist()
+            
+            # 標記已關單的 PO
+            df.loc[df['PO#'].isin(closed_po_list), 'Closing_Status'] = 'Closed'
+        
+        return df
+    
+    def is_closed_spx(self, df: pd.DataFrame) -> Tuple[pd.Series, pd.Series]:
+        """判斷SPX關單狀態
+        
+        Args:
+            df: 關單數據DataFrame
+            
+        Returns:
+            Tuple[pd.Series, pd.Series]: (待關單條件, 已關單條件)
+        """
+        # [0]有新的PR編號，但FN未上系統關單的
+        condition_to_be_closed = (
+            (~df['new_pr_no'].isna()) & 
+            (df['new_pr_no'] != '') & 
+            (df['done_by_fn'].isna())
+        )
+        
+        # [1]有新的PR編號，但FN已經上系統關單的
+        condition_closed = (
+            (~df['new_pr_no'].isna()) & 
+            (df['new_pr_no'] != '') & 
+            (~df['done_by_fn'].isna())
+        )
+        
+        return condition_to_be_closed, condition_closed
+    
+    def convert_date_format_in_remark(self, series: pd.Series) -> pd.Series:
+        """轉換備註中的日期格式 (YYYY/MM -> YYYYMM)
+        
+        Args:
+            series: 包含日期的Series
+            
+        Returns:
+            pd.Series: 轉換後的Series
+        """
+        try:
+            return series.astype(str).str.replace(r'(\d{4})/(\d{2})', r'\1\2', regex=True)
+        except Exception as e:
+            self.logger.error(f"轉換日期格式時出錯: {str(e)}", exc_info=True)
+            return series
+        
+    def extract_fa_remark(self, series: pd.Series) -> pd.Series:
+        """提取FA備註中的日期
+        
+        Args:
+            series: 包含FA備註的Series
+            
+        Returns:
+            pd.Series: 提取的日期Series
+        """
+        try:
+            return series.astype(str).str.extract(r'(\d{6}入FA)', expand=False)
+        except Exception as e:
+            self.logger.error(f"提取FA備註時出錯: {str(e)}", exc_info=True)
+            return series
+    
+    async def validate_input(self, context: ProcessingContext) -> bool:
+        """驗證輸入"""
+        if context.data is None or context.data.empty:
+            self.logger.error("No data for status stage 1")
+            return False
+        
+        return True
 # =============================================================================
 # 載入步驟使用範例
 # =============================================================================
@@ -1397,6 +2132,13 @@ def create_spx_po_complete_pipeline(file_paths: Dict[str, str]) -> Pipeline:
                 .add_step(APInvoiceIntegrationStep(name="Integrate_AP_Invoice", required=True))
                 .add_step(PreviousWorkpaperIntegrationStep(name="Integrate_Previous_WP", required=True))
                 .add_step(ProcurementIntegrationStep(name="Integrate_Procurement", required=True))
+                
+                # ========== 階段3: 業務邏輯 ==========
+                .add_step(DateLogicStep(name="Process_Dates", required=True))
+                .add_step(ClosingListIntegrationStep(name="Integrate_Closing_List", required=True))
+                .add_step(StatusStage1Step(name="Evaluate_Status_Stage1", required=True))
+                # .add_step(ERMLogicStep(name="Apply_ERM_Logic", required=True))
+                # .add_step(ValidationDataProcessingStep(name="Process_Validation", required=False))
 
 
                 )
