@@ -1,16 +1,3 @@
-import sys
-import os
-import time
-from pathlib import Path
-
-# 添加模組路徑
-current_dir = Path(__file__).parent
-sys.path.insert(0, str(current_dir))
-
-# TEST NEW MODULE
-import asyncio
-
-
 """
 SPX Pipeline Checkpoint 系統
 解決測試時每次都要重跑耗時步驟的問題
@@ -30,15 +17,23 @@ SPX Pipeline Checkpoint 系統
         start_from="Add_Columns"
     )
 """
+import sys
+import os
+import time
+from pathlib import Path
 
-import pickle
+# 添加模組路徑
+current_dir = Path(__file__).parent
+sys.path.insert(0, str(current_dir))
+
 import json
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 from datetime import datetime
+# TEST NEW MODULE
+import asyncio
 import pandas as pd
 
-# 你的原有導入
 from accrual_bot.core.pipeline.context import ProcessingContext
 from accrual_bot.core.pipeline import Pipeline
 
@@ -280,7 +275,7 @@ class PipelineWithCheckpoint:
             'successful_steps': successful,
             'failed_steps': failed,
             # 'skipped_steps': skipped,
-            'results': results,
+            'results': results,  # List[StepResult]
             'context': context
         }
 
@@ -482,6 +477,8 @@ async def example_usage():
 
 
 if __name__ == "__main__":
+    import warnings
+    warnings.filterwarnings('ignore')
     # asyncio.run(example_usage())
 
     file_paths = {
@@ -525,8 +522,25 @@ if __name__ == "__main__":
         }
     }
     
-    asyncio.run(resume_from_step(
-        checkpoint_name="SPX_202509_after_Filter_SPX_Products",
-        start_from_step="Add_Columns",
-        file_paths=file_paths  # 可選,如果 checkpoint 中沒有
+    # Run all steps
+    result = asyncio.run(execute_with_checkpoint(
+        file_paths=file_paths,
+        processing_date=202509,
+        save_checkpoints=True
     ))
+
+    # Start from specific point
+    # asyncio.run(resume_from_step(
+    #     # checkpoint_name="SPX_202509_after_Filter_SPX_Products",    # checkpoint資料夾路徑名稱
+    #     # start_from_step="Add_Columns",
+    #     checkpoint_name="SPX_202509_after_Process_Dates",    # checkpoint資料夾路徑名稱
+    #     start_from_step="Integrate_Closing_List",
+    #     file_paths=file_paths  # 可選,如果 checkpoint 中沒有
+    # ))
+
+    # 從特定步驟開始，跟resume_from_step類似
+    # result = asyncio.run(quick_test_step(
+    #     checkpoint_name="SPX_202509_after_Add_Columns",
+    #     step_to_test="Integrate_AP_Invoice"
+    # ))
+    print(1)

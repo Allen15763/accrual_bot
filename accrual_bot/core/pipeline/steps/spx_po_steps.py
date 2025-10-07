@@ -14,6 +14,7 @@
 """
 
 import os
+import re
 import pandas as pd
 import numpy as np
 import asyncio
@@ -33,7 +34,9 @@ from accrual_bot.core.datasources import (
 from accrual_bot.utils.config import config_manager
 from accrual_bot.utils.helpers.data_utils import (create_mapping_dict, 
                                                   safe_string_operation,
-                                                  extract_date_range_from_description)
+                                                  extract_date_range_from_description,
+                                                  classify_description,
+                                                  give_account_by_keyword)
 from accrual_bot.utils.config.constants import STATUS_VALUES
 
 
@@ -136,6 +139,10 @@ class SPXDataLoadingStep(PipelineStep):
             context.update_data(df)
             context.set_variable('processing_date', date)
             context.set_variable('processing_month', m)
+            # 原處理OPS驗收底稿的方法介面需要路徑，故存成變量至Process_Validation步驟使用
+            context.set_variable('validation_file_path', validated_configs.get('ops_validation').get('path'))
+            # 提供快速測試支援
+            context.set_variable('file_paths', validated_configs)
             
             # 階段 3: 添加輔助數據到 Context
             auxiliary_count = 0
@@ -145,14 +152,14 @@ class SPXDataLoadingStep(PipelineStep):
                         context.add_auxiliary_data(data_name, data_content)
                         auxiliary_count += 1
                         self.logger.info(
-                            f"Added auxiliary data: {data_name} ({len(data_content)} rows)"
+                            f"Added auxiliary data: {data_name} {data_content.shape} shape)"
                         )
             
             # 階段 4: 載入參考數據
             ref_count = await self._load_reference_data(context)
             
             self.logger.info(
-                f"Successfully loaded {len(df)} rows of PO data, "
+                f"Successfully loaded {df.shape} shape of PO data, "
                 f"{auxiliary_count} auxiliary datasets, "
                 f"{ref_count} reference datasets"
             )
@@ -259,6 +266,8 @@ class SPXDataLoadingStep(PipelineStep):
                 return await self._load_raw_po_file(source, file_path)
             elif file_type == 'ap_invoice':
                 return await self._load_ap_invoice(source)
+            elif file_type == 'ops_validation':
+                self.logger.warning("Pass loading ops_validation. Will load it on Process_Validation Step")
             else:
                 # 其他文件直接讀取
                 df = await source.read()
@@ -448,7 +457,7 @@ class SPXDataLoadingStep(PipelineStep):
                 raise ValueError(f"Missing required columns: {missing_columns}")
             
             self.logger.info(
-                f"Raw PO data validated: {len(df)} rows, "
+                f"Raw PO data validated: {df.shape} shape, "
                 f"{len(df.columns)} columns, date={date}, month={m}"
             )
             
@@ -2612,6 +2621,859 @@ class SPXERMLogicStep(PipelineStep):
     
 
 # =============================================================================
+# 步驟 11: 驗收數據處理步驟
+# 替代原始: process_validation_data() + apply_validation_data_to_po()
+# =============================================================================
+
+class ValidationDataProcessingStep(PipelineStep):
+    """
+    驗收數據處理步驟
+    
+    功能:
+    1. 處理智取櫃驗收明細
+    2. 處理繳費機驗收明細
+    3. 將驗收數據應用到 PO DataFrame
+    
+    輸入: DataFrame + Validation file path
+    輸出: DataFrame with validation data applied
+    """
+    
+    def __init__(self, 
+                 name: str = "ValidationDataProcessing",
+                 validation_file_path: Optional[str] = None,
+                 **kwargs):
+        super().__init__(name, description="Process validation data", **kwargs)
+        self.validation_file_path = validation_file_path
+    
+    async def execute(self, context: ProcessingContext) -> StepResult:
+        """執行驗收數據處理"""
+        try:
+            df = context.data.copy()
+            processing_date = context.metadata.processing_date
+            
+            # 從 context 獲取驗收文件路徑
+            validation_path = self.validation_file_path or context.get_variable('validation_file_path')
+            
+            if not validation_path:
+                self.logger.warning("No validation file path provided, skipping")
+                return StepResult(
+                    step_name=self.name,
+                    status=StepStatus.SKIPPED,
+                    data=df,
+                    message="No validation file path"
+                )
+            
+            if not os.path.exists(validation_path):
+                self.logger.warning(f"Validation file not found: {validation_path}")
+                return StepResult(
+                    step_name=self.name,
+                    status=StepStatus.SKIPPED,
+                    data=df,
+                    message="Validation file not found"
+                )
+            
+            self.logger.info("Processing validation data...")
+            
+            # 處理驗收數據
+            locker_non_discount, locker_discount, discount_rate, kiosk_data = \
+                self._process_validation_data(validation_path, processing_date)
+            
+            # 應用驗收數據
+            df = self._apply_validation_data(df, locker_non_discount, locker_discount, 
+                                             discount_rate, kiosk_data)
+            
+            context.update_data(df)
+            
+            validation_count = (df['本期驗收數量/金額'] != 0).sum() if '本期驗收數量/金額' in df.columns else 0
+            
+            self.logger.info(f"Validation data processed: {validation_count} records updated")
+            
+            return StepResult(
+                step_name=self.name,
+                status=StepStatus.SUCCESS,
+                data=df,
+                message=f"Validation data applied to {validation_count} records",
+                metadata={
+                    'validation_records': int(validation_count),
+                    'locker_non_discount_count': len(locker_non_discount),
+                    'locker_discount_count': len(locker_discount),
+                    'kiosk_count': len(kiosk_data)
+                }
+            )
+            
+        except Exception as e:
+            self.logger.error(f"Validation data processing failed: {str(e)}", exc_info=True)
+            context.add_error(f"Validation data processing failed: {str(e)}")
+            return StepResult(
+                step_name=self.name,
+                status=StepStatus.FAILED,
+                error=e,
+                message=str(e)
+            )
+    
+    def _process_validation_data(self, validation_file_path: str, target_date: int) -> Tuple[Dict, Dict, float, Dict]:
+        """
+        處理驗收數據 - 智取櫃和繳費機驗收明細
+        
+        Args:
+            validation_file_path: 驗收明細檔案路徑
+            target_date: 目標日期 (YYYYMM格式)
+            
+        Returns:
+            Tuple[Dict, Dict, Dict]: (智取櫃非折扣驗收數量, 智取櫃折扣驗收數量, 折扣率, 繳費機驗收數量)
+        """
+        
+        # 處理智取櫃驗收明細
+        locker_data = self._process_locker_validation_data(validation_file_path, target_date)
+        
+        # 處理繳費機驗收明細
+        kiosk_data = self._process_kiosk_validation_data(validation_file_path, target_date)
+        
+        return locker_data['non_discount'], locker_data['discount'], locker_data.get('discount_rate'), kiosk_data
+    
+    def _process_locker_validation_data(self, validation_file_path: str, target_date: int) -> Dict:
+        """
+        處理智取櫃驗收明細
+        Args:
+            validation_file_path: 驗收明細檔案路徑
+            target_date: 目標日期 (YYYYMM格式)
+            
+        Returns:
+            Dict[str, dict]: 包含非折扣和折扣驗收數量的字典
+        """
+        
+        try:
+            # 讀取智取櫃驗收明細
+            df_locker = pd.read_excel(
+                validation_file_path, 
+                sheet_name=config_manager.get('SPX', 'locker_sheet_name'), 
+                header=int(config_manager.get('SPX', 'locker_header')), 
+                usecols=config_manager.get('SPX', 'locker_usecols')
+            )
+            
+            if df_locker.empty:
+                return {'non_discount': {}, 'discount': {}, 'discount_rate': None}
+            
+            # 設置欄位名稱
+            locker_columns = config_manager.get_list('SPX', 'locker_columns')
+            df_locker.columns = locker_columns
+            
+            # 過濾和轉換
+            df_locker = df_locker.loc[~df_locker['驗收月份'].isna(), :].reset_index(drop=True)
+            df_locker['validated_month'] = pd.to_datetime(
+                df_locker['驗收月份'], errors='coerce'
+            ).dt.strftime('%Y%m').astype('Int64')
+            
+            # 移除無效日期的記錄
+            df_locker = df_locker.dropna(subset=['validated_month']).reset_index(drop=True)
+            # 篩選目標月份的數據
+            df_locker_filtered = df_locker.loc[df_locker['validated_month'] == target_date, :]
+            
+            if df_locker_filtered.empty:
+                return {'non_discount': {}, 'discount': {}, 'discount_rate': None}
+            
+            # 聚合欄位
+            agg_cols = [
+                'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'DA', 
+                'XA', 'XB', 'XC', 'XD', 'XE', 'XF',
+                '超出櫃體安裝費', '超出櫃體運費', '裝運費'
+            ]
+            
+            return self._categorize_validation_data(df_locker_filtered, agg_cols)
+            
+        except Exception as e:
+            self.logger.error(f"Processing locker validation data failed: {str(e)}")
+            return {'non_discount': {}, 'discount': {}, 'discount_rate': None}
+    
+    def _process_kiosk_validation_data(self, validation_file_path: str, target_date: int) -> Dict:
+        """
+        處理繳費機驗收明細
+        Args:
+            validation_file_path: 驗收明細檔案路徑
+            target_date: 目標日期 (YYYYMM格式)
+            
+        Returns:
+            Dict[str, dict]: 繳費機驗收數量字典
+        """
+        try:
+            # 讀取繳費機驗收明細
+            df_kiosk = pd.read_excel(
+                validation_file_path, 
+                sheet_name=config_manager.get('SPX', 'kiosk_sheet_name'), 
+                usecols=config_manager.get('SPX', 'kiosk_usecols')
+            )
+            
+            if df_kiosk.empty:
+                return {}
+            
+            # 過濾和轉換
+            df_kiosk = df_kiosk.loc[~df_kiosk['驗收月份'].isna(), :].reset_index(drop=True)
+            df_kiosk['validated_month'] = pd.to_datetime(
+                df_kiosk['驗收月份'], errors='coerce'
+            ).dt.strftime('%Y%m').astype('Int64')
+            
+            df_kiosk = df_kiosk.dropna(subset=['validated_month']).reset_index(drop=True)
+            df_kiosk_filtered = df_kiosk.loc[df_kiosk['validated_month'] == target_date, :]
+            
+            if df_kiosk_filtered.empty:
+                return {}
+            
+            # 取得當期驗收數
+            kiosk_validation = df_kiosk_filtered['PO單號'].value_counts().to_dict()
+            return kiosk_validation
+            
+        except Exception as e:
+            self.logger.error(f"Processing kiosk validation data failed: {str(e)}")
+            return {}
+    
+    def _categorize_validation_data(self, df: pd.DataFrame, agg_cols: List[str]) -> Dict:
+        """
+        分類驗收數據為折扣和非折扣
+        Args:
+            df: 驗收數據DataFrame
+            agg_cols: 需要聚合的欄位列表
+            
+        Returns:
+            Dict[str, dict]: 包含 'non_discount' 和 'discount'， 'discount_rate' 鍵的字典
+        """
+        
+        validation_results = {'non_discount': {}, 'discount': {}, 'discount_rate': None}
+        
+        if 'discount' not in df.columns:
+            self.logger.warning("智取櫃數據中沒有 discount 欄位，所有數據將歸類為非折扣")
+            df['discount'] = ''
+        
+        # 確保 discount 欄位為字符串類型
+        df['discount'] = df['discount'].fillna('').astype(str)
+        
+        # 非折扣驗收 (不包含 X折驗收/出貨 的記錄)
+        locker_discount_pattern = config_manager.get('SPX', 'locker_discount_pattern', r'\d+折')
+        non_discount_condition = ~df['discount'].str.contains(locker_discount_pattern, na=False, regex=True)
+        df_non_discount = df.loc[non_discount_condition, :]
+        
+        if not df_non_discount.empty and 'PO單號' in df_non_discount.columns:
+            validation_results['non_discount'] = (
+                df_non_discount.groupby(['PO單號'])[agg_cols]
+                .sum()
+                .to_dict('index')
+            )
+        
+        # 折扣驗收
+        discount_condition = df['discount'].str.contains(locker_discount_pattern, na=False, regex=True)
+        df_discount = df.loc[discount_condition, :]
+        
+        if not df_discount.empty and 'PO單號' in df_discount.columns:
+            validation_results['discount'] = (
+                df_discount.groupby(['PO單號'])[agg_cols]
+                .sum()
+                .to_dict('index')
+            )
+            # 提取折扣率
+            validation_results['discount_rate'] = self._extract_discount_rate(df_discount['discount'].unique())
+        
+        return validation_results
+    
+    def _extract_discount_rate(self, discount_input: Optional[Union[str, np.ndarray]]) -> Optional[float]:
+        """從輸入中提取折扣率。
+        
+        此函數能處理字串或包含字串的 NumPy 陣列。
+        如果輸入為陣列，預設只會處理第一個元素。
+
+        Args:
+            discount_input: 折扣字串 (e.g., "8折驗收") 或包含此類字串的 NumPy 陣列。
+            
+        Returns:
+            折扣率 (e.g., 0.8)，若無法提取或輸入無效則返回 None。
+        """
+        # --- 步驟 1: 輸入正規化 (Input Normalization) ---
+        target_str: Optional[str] = None
+
+        if discount_input is None:
+            return None
+        
+        if isinstance(discount_input, str):
+            target_str = discount_input
+        elif isinstance(discount_input, np.ndarray):
+            if discount_input.size == 0:
+                self.logger.info("輸入的 ndarray 為空，無法提取折扣率。")
+                return None
+            
+            if discount_input.size > 1:
+                self.logger.warning(
+                    f"輸入為多值陣列，只處理第一個元素 '{discount_input[0]}'. "
+                    f"被忽略的值: {list(discount_input[1:])}"
+                )
+            target_str = str(discount_input[0])  # 確保取出的元素是字串
+        else:
+            self.logger.error(f"不支援的輸入類型: {type(discount_input)}")
+            raise TypeError(f"Input must be str or np.ndarray, not {type(discount_input)}")
+
+        # --- 步驟 2: 核心提取邏輯 (Core Extraction Logic) ---
+        if not target_str:  # 處理空字串或 None 的情況
+            return None
+
+        match = re.search(r'(\d+)折', target_str)
+        if match:
+            try:
+                discount_num = int(match.group(1))
+                rate = discount_num / 10.0
+                self.logger.info(f"從 '{target_str}' 成功提取折扣率: {rate}")
+                return rate
+            except (ValueError, IndexError):
+                self.logger.error(f"從 '{target_str}' 匹配到數字但轉換失敗。")
+                return None
+
+        self.logger.debug(f"在 '{target_str}' 中未找到符合 'N折' 格式的內容。")
+        return None
+    
+    def _apply_validation_data(self, df: pd.DataFrame, locker_non_discount: Dict, 
+                               locker_discount: Dict, discount_rate: float, kiosk_data: Dict) -> pd.DataFrame:
+        """
+        應用驗收數據到 PO DataFrame
+        Args:
+            df: PO DataFrame
+            locker_non_discount: 智取櫃非折扣驗收數據 {PO#: {A:value, B:value, ...}}
+            locker_discount: 智取櫃折扣驗收數據 {PO#: {A:value, B:value, ...}}
+            discount_rate: 折扣率
+            kiosk_data: 繳費機驗收數據 {PO#: value}
+            
+        Returns:
+            pd.DataFrame: 更新後的PO DataFrame
+        """
+        
+        # 初始化欄位
+        df['本期驗收數量/金額'] = 0
+        
+        # 獲取供應商配置
+        locker_suppliers = config_manager.get('SPX', 'locker_suppliers', '')
+        kiosk_suppliers = config_manager.get('SPX', 'kiosk_suppliers', '')
+        
+        # 轉換為列表
+        if isinstance(locker_suppliers, str):
+            locker_suppliers = [s.strip() for s in locker_suppliers.split(',')]
+        if isinstance(kiosk_suppliers, str):
+            kiosk_suppliers = [s.strip() for s in kiosk_suppliers.split(',')]
+        
+        # 應用智取櫃非折扣驗收
+        df = self._apply_locker_validation(df, locker_non_discount, locker_suppliers, is_discount=False)
+        
+        # 應用智取櫃折扣驗收
+        df = self._apply_locker_validation(df, locker_discount, locker_suppliers, discount_rate, is_discount=True)
+        
+        # 應用繳費機驗收
+        df = self._apply_kiosk_validation(df, kiosk_data, kiosk_suppliers)
+        
+        # 修改相關欄位
+        df = self._modify_relevant_columns(df)
+        
+        return df
+    
+    def _apply_locker_validation(self, df: pd.DataFrame, locker_data: Dict, 
+                                 locker_suppliers: List[str], discount_rate: float = None,
+                                 is_discount: bool = False) -> pd.DataFrame:
+        """
+        應用智取櫃驗收數據
+        Args:
+            df: PO DataFrame
+            locker_data: 智取櫃驗收數據 {PO#: {A:value, B:value, ...}}
+            locker_suppliers: 智取櫃供應商列表
+            discount_rate: 折扣率
+            is_discount: 是否為折扣驗收
+            
+        Returns:
+            pd.DataFrame: 更新後的DataFrame
+        """
+        if not locker_data:
+            return df
+        
+        # 定義櫃體種類的正則表達式模式
+        patterns = {
+            # A~K類櫃體，後面非英文字母數字組合，但允許中文字符
+            'A': r'locker\s*A(?![A-Za-z0-9])',
+            'B': r'locker\s*B(?![A-Za-z0-9])',
+            'C': r'locker\s*C(?![A-Za-z0-9])',
+            'D': r'locker\s*D(?![A-Za-z0-9])',
+            'E': r'locker\s*E(?![A-Za-z0-9])',
+            'F': r'locker\s*F(?![A-Za-z0-9])',
+            'G': r'locker\s*G(?![A-Za-z0-9])',
+            'H': r'locker\s*H(?![A-Za-z0-9])',
+            'I': r'locker\s*I(?![A-Za-z0-9])',
+            'J': r'locker\s*J(?![A-Za-z0-9])',
+            'K': r'locker\s*K(?![A-Za-z0-9])',
+            'DA': r'locker\s*控制主[櫃|機]',
+            'XA': r'locker\s*XA(?![A-Za-z0-9])',
+            'XB': r'locker\s*XB(?![A-Za-z0-9])',
+            'XC': r'locker\s*XC(?![A-Za-z0-9])',
+            'XD': r'locker\s*XD(?![A-Za-z0-9])',
+            'XE': r'locker\s*XE(?![A-Za-z0-9])',
+            'XF': r'locker\s*XF(?![A-Za-z0-9])',
+            '裝運費': r'locker\s*安裝運費',
+            '超出櫃體安裝費': r'locker\s*超出櫃體安裝費',
+            '超出櫃體運費': r'locker\s*超出櫃體運費'
+        }
+        
+        # 遍歷DataFrame
+        for idx, row in df.iterrows():
+            try:
+                po_number = row.get('PO#')
+                item_desc = str(row.get('Item Description', ''))
+                po_supplier = str(row.get('PO Supplier', ''))
+                
+                # 檢查條件; 不符合的資料該圈將被跳過
+                # 檢查PO#是否在字典keys中
+                if po_number not in locker_data:
+                    continue
+                # 檢查Item Description是否包含"門市智取櫃"
+                if '門市智取櫃' not in item_desc:
+                    continue
+                # 對於非折扣驗收，檢查是否不包含"減價"
+                if not is_discount and '減價' in item_desc:
+                    continue
+                # 檢查PO Supplier是否在配置的suppliers中
+                if locker_suppliers and po_supplier not in locker_suppliers:
+                    continue
+                
+                # 提取櫃體種類
+                cabinet_type = None
+                priority_order = ['DA', '裝運費', '超出櫃體安裝費', '超出櫃體運費',
+                                  'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K',
+                                  'XA', 'XB', 'XC', 'XD', 'XE', 'XF']
+                
+                for ctype in priority_order:
+                    if ctype in patterns:
+                        if re.search(patterns[ctype], item_desc, re.IGNORECASE):
+                            cabinet_type = ctype
+                            break
+                
+                if cabinet_type and cabinet_type in locker_data[po_number]:
+                    current_value = df.at[idx, '本期驗收數量/金額']
+                    if current_value == 0:  # 只有當前值為0時才設置新值
+                        validation_value = locker_data[po_number][cabinet_type]
+                        df.at[idx, '本期驗收數量/金額'] = validation_value
+                        
+                        # 如果是折扣驗收，記錄折扣率
+                        if is_discount and discount_rate:
+                            df.at[idx, '折扣率'] = discount_rate
+                
+            except Exception as e:
+                self.logger.debug(f"Error processing locker validation for row {idx}: {str(e)}")
+                continue
+        
+        return df
+    
+    def _apply_kiosk_validation(self, df: pd.DataFrame, kiosk_data: Dict, 
+                                kiosk_suppliers: List[str]) -> pd.DataFrame:
+        """應用繳費機驗收數據"""
+        if not kiosk_data:
+            return df
+        
+        for idx, row in df.iterrows():
+            try:
+                po_number = row.get('PO#')
+                item_desc = str(row.get('Item Description', ''))
+                po_supplier = str(row.get('PO Supplier', ''))
+                
+                # 檢查條件
+                if po_number not in kiosk_data:
+                    continue
+                if '門市繳費機' not in item_desc:
+                    continue
+                if kiosk_suppliers and po_supplier not in kiosk_suppliers:
+                    continue
+                
+                current_value = df.at[idx, '本期驗收數量/金額']
+                if current_value == 0:
+                    validation_value = kiosk_data[po_number]
+                    df.at[idx, '本期驗收數量/金額'] = validation_value
+                
+            except Exception as e:
+                self.logger.debug(f"Error processing kiosk validation for row {idx}: {str(e)}")
+                continue
+        
+        return df
+    
+    def _modify_relevant_columns(self, df: pd.DataFrame) -> pd.DataFrame:
+        """修改相關欄位"""
+        
+        need_to_accrual = df['本期驗收數量/金額'] != 0
+        df.loc[need_to_accrual, '是否估計入帳'] = 'Y'
+        
+        # 設置 Account code
+        fa_accounts = config_manager.get_list('SPX', 'fa_accounts')
+        if fa_accounts:
+            df.loc[need_to_accrual, 'Account code'] = fa_accounts[0]
+        
+        # 設置 Account Name
+        df.loc[need_to_accrual, 'Account Name'] = 'AP,FA Clear Account'
+        
+        # 設置其他欄位
+        df.loc[need_to_accrual, 'Product code'] = df.loc[need_to_accrual, 'Product Code']
+        df.loc[need_to_accrual, 'Region_c'] = "TW"
+        df.loc[need_to_accrual, 'Dep.'] = '000'
+        df.loc[need_to_accrual, 'Currency_c'] = df.loc[need_to_accrual, 'Currency']
+        
+        # 計算 Accr. Amount
+        df['temp_amount'] = (
+            df['Unit Price'].astype(float) * df['本期驗收數量/金額'].fillna(0).astype(float)
+        )
+        
+        # 套用折扣
+        if '折扣率' in df.columns:
+            has_discount = df['折扣率'].notna()
+            df.loc[has_discount, 'temp_amount'] = (
+                df.loc[has_discount, 'temp_amount'] * df.loc[has_discount, '折扣率'].astype(float)
+            )
+            df.drop('折扣率', axis=1, inplace=True)
+        
+        non_shipping = ~df['Item Description'].str.contains('運費|安裝費', na=False)
+        df.loc[need_to_accrual & non_shipping, 'Accr. Amount'] = \
+            df.loc[need_to_accrual & non_shipping, 'temp_amount']
+        df.loc[need_to_accrual & ~non_shipping, 'Accr. Amount'] = \
+            df.loc[need_to_accrual & ~non_shipping, '本期驗收數量/金額']
+        df.drop('temp_amount', axis=1, inplace=True)
+        
+        # 設置 Liability
+        df.loc[need_to_accrual, 'Liability'] = '200414'
+        
+        return df
+    
+    async def validate_input(self, context: ProcessingContext) -> bool:
+        """驗證輸入"""
+        if context.data is None or context.data.empty:
+            self.logger.error("No data for validation processing")
+            return False
+        
+        return True
+    
+# =============================================================================
+# 步驟 12: 數據格式化和重組步驟
+# 替代原始: reformate()、give_account_by_keyword()、is_installment()
+# =============================================================================
+
+class DataReformattingStep(PipelineStep):
+    """
+    數據格式化和重組步驟
+    
+    功能:
+    1. 格式化數值列
+    2. 格式化日期列
+    3. 清理 nan 值
+    4. 重新排列欄位順序
+    5. 添加分類和關鍵字匹配
+    
+    輸入: DataFrame
+    輸出: Formatted DataFrame ready for export
+    """
+    
+    def __init__(self, name: str = "DataReformatting", **kwargs):
+        super().__init__(name, description="Reformat and reorganize data", **kwargs)
+    
+    async def execute(self, context: ProcessingContext) -> StepResult:
+        """執行數據格式化"""
+        try:
+            df = context.data.copy()
+            
+            self.logger.info("Reformatting data...")
+            
+            # 格式化數值列
+            df = self._format_numeric_columns(df)
+            
+            # 格式化日期列
+            df = self._reformat_dates(df)
+            
+            # 清理 nan 值
+            df = self._clean_nan_values(df)
+            
+            # 重新排列欄位
+            df = self._rearrange_columns(df)
+            
+            # 添加分類
+            df = self._add_classification(df)
+            
+            # 添加關鍵字匹配
+            df = self._add_keyword_matching(df)
+            
+            # 添加分期標記
+            df = self._add_installment_flag(df)
+            
+            # 將含有暫時性計算欄位的結果存為附件
+            if isinstance(df, pd.DataFrame) and not df.empty:
+                data_name = 'result_with_temp_cols'
+                data_copy = df.copy()
+                context.add_auxiliary_data(data_name, data_copy)
+                self.logger.info(
+                    f"Added auxiliary data: {data_name} {data_copy.shape} shape)"
+                )
+
+            # 移除臨時欄位
+            df = self._remove_temp_columns(df)
+            
+            context.update_data(df)
+            
+            self.logger.info("Data reformatting completed")
+            
+            return StepResult(
+                step_name=self.name,
+                status=StepStatus.SUCCESS,
+                data=df,
+                message="Data reformatted successfully",
+                metadata={
+                    'total_columns': len(df.columns),
+                    'total_rows': len(df)
+                }
+            )
+            
+        except Exception as e:
+            self.logger.error(f"Data reformatting failed: {str(e)}", exc_info=True)
+            context.add_error(f"Data reformatting failed: {str(e)}")
+            return StepResult(
+                step_name=self.name,
+                status=StepStatus.FAILED,
+                error=e,
+                message=str(e)
+            )
+    
+    def _format_numeric_columns(self, df: pd.DataFrame) -> pd.DataFrame:
+        """格式化數值列"""
+        # 整數列
+        int_columns = ['Line#', 'GL#']
+        for col in int_columns:
+            if col in df.columns:
+                try:
+                    df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype('int64')
+                except Exception as e:
+                    self.logger.warning(f"Failed to format {col}: {str(e)}")
+        
+        # 浮點數列
+        float_columns = ['Unit Price', 'Entry Amount', 'Entry Invoiced Amount', 
+                         'Entry Billed Amount', 'Entry Prepay Amount', 
+                         'PO Entry full invoiced status', 'Accr. Amount']
+        for col in float_columns:
+            if col in df.columns:
+                try:
+                    df[col] = pd.to_numeric(df[col], errors='coerce').round(2)
+                except Exception as e:
+                    self.logger.warning(f"Failed to format {col}: {str(e)}")
+        
+        return df
+    
+    def _reformat_dates(self, df: pd.DataFrame) -> pd.DataFrame:
+        """格式化日期列"""
+        date_columns = ['Creation Date', 'Expected Received Month', 'Last Update Date']
+        
+        for col in date_columns:
+            if col in df.columns:
+                try:
+                    df[col] = pd.to_datetime(df[col], errors='coerce').dt.strftime('%Y-%m-%d')
+                except Exception as e:
+                    self.logger.warning(f"Failed to format date column {col}: {str(e)}")
+        
+        return df
+    
+    def _remove_temp_columns(self, df: pd.DataFrame) -> pd.DataFrame:
+        """移除臨時計算列"""
+        temp_columns = ['檔案日期', 'Expected Received Month_轉換格式', 'YMs of Item Description']
+        
+        for col in temp_columns:
+            if col in df.columns:
+                df.drop(columns=[col], inplace=True)
+        
+        return df
+    
+    def _clean_nan_values(self, df: pd.DataFrame) -> pd.DataFrame:
+        """清理 nan 值"""
+        columns_to_clean = [
+            '是否估計入帳', 'PR Product Code Check', 'PO狀態',
+            'Accr. Amount', '是否為FA', 'Region_c', 'Dep.'
+        ]
+        
+        for col in columns_to_clean:
+            if col in df.columns:
+                df[col] = df[col].replace('nan', np.nan)
+                df[col] = df[col].replace('<NA>', np.nan)
+        
+        # 特殊處理 Accr. Amount
+        if 'Accr. Amount' in df.columns:
+            try:
+                df['Accr. Amount'] = (
+                    df['Accr. Amount'].astype(str).str.replace(',', '')
+                    .replace('nan', '0')
+                    .replace('<NA>', '0')
+                    .astype(float)
+                )
+                df['Accr. Amount'] = df['Accr. Amount'].apply(lambda x: x if x != 0 else None)
+            except Exception as e:
+                self.logger.warning(f"Failed to clean Accr. Amount: {str(e)}")
+        
+        return df
+    
+    def _rearrange_columns(self, df: pd.DataFrame) -> pd.DataFrame:
+        """重新排列欄位順序"""
+        # 重新排列上月備註欄位位置
+        if 'Remarked by FN' in df.columns and 'Remarked by 上月 FN' in df.columns:
+            fn_index = df.columns.get_loc('Remarked by FN') + 1
+            last_month_col = df.pop('Remarked by 上月 FN')
+            df.insert(fn_index, 'Remarked by 上月 FN', last_month_col)
+        
+        if 'Remarked by 上月 FN' in df.columns and 'Remarked by 上月 FN PR' in df.columns:
+            fn_pr_index = df.columns.get_loc('Remarked by 上月 FN') + 1
+            last_month_pr_col = df.pop('Remarked by 上月 FN PR')
+            df.insert(fn_pr_index, 'Remarked by 上月 FN PR', last_month_pr_col)
+        
+        # 重新排列 PO 狀態欄位位置
+        if 'PO狀態' in df.columns and '是否估計入帳' in df.columns:
+            accrual_index = df.columns.get_loc('是否估計入帳')
+            po_status_col = df.pop('PO狀態')
+            df.insert(accrual_index, 'PO狀態', po_status_col)
+        
+        # 重新排列 PR 欄位位置
+        if 'Noted by Procurement' in df.columns:
+            noted_index = df.columns.get_loc('Noted by Procurement') + 1
+            
+            for col_name in ['Remarked by Procurement PR', 'Noted by Procurement PR']:
+                if col_name in df.columns:
+                    col = df.pop(col_name)
+                    df.insert(noted_index, col_name, col)
+                    noted_index += 1
+        
+        # 把本期驗收數量/金額移到 memo 前面
+        if '本期驗收數量/金額' in df.columns and 'memo' in df.columns:
+            memo_index = df.columns.get_loc('memo')
+            validation_col = df.pop('本期驗收數量/金額')
+            df.insert(memo_index, '本期驗收數量/金額', validation_col)
+        
+        return df
+    
+    def _add_classification(self, df: pd.DataFrame) -> pd.DataFrame:
+        """添加分類"""
+        try:
+            df['CATEGORY'] = df['Item Description'].apply(classify_description)
+        except Exception as e:
+            self.logger.warning(f"Failed to add classification: {str(e)}")
+            df['CATEGORY'] = np.nan
+        
+        return df
+    
+    def _add_keyword_matching(self, df: pd.DataFrame) -> pd.DataFrame:
+        """添加關鍵字匹配"""
+        try:
+            df = give_account_by_keyword(df, 'Item Description', export_keyword=True)
+        except Exception as e:
+            self.logger.warning(f"Failed to add keyword matching: {str(e)}")
+        
+        return df
+    
+    def _add_installment_flag(self, df: pd.DataFrame) -> pd.DataFrame:
+        """添加分期標記"""
+        if 'Item Description' not in df.columns:
+            return df
+        
+        mask1 = df['Item Description'].str.contains('裝修', na=False)
+        mask2 = df['Item Description'].str.contains('第[一|二|三]期款項', na=False)
+        
+        conditions = [
+            (mask1 & mask2),  # Condition for 'Installment'
+            (mask1)           # Condition for 'General'
+        ]
+        choices = ['分期', '一般']
+        
+        df['裝修一般/分期'] = np.select(conditions, choices, default=None)
+        
+        return df
+    
+    async def validate_input(self, context: ProcessingContext) -> bool:
+        """驗證輸入"""
+        if context.data is None or context.data.empty:
+            self.logger.error("No data for reformatting")
+            return False
+        
+        return True
+
+# =============================================================================
+# 步驟 13: 導出步驟
+# 替代原始: _save_output()
+# =============================================================================
+
+class SPXExportStep(PipelineStep):
+    """
+    SPX 導出步驟
+    
+    功能: 將處理完成的數據導出到 Excel
+    
+    輸入: Processed DataFrame
+    輸出: Excel file path
+    """
+    
+    def __init__(self, 
+                 name: str = "SPXExport",
+                 output_dir: str = "output",
+                 **kwargs):
+        super().__init__(name, description="Export SPX processed data", **kwargs)
+        self.output_dir = output_dir
+    
+    async def execute(self, context: ProcessingContext) -> StepResult:
+        """執行導出"""
+        try:
+            df = context.data.copy()
+            
+            # 清理 <NA> 值
+            df_export = df.replace('<NA>', np.nan)
+            
+            # 生成文件名
+            processing_date = context.metadata.processing_date
+            entity_type = context.metadata.entity_type
+            timestamp = pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')
+            
+            filename = f"{entity_type}_PO_{processing_date}_processed_{timestamp}.xlsx"
+            
+            # 創建輸出目錄
+            if not os.path.exists(self.output_dir):
+                os.makedirs(self.output_dir)
+            
+            output_path = os.path.join(self.output_dir, filename)
+            
+            # 確保文件名唯一
+            counter = 1
+            while os.path.exists(output_path):
+                filename = f"{entity_type}_PO_{processing_date}_processed_{timestamp}_{counter}.xlsx"
+                output_path = os.path.join(self.output_dir, filename)
+                counter += 1
+            
+            # 導出 Excel
+            df_export.to_excel(output_path, index=False)
+            
+            self.logger.info(f"Data exported to: {output_path}")
+            
+            return StepResult(
+                step_name=self.name,
+                status=StepStatus.SUCCESS,
+                message=f"Exported to {output_path}",
+                metadata={
+                    'output_path': output_path,
+                    'rows_exported': len(df_export),
+                    'columns_exported': len(df_export.columns)
+                }
+            )
+            
+        except Exception as e:
+            self.logger.error(f"Export failed: {str(e)}", exc_info=True)
+            context.add_error(f"Export failed: {str(e)}")
+            return StepResult(
+                step_name=self.name,
+                status=StepStatus.FAILED,
+                error=e,
+                message=str(e)
+            )
+    
+    async def validate_input(self, context: ProcessingContext) -> bool:
+        """驗證輸入"""
+        if context.data is None or context.data.empty:
+            self.logger.error("No data to export")
+            return False
+        
+        return True
+
+# =============================================================================
 # 載入步驟使用範例
 # =============================================================================
 
@@ -2796,8 +3658,11 @@ def create_spx_po_complete_pipeline(file_paths: Dict[str, str]) -> Pipeline:
                 .add_step(StatusStage1Step(name="Evaluate_Status_Stage1", required=True))
                 .add_step(SPXERMLogicStep(name="Apply_ERM_Logic", required=True, retry_count=0))
                 # .add_step(ERMLogicStep(name="Apply_ERM_Logic", required=True))
-                # .add_step(ValidationDataProcessingStep(name="Process_Validation", required=False))
+                .add_step(ValidationDataProcessingStep(name="Process_Validation", required=False))
 
+                # ========== 階段4: 後處理 ==========
+                .add_step(DataReformattingStep(name="Reformat_Data", required=True))
+                .add_step(SPXExportStep(name="Export_Results", output_dir="output", required=True))
 
                 )
     
