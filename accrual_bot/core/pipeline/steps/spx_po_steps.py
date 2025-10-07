@@ -1267,7 +1267,7 @@ class DateLogicStep(PipelineStep):
                 df.loc[mask_profit_sharing & mask_no_status, 'PO狀態'] = '分潤'
                 
             # 處理已入帳
-            if 'PO Entry full invoiced status' in df.columns:
+            if 'PO Entry full invoiced status' in df.columns and context.metadata.entity_type != 'SPX':
                 mask_posted = (
                     (df['PO狀態'].isna() | (df['PO狀態'] == 'nan')) & 
                     (df['PO Entry full invoiced status'].astype(str) == '1')
@@ -2189,10 +2189,12 @@ class SPXERMLogicStep(PipelineStep):
         條件優先順序從上到下，符合的條件會被優先設置
         """
         
-        # === 條件 1: 已入帳（明確標註）===
+        # === 條件 1: 已入帳（前期FN明確標註）===
         condition_1 = df['Remarked by 上月 FN'].str.contains('(?i)已入帳', na=False)
         df.loc[condition_1, 'PO狀態'] = '已入帳'
-        self._log_condition_result("已入帳（明確標註）", condition_1.sum())
+        self._log_condition_result("已入帳（前期FN明確標註）", condition_1.sum())
+        # 🔴 新增：更新 no_status
+        cond.no_status = (df['PO狀態'].isna()) | (df['PO狀態'] == 'nan')
         
         # === 條件 2: 已入帳（有 GL DATE 且符合其他條件）===
         condition_2 = (
@@ -2207,6 +2209,9 @@ class SPXERMLogicStep(PipelineStep):
         )
         df.loc[condition_2, 'PO狀態'] = '已入帳'
         self._log_condition_result("已入帳（GL DATE）", condition_2.sum())
+
+        # 🔴 新增：更新 no_status
+        cond.no_status = (df['PO狀態'].isna()) | (df['PO狀態'] == 'nan')
         
         # === 條件 3: 已完成 ===
         condition_3 = (
@@ -2220,6 +2225,9 @@ class SPXERMLogicStep(PipelineStep):
         )
         df.loc[condition_3, 'PO狀態'] = '已完成'
         self._log_condition_result("已完成", condition_3.sum())
+
+        # 🔴 新增：更新 no_status
+        cond.no_status = (df['PO狀態'].isna()) | (df['PO狀態'] == 'nan')
         
         # === 條件 4: 全付完，未關單 ===
         condition_4 = (
@@ -2233,6 +2241,9 @@ class SPXERMLogicStep(PipelineStep):
         )
         df.loc[condition_4, 'PO狀態'] = '全付完，未關單?'
         self._log_condition_result("全付完，未關單", condition_4.sum())
+
+        # 🔴 新增：更新 no_status
+        cond.no_status = (df['PO狀態'].isna()) | (df['PO狀態'] == 'nan')
         
         # === 條件 5: 已完成但有未付款部分 ===
         condition_5 = (
@@ -2246,6 +2257,9 @@ class SPXERMLogicStep(PipelineStep):
         )
         df.loc[condition_5, 'PO狀態'] = '已完成'
         self._log_condition_result("已完成（有未付款）", condition_5.sum())
+
+        # 🔴 新增：更新 no_status
+        cond.no_status = (df['PO狀態'].isna()) | (df['PO狀態'] == 'nan')
         
         # === 條件 6: Check收貨 ===
         condition_6 = (
@@ -2257,6 +2271,9 @@ class SPXERMLogicStep(PipelineStep):
         )
         df.loc[condition_6, 'PO狀態'] = 'Check收貨'
         self._log_condition_result("Check收貨", condition_6.sum())
+
+        # 🔴 新增：更新 no_status
+        cond.no_status = (df['PO狀態'].isna()) | (df['PO狀態'] == 'nan')
         
         # === 條件 7: 未完成 ===
         condition_7 = (
@@ -2267,6 +2284,9 @@ class SPXERMLogicStep(PipelineStep):
         )
         df.loc[condition_7, 'PO狀態'] = '未完成'
         self._log_condition_result("未完成", condition_7.sum())
+
+        # 🔴 新增：更新 no_status
+        cond.no_status = (df['PO狀態'].isna()) | (df['PO狀態'] == 'nan')
         
         # === 條件 8: 範圍錯誤_租金 ===
         condition_8 = (
@@ -2277,6 +2297,9 @@ class SPXERMLogicStep(PipelineStep):
         )
         df.loc[condition_8, 'PO狀態'] = 'error(Description Period is out of ERM)_租金'
         self._log_condition_result("範圍錯誤_租金", condition_8.sum())
+
+        # 🔴 新增：更新 no_status
+        cond.no_status = (df['PO狀態'].isna()) | (df['PO狀態'] == 'nan')
         
         # === 條件 9: 範圍錯誤_薪資 ===
         condition_9 = (
@@ -2287,6 +2310,9 @@ class SPXERMLogicStep(PipelineStep):
         )
         df.loc[condition_9, 'PO狀態'] = 'error(Description Period is out of ERM)_薪資'
         self._log_condition_result("範圍錯誤_薪資", condition_9.sum())
+
+        # 🔴 新增：更新 no_status
+        cond.no_status = (df['PO狀態'].isna()) | (df['PO狀態'] == 'nan')
         
         # === 條件 10: 範圍錯誤（一般）===
         condition_10 = (
@@ -2296,6 +2322,9 @@ class SPXERMLogicStep(PipelineStep):
         )
         df.loc[condition_10, 'PO狀態'] = 'error(Description Period is out of ERM)'
         self._log_condition_result("範圍錯誤（一般）", condition_10.sum())
+
+        # 🔴 新增：更新 no_status
+        cond.no_status = (df['PO狀態'].isna()) | (df['PO狀態'] == 'nan')
         
         # === 條件 11: 部分完成ERM ===
         condition_11 = (
