@@ -521,6 +521,47 @@ if __name__ == "__main__":
             }
         }
     }
+
+    # file_paths = {
+    #     'raw_po': {
+    #         'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202508\SPX未結For 機器人\202508_purchase_order.csv",
+    #         'params': {'encoding': 'utf-8', 
+    #                    'sep': ',', 
+    #                    'dtype': str, 
+    #                    'keep_default_na': False, 
+    #                    'na_values': ['']
+    #                    }
+    #     },
+    #     'previous': {
+    #         'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202508\SPX未結For 機器人\202507_PO_FN.xlsx",
+    #         'params': {'sheet_name': 0, 'header': 0, 'dtype': str, }
+    #     },
+    #     'procurement_po': {
+    #         'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202508\SPX未結For 機器人\202508_PO_PQ.xlsx",
+    #         'params': {'dtype': str, }
+    #     },
+    #     'ap_invoice': {
+    #         'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202508\SPX未結For 機器人\AP_Invoice_Match_Monitoring_Ext (NEW).xlsx",
+    #         'params': {}
+    #     },
+    #     'previous_pr': {
+    #         'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202508\SPX未結For 機器人\202507_PR_FN.xlsx",
+    #         'params': {'dtype': str, }
+    #     },
+    #     'procurement_pr': {
+    #         'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202508\SPX未結For 機器人\202508_PR_PQ.xlsx",
+    #         'params': {'dtype': str, }
+    #     },
+    #     'ops_validation': {
+    #         'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202508\SPX未結For 機器人\SPX智取櫃及繳費機驗收明細(For FN)_2508_修復.xlsx",
+    #         'params': {
+    #             'sheet_name': '智取櫃驗收明細',
+    #             'header': 1,  # 第二行作為表頭
+    #             'usecols': 'A:AE',
+    #             # 'dtype': str, 
+    #         }
+    #     }
+    # }
     
     # Run all steps
     result = asyncio.run(execute_with_checkpoint(

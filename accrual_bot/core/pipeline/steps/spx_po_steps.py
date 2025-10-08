@@ -15,12 +15,15 @@
 
 import os
 import re
+import time
+import traceback
 import pandas as pd
 import numpy as np
 import asyncio
 from dataclasses import dataclass
 from typing import Optional, Dict, List, Tuple, Any, Union
 from pathlib import Path
+from datetime import datetime
 
 from accrual_bot.core.pipeline.base import PipelineStep, StepResult, StepStatus
 from accrual_bot.core.pipeline import PipelineBuilder, Pipeline
@@ -38,6 +41,106 @@ from accrual_bot.utils.helpers.data_utils import (create_mapping_dict,
                                                   classify_description,
                                                   give_account_by_keyword)
 from accrual_bot.utils.config.constants import STATUS_VALUES
+
+
+# =============================================================================
+# 輔助工具類別
+# =============================================================================
+
+class StepMetadataBuilder:
+    """
+    StepResult metadata 構建器
+    提供標準化的 metadata 結構和鏈式 API
+    """
+    
+    def __init__(self):
+        self.metadata = {
+            # 基本統計
+            'input_rows': 0,
+            'output_rows': 0,
+            'rows_changed': 0,
+            
+            # 處理統計
+            'records_processed': 0,
+            'records_skipped': 0,
+            'records_failed': 0,
+            
+            # 時間資訊
+            'start_time': None,
+            'end_time': None,
+        }
+    
+    def set_row_counts(self, input_rows: int, output_rows: int) -> 'StepMetadataBuilder':
+        """設置行數統計"""
+        self.metadata['input_rows'] = int(input_rows)
+        self.metadata['output_rows'] = int(output_rows)
+        self.metadata['rows_changed'] = int(output_rows - input_rows)
+        return self
+    
+    def set_process_counts(self, processed: int = 0, skipped: int = 0, 
+                           failed: int = 0) -> 'StepMetadataBuilder':
+        """設置處理計數"""
+        self.metadata['records_processed'] = int(processed)
+        self.metadata['records_skipped'] = int(skipped)
+        self.metadata['records_failed'] = int(failed)
+        return self
+    
+    def set_time_info(self, start_time: datetime, end_time: datetime) -> 'StepMetadataBuilder':
+        """設置時間資訊"""
+        self.metadata['start_time'] = start_time.isoformat()
+        self.metadata['end_time'] = end_time.isoformat()
+        return self
+    
+    def add_custom(self, key: str, value: Any) -> 'StepMetadataBuilder':
+        """添加自定義 metadata"""
+        self.metadata[key] = value
+        return self
+    
+    def build(self) -> Dict[str, Any]:
+        """構建並返回 metadata 字典"""
+        return self.metadata.copy()
+
+
+def create_error_metadata(error: Exception, context: ProcessingContext, 
+                          step_name: str, **kwargs) -> Dict[str, Any]:
+    """
+    創建增強的錯誤 metadata
+    
+    Args:
+        error: 發生的異常
+        context: 處理上下文
+        step_name: 步驟名稱
+        **kwargs: 額外的上下文資訊
+    
+    Returns:
+        Dict[str, Any]: 錯誤 metadata 字典
+    """
+    error_metadata = {
+        'error_type': type(error).__name__,
+        'error_message': str(error),
+        'error_traceback': traceback.format_exc(),
+        'step_name': step_name,
+    }
+    
+    # 添加數據快照
+    if context.data is not None:
+        error_metadata['data_snapshot'] = {
+            'total_rows': len(context.data),
+            'total_columns': len(context.data.columns),
+            'columns': list(context.data.columns)[:20],  # 只列前20個欄位
+        }
+    else:
+        error_metadata['data_snapshot'] = {'status': 'no_data'}
+    
+    # 添加上下文變量
+    error_metadata['context_variables'] = {
+        k: str(v)[:100] for k, v in context.variables.items()  # 限制長度
+    }
+    
+    # 添加額外資訊
+    error_metadata.update(kwargs)
+    
+    return error_metadata
 
 
 class SPXDataLoadingStep(PipelineStep):
@@ -117,6 +220,9 @@ class SPXDataLoadingStep(PipelineStep):
     
     async def execute(self, context: ProcessingContext) -> StepResult:
         """執行並發數據載入"""
+        start_time = time.time()
+        start_datetime = datetime.now()
+        
         try:
             self.logger.info("Starting concurrent file loading with datasources...")
             
@@ -158,35 +264,60 @@ class SPXDataLoadingStep(PipelineStep):
             # 階段 4: 載入參考數據
             ref_count = await self._load_reference_data(context)
             
+            # ✅ 計算執行時間
+            duration = time.time() - start_time
+            end_datetime = datetime.now()
+            
             self.logger.info(
                 f"Successfully loaded {df.shape} shape of PO data, "
                 f"{auxiliary_count} auxiliary datasets, "
-                f"{ref_count} reference datasets"
+                f"{ref_count} reference datasets in {duration:.2f}s"
             )
+            
+            # ✅ 使用 StepMetadataBuilder 構建標準化 metadata
+            metadata = (StepMetadataBuilder()
+                        .set_row_counts(0, len(df))
+                        .set_process_counts(processed=len(df))
+                        .set_time_info(start_datetime, end_datetime)
+                        .add_custom('po_records', len(df))
+                        .add_custom('po_columns', len(df.columns))
+                        .add_custom('processing_date', int(date))
+                        .add_custom('processing_month', int(m))
+                        .add_custom('auxiliary_datasets', auxiliary_count)
+                        .add_custom('reference_datasets', ref_count)
+                        .add_custom('loaded_files', list(loaded_data.keys()))
+                        .add_custom('files_loaded_count', len(loaded_data))
+                        .build())
             
             return StepResult(
                 step_name=self.name,
                 status=StepStatus.SUCCESS,
                 data=df,
                 message=f"Loaded {len(df)} PO records with {auxiliary_count} auxiliary datasets",
-                metadata={
-                    'po_records': len(df),
-                    'processing_date': date,
-                    'processing_month': m,
-                    'auxiliary_datasets': auxiliary_count,
-                    'reference_datasets': ref_count,
-                    'loaded_files': list(loaded_data.keys())
-                }
+                duration=duration,  # ✅ 新增
+                metadata=metadata  # ✅ 標準化
             )
             
         except Exception as e:
+            duration = time.time() - start_time  # ✅ 錯誤時也計算時間
+            
             self.logger.error(f"Data loading failed: {str(e)}", exc_info=True)
             context.add_error(f"Data loading failed: {str(e)}")
+            
+            # ✅ 創建增強的錯誤 metadata
+            error_metadata = create_error_metadata(
+                e, context, self.name,
+                validated_files=list(self.file_configs.keys()) if self.file_configs else [],
+                stage='data_loading'
+            )
+            
             return StepResult(
                 step_name=self.name,
                 status=StepStatus.FAILED,
                 error=e,
-                message=f"Failed to load data: {str(e)}"
+                message=f"Failed to load data: {str(e)}",
+                duration=duration,  # ✅ 新增
+                metadata=error_metadata  # ✅ 增強錯誤資訊
             )
         
         finally:
@@ -297,11 +428,11 @@ class SPXDataLoadingStep(PipelineStep):
         df = await source.read()
         # 基本數據處理
         if 'Line#' in df.columns:
-            df['Line#'] = df['Line#'].astype(float).round(0).astype(int).astype(str)
+            df['Line#'] = df['Line#'].astype('Float64').round(0).astype('Int64').astype('string')
         
         if 'GL#' in df.columns:
             df['GL#'] = np.where(df['GL#'] == 'N.A.', '666666', df['GL#'])
-            df['GL#'] = df['GL#'].fillna('666666').astype(float).round(0).astype(int).astype(str)
+            df['GL#'] = df['GL#'].fillna('666666').astype('Float64').round(0).astype('Int64').astype('string')
 
         self.logger.debug(f"成功導入PO數據, 數據維度: {df.shape}")
         
@@ -527,6 +658,9 @@ class SPXProductFilterStep(PipelineStep):
     
     async def execute(self, context: ProcessingContext) -> StepResult:
         """執行產品過濾"""
+        start_time = time.time()
+        start_datetime = datetime.now()
+        
         try:
             df = context.data.copy()
             original_count = len(df)
@@ -543,35 +677,59 @@ class SPXProductFilterStep(PipelineStep):
             filtered_count = len(filtered_df)
             removed_count = original_count - filtered_count
             
+            # ✅ 計算執行時間
+            duration = time.time() - start_time
+            end_datetime = datetime.now()
+            
             self.logger.info(
                 f"Product filtering complete: {original_count} -> {filtered_count} "
-                f"(removed {removed_count} non-SPX items)"
+                f"(removed {removed_count} non-SPX items) in {duration:.2f}s"
             )
             
             if filtered_count == 0:
                 context.add_warning("No SPX products found after filtering")
             
+            # ✅ 標準化 metadata
+            filter_rate = filtered_count / original_count * 100
+            speed = original_count / duration
+            metadata = (StepMetadataBuilder()
+                        .set_row_counts(original_count, filtered_count)
+                        .set_process_counts(processed=filtered_count, skipped=removed_count)
+                        .set_time_info(start_datetime, end_datetime)
+                        .add_custom('filter_pattern', self.product_pattern)
+                        .add_custom('filter_rate', f"{(filter_rate):.2f}%" if original_count > 0 else "N/A")
+                        .add_custom('processing_speed_rows_per_sec', f"{(speed):.0f}" if duration > 0 else "N/A")
+                        .build())
+            
             return StepResult(
                 step_name=self.name,
                 status=StepStatus.SUCCESS,
                 data=filtered_df,
-                message=f"Filtered to {filtered_count} SPX items",
-                metadata={
-                    'original_count': original_count,
-                    'filtered_count': filtered_count,
-                    'removed_count': removed_count,
-                    'filter_pattern': self.product_pattern
-                }
+                message=f"Filtered to {filtered_count} SPX items ({(filtered_count/original_count*100):.1f}%)",
+                duration=duration,  # ✅ 新增
+                metadata=metadata  # ✅ 標準化
             )
             
         except Exception as e:
+            duration = time.time() - start_time  # ✅ 錯誤時也計算時間
+            
             self.logger.error(f"Product filtering failed: {str(e)}", exc_info=True)
             context.add_error(f"Product filtering failed: {str(e)}")
+            
+            # ✅ 創建增強的錯誤 metadata
+            error_metadata = create_error_metadata(
+                e, context, self.name,
+                filter_pattern=self.product_pattern,
+                stage='product_filtering'
+            )
+            
             return StepResult(
                 step_name=self.name,
                 status=StepStatus.FAILED,
                 error=e,
-                message=str(e)
+                message=f"Product filtering failed: {str(e)}",
+                duration=duration,  # ✅ 新增
+                metadata=error_metadata  # ✅ 增強錯誤資訊
             )
     
     async def validate_input(self, context: ProcessingContext) -> bool:
@@ -610,8 +768,12 @@ class ColumnAdditionStep(PipelineStep):
     
     async def execute(self, context: ProcessingContext) -> StepResult:
         """執行欄位添加"""
+        start_time = time.time()
+        start_datetime = datetime.now()
+
         try:
             df = context.data.copy()
+            input_count = len(df)
             m = context.get_variable('processing_month')
             
             original_columns = set(df.columns)
@@ -633,29 +795,45 @@ class ColumnAdditionStep(PipelineStep):
             context.update_data(df)
             
             new_columns = set(df.columns) - original_columns
+            output_count = len(df)
             
+            duration = time.time() - start_time
+            end_datetime = datetime.now()
             self.logger.info(f"Added {len(new_columns)} columns: {new_columns}")
             
+            metadata = (StepMetadataBuilder()
+                        .set_row_counts(input_count, output_count)
+                        .set_process_counts(processed=output_count)
+                        .set_time_info(start_datetime, end_datetime)
+                        .add_custom('columns_added', len(new_columns))
+                        .add_custom('new_columns', list(new_columns))
+                        .add_custom('total_columns', len(df.columns))
+                        .add_custom('updated_month', m)
+                        .build())
             return StepResult(
                 step_name=self.name,
                 status=StepStatus.SUCCESS,
                 data=df,
                 message=f"Added {len(new_columns)} columns",
-                metadata={
-                    'new_columns': list(new_columns),
-                    'total_columns': len(df.columns),
-                    'updated_month': m
-                }
+                duration=duration,
+                metadata=metadata
             )
             
         except Exception as e:
+            duration = time.time() - start_time
             self.logger.error(f"Column addition failed: {str(e)}", exc_info=True)
             context.add_error(f"Column addition failed: {str(e)}")
+            error_metadata = create_error_metadata(
+                e, context, self.name,
+                stage='column_addition'
+            )
             return StepResult(
                 step_name=self.name,
                 status=StepStatus.FAILED,
                 error=e,
-                message=str(e)
+                message=f"Column addition failed: {str(e)}",
+                duration=duration,
+                metadata=error_metadata
             )
     
     def _add_basic_columns(self, df: pd.DataFrame, month: int) -> Tuple[pd.DataFrame, int]:
@@ -698,10 +876,10 @@ class ColumnAdditionStep(PipelineStep):
             
             # 生成行號標識
             if 'PR#' in df_copy.columns and 'Line#' in df_copy.columns:
-                df_copy['PR Line'] = df_copy['PR#'].astype(str) + '-' + df_copy['Line#'].astype(str)
+                df_copy['PR Line'] = df_copy['PR#'].astype('string') + '-' + df_copy['Line#'].astype('string')
             
             if 'PO#' in df_copy.columns and 'Line#' in df_copy.columns:
-                df_copy['PO Line'] = df_copy['PO#'].astype(str) + '-' + df_copy['Line#'].astype(str)
+                df_copy['PO Line'] = df_copy['PO#'].astype('string') + '-' + df_copy['Line#'].astype('string')
             
             # 添加標記和備註欄位
             self._add_remark_columns(df_copy)
@@ -733,7 +911,7 @@ class ColumnAdditionStep(PipelineStep):
         
         for col in columns_to_add:
             if col not in df.columns:
-                df[col] = np.nan
+                df[col] = pd.NA
     
     def _add_calculation_columns(self, df: pd.DataFrame) -> None:
         """添加計算相關欄位"""
@@ -757,7 +935,7 @@ class ColumnAdditionStep(PipelineStep):
         
         for col in calculation_columns:
             if col not in df.columns:
-                df[col] = np.nan
+                df[col] = pd.NA
         
         # 設置特定值
         df['是否為FA'] = self._determine_fa_status(df)
@@ -775,7 +953,7 @@ class ColumnAdditionStep(PipelineStep):
         """
         fa_accounts: List = config_manager.get_list('FA_ACCOUNTS', 'spx')
         if 'GL#' in df.columns:
-            return np.where(df['GL#'].astype(str).isin([str(x) for x in fa_accounts]), 'Y', '')
+            return np.where(df['GL#'].astype('string').isin([str(x) for x in fa_accounts]), 'Y', '')
         return pd.Series('', index=df.index)
     
     def _determine_sm_status(self, df: pd.DataFrame) -> pd.Series:
@@ -792,7 +970,7 @@ class ColumnAdditionStep(PipelineStep):
             return pd.Series('N', index=df.index)
         
         return np.where(
-            (df['GL#'].astype(str) == '650003') | (df['GL#'].astype(str) == '450014'), 
+            (df['GL#'].astype('string') == '650003') | (df['GL#'].astype('string') == '450014'), 
             "Y", "N"
         )
     
@@ -826,8 +1004,11 @@ class APInvoiceIntegrationStep(PipelineStep):
     
     async def execute(self, context: ProcessingContext) -> StepResult:
         """執行 AP Invoice 整合"""
+        start_time = time.time()
+        start_datetime = datetime.now()
         try:
             df = context.data.copy()
+            input_count = len(df)
             df_ap = context.get_auxiliary_data('ap_invoice')
             yyyymm = context.get_variable('processing_date')
             
@@ -847,9 +1028,9 @@ class APInvoiceIntegrationStep(PipelineStep):
             
             # 創建組合鍵
             df_ap['po_line'] = (
-                df_ap['Company'].astype(str) + '-' + 
-                df_ap['PO Number'].astype(str) + '-' + 
-                df_ap['PO_LINE_NUMBER'].astype(str)
+                df_ap['Company'].astype('string') + '-' + 
+                df_ap['PO Number'].astype('string') + '-' + 
+                df_ap['PO_LINE_NUMBER'].astype('string')
             )
             
             # 轉換 Period 為 yyyymm 格式
@@ -857,7 +1038,7 @@ class APInvoiceIntegrationStep(PipelineStep):
                 pd.to_datetime(df_ap['Period'], format='%b-%y', errors='coerce')
                 .dt.strftime('%Y%m')
                 .fillna('0')
-                .astype('int32')
+                .astype('Int32')
             )
             
             df_ap['match_type'] = df_ap['Match Type'].fillna('system_filled')
@@ -884,18 +1065,27 @@ class APInvoiceIntegrationStep(PipelineStep):
             context.update_data(df)
             
             matched_count = df['GL DATE'].notna().sum()
+            output_count = len(df)
             
+            duration = time.time() - start_time
+            end_datetime = datetime.now()
             self.logger.info(f"AP Invoice integration completed: {matched_count} records matched")
+            
+            metadata = (StepMetadataBuilder()
+                        .set_row_counts(input_count, output_count)
+                        .set_process_counts(processed=output_count)
+                        .set_time_info(start_datetime, end_datetime)
+                        .add_custom('matched_records', int(matched_count))
+                        .add_custom('total_records', len(df))
+                        .build())
             
             return StepResult(
                 step_name=self.name,
                 status=StepStatus.SUCCESS,
                 data=df,
                 message=f"Integrated GL DATE for {matched_count} records",
-                metadata={
-                    'matched_records': int(matched_count),
-                    'total_records': len(df)
-                }
+                duration=duration,
+                metadata=metadata
             )
             
         except Exception as e:
@@ -943,6 +1133,7 @@ class PreviousWorkpaperIntegrationStep(PipelineStep):
     
     async def execute(self, context: ProcessingContext) -> StepResult:
         """執行前期底稿整合"""
+        start_time = time.time()
         try:
             df = context.data.copy()
             previous_wp = context.get_auxiliary_data('previous')
@@ -971,12 +1162,14 @@ class PreviousWorkpaperIntegrationStep(PipelineStep):
                 self.logger.info("Previous PR workpaper integrated")
             
             context.update_data(df)
+            duration = time.time() - start_time
             
             return StepResult(
                 step_name=self.name,
                 status=StepStatus.SUCCESS,
                 data=df,
                 message="Previous workpaper integrated successfully",
+                duration=duration,
                 metadata={
                     'po_integrated': previous_wp is not None,
                     'pr_integrated': previous_wp_pr is not None
@@ -986,10 +1179,12 @@ class PreviousWorkpaperIntegrationStep(PipelineStep):
         except Exception as e:
             self.logger.error(f"Previous workpaper integration failed: {str(e)}", exc_info=True)
             context.add_error(f"Previous workpaper integration failed: {str(e)}")
+            duration = time.time() - start_time
             return StepResult(
                 step_name=self.name,
                 status=StepStatus.FAILED,
                 error=e,
+                duration=duration,
                 message=str(e)
             )
     
@@ -1084,6 +1279,7 @@ class ProcurementIntegrationStep(PipelineStep):
     
     async def execute(self, context: ProcessingContext) -> StepResult:
         """執行採購底稿整合"""
+        start_time = time.time()
         try:
             df = context.data.copy()
             procurement = context.get_auxiliary_data('procurement_po')
@@ -1111,6 +1307,7 @@ class ProcurementIntegrationStep(PipelineStep):
                 self.logger.info("Procurement PR integrated")
             
             context.update_data(df)
+            duration = time.time() - start_time
             
             return StepResult(
                 step_name=self.name,
@@ -1126,10 +1323,12 @@ class ProcurementIntegrationStep(PipelineStep):
         except Exception as e:
             self.logger.error(f"Procurement integration failed: {str(e)}", exc_info=True)
             context.add_error(f"Procurement integration failed: {str(e)}")
+            duration = time.time() - start_time
             return StepResult(
                 step_name=self.name,
                 status=StepStatus.FAILED,
                 error=e,
+                duration=duration,
                 message=str(e)
             )
     
@@ -1171,7 +1370,7 @@ class ProcurementIntegrationStep(PipelineStep):
                 # 只更新尚未匹配的記錄
                 df['Remarked by Procurement'] = \
                     (df.apply(lambda x: pr_procurement_mapping.get(x['PR Line'], None) 
-                              if x['Remarked by Procurement'] is np.nan else x['Remarked by Procurement'], axis=1))
+                              if x['Remarked by Procurement'] is pd.NA else x['Remarked by Procurement'], axis=1))
             
             # 設置FN備註為採購備註
             df['Remarked by FN'] = df['Remarked by Procurement']
@@ -1255,6 +1454,7 @@ class DateLogicStep(PipelineStep):
     
     async def execute(self, context: ProcessingContext) -> StepResult:
         """執行日期邏輯處理"""
+        start_time = time.time()
         try:
             df = context.data.copy()
             
@@ -1279,7 +1479,7 @@ class DateLogicStep(PipelineStep):
             if 'PO Entry full invoiced status' in df.columns and context.metadata.entity_type != 'SPX':
                 mask_posted = (
                     (df['PO狀態'].isna() | (df['PO狀態'] == 'nan')) & 
-                    (df['PO Entry full invoiced status'].astype(str) == '1')
+                    (df['PO Entry full invoiced status'].astype('string') == '1')
                 )
                 df.loc[mask_posted, 'PO狀態'] = STATUS_VALUES['POSTED']
                 df.loc[df['PO狀態'] == STATUS_VALUES['POSTED'], '是否估計入帳'] = "N"
@@ -1288,6 +1488,7 @@ class DateLogicStep(PipelineStep):
             df = self.parse_date_from_description(df)
                 
             context.update_data(df)
+            duration = time.time() - start_time
             
             self.logger.info("Date logic processing completed")
             
@@ -1295,16 +1496,19 @@ class DateLogicStep(PipelineStep):
                 step_name=self.name,
                 status=StepStatus.SUCCESS,
                 data=df,
+                duration=duration,
                 message="Date logic processed successfully"
             )
             
         except Exception as e:
             self.logger.error(f"Date logic processing failed: {str(e)}", exc_info=True)
             context.add_error(f"Date logic processing failed: {str(e)}")
+            duration = time.time() - start_time
             return StepResult(
                 step_name=self.name,
                 status=StepStatus.FAILED,
                 error=e,
+                duration=duration,
                 message=str(e)
             )
     
@@ -1341,7 +1545,7 @@ class DateLogicStep(PipelineStep):
                     df_copy['Expected Receive Month'], 
                     format='%b-%y',
                     errors='coerce'
-                ).dt.strftime('%Y%m').fillna('0').astype('int32')
+                ).dt.strftime('%Y%m').fillna('0').astype('Int32')
             
             # 解析Item Description中的日期範圍
             if 'Item Description' in df_copy.columns:
@@ -1382,6 +1586,7 @@ class ClosingListIntegrationStep(PipelineStep):
     
     async def execute(self, context: ProcessingContext) -> StepResult:
         """執行關單清單整合"""
+        start_time = time.time()
         try:
             df = context.data.copy()
             processing_date = context.metadata.processing_date
@@ -1402,12 +1607,14 @@ class ClosingListIntegrationStep(PipelineStep):
                 self.logger.info(f"Loaded {len(df_spx_closing)} closing records")
             
             context.update_data(df)
+            duration = time.time() - start_time
             
             return StepResult(
                 step_name=self.name,
                 status=StepStatus.SUCCESS,
                 data=df,
                 message=f"Closing list integrated: {len(df_spx_closing) if df_spx_closing is not None else 0} records",
+                duration=duration,
                 metadata={
                     'closing_records': len(df_spx_closing) if df_spx_closing is not None else 0
                 }
@@ -1416,10 +1623,12 @@ class ClosingListIntegrationStep(PipelineStep):
         except Exception as e:
             self.logger.error(f"Closing list integration failed: {str(e)}", exc_info=True)
             context.add_error(f"Closing list integration failed: {str(e)}")
+            duration = time.time() - start_time
             return StepResult(
                 step_name=self.name,
                 status=StepStatus.FAILED,
                 error=e,
+                duration=duration,
                 message=str(e)
             )
     
@@ -1558,6 +1767,7 @@ class StatusStage1Step(PipelineStep):
     
     async def execute(self, context: ProcessingContext) -> StepResult:
         """執行第一階段狀態判斷"""
+        start_time = time.time()
         try:
             df = context.data.copy()
             df_spx_closing = context.get_auxiliary_data('closing_list')
@@ -1585,22 +1795,26 @@ class StatusStage1Step(PipelineStep):
             status_counts = df['PO狀態'].value_counts().to_dict() if 'PO狀態' in df.columns else {}
             
             self.logger.info("Status stage 1 evaluation completed")
+            duration = time.time() - start_time
             
             return StepResult(
                 step_name=self.name,
                 status=StepStatus.SUCCESS,
                 data=df,
                 message="Status stage 1 evaluated",
+                duration=duration,
                 metadata={'status_counts': status_counts}
             )
             
         except Exception as e:
             self.logger.error(f"Status stage 1 evaluation failed: {str(e)}", exc_info=True)
             context.add_error(f"Status stage 1 evaluation failed: {str(e)}")
+            duration = time.time() - start_time
             return StepResult(
                 step_name=self.name,
                 status=StepStatus.FAILED,
                 error=e,
+                duration=duration,
                 message=str(e)
             )
     
@@ -1636,7 +1850,7 @@ class StatusStage1Step(PipelineStep):
             # 定義「上月FN」備註關單條件
             remarked_close_by_fn_last_month = (
                 (df['Remarked by 上月 FN'].str.contains('刪|關', na=False)) | 
-                (df['Remarked by 上月 FN PR'].astype(str).str.contains('刪|關', na=False))
+                (df['Remarked by 上月 FN PR'].astype('string').str.contains('刪|關', na=False))
             )
             
             # 統一轉換日期格式
@@ -1647,7 +1861,7 @@ class StatusStage1Step(PipelineStep):
             cond1 = \
                 df['Item Description'].str.contains(config_manager.get(entity_type, 'deposit_keywords'), 
                                                     na=False)
-            is_fa = df['GL#'].astype(str) == config_manager.get('FA_ACCOUNTS', entity_type, '199999')
+            is_fa = df['GL#'].astype('string') == config_manager.get('FA_ACCOUNTS', entity_type, '199999')
             cond_exclude = df['Item Description'].str.contains('(?i)繳費機訂金', na=False)  # 繳費機訂金屬FA
             df.loc[cond1 & ~is_fa & ~cond_exclude, tag_column] = \
                 config_manager.get(entity_type, 'deposit_keywords_label')
@@ -1659,11 +1873,11 @@ class StatusStage1Step(PipelineStep):
             df.loc[cond2, tag_column] = 'GL調整'
             
             # 條件3：該PO#在待關單清單中
-            cond3 = df['PO#'].astype(str).isin([str(x) for x in to_be_close])
+            cond3 = df['PO#'].astype('string').isin([str(x) for x in to_be_close])
             df.loc[cond3, tag_column] = '待關單'
             
             # 條件4：該PO#在已關單清單中
-            cond4 = df['PO#'].astype(str).isin([str(x) for x in closed])
+            cond4 = df['PO#'].astype('string').isin([str(x) for x in closed])
             df.loc[cond4, tag_column] = '已關單'
             
             # 條件5：上月FN備註含有「刪」或「關」
@@ -1682,8 +1896,8 @@ class StatusStage1Step(PipelineStep):
             
             # 條件7：若「Remarked by 上月 FN PR」含有「入FA」，則提取該數字，並更新狀態
             cond7 = (
-                (df['Remarked by 上月 FN PR'].astype(str).str.contains('入FA', na=False)) & 
-                (~df['Remarked by 上月 FN PR'].astype(str).str.contains('部分完成', na=False))
+                (df['Remarked by 上月 FN PR'].astype('string').str.contains('入FA', na=False)) & 
+                (~df['Remarked by 上月 FN PR'].astype('string').str.contains('部分完成', na=False))
             )
             if cond7.any():
                 extracted_pr = self.extract_fa_remark(df.loc[cond7, 'Remarked by 上月 FN PR'])
@@ -1703,7 +1917,7 @@ class StatusStage1Step(PipelineStep):
             mask_erm_equals_current = df['Expected Received Month_轉換格式'] == date
             mask_account_rent = df['GL#'] == account_rent
             mask_ops_rent = df['PR Requester'] == ops_rent
-            mask_descerm_equals_current = df['YMs of Item Description'].str[:6].astype(int) == date
+            mask_descerm_equals_current = df['YMs of Item Description'].str[:6].astype('Int64') == date
             mask_desc_contains_intermediary = df['Item Description'].fillna('na').str.contains('(?i)intermediary')
             mask_ops_intermediary = df['PR Requester'] == ops_intermediary
 
@@ -1726,11 +1940,11 @@ class StatusStage1Step(PipelineStep):
                  ) &
                 
                 (
-                    ((df['Expected Received Month_轉換格式'] <= df['YMs of Item Description'].str[:6].astype('int32')) &
+                    ((df['Expected Received Month_轉換格式'] <= df['YMs of Item Description'].str[:6].astype('Int32')) &
                         (df['Expected Received Month_轉換格式'] > date) &
                         (df['YMs of Item Description'] != '100001,100002')
                      ) |
-                    ((df['Expected Received Month_轉換格式'] > df['YMs of Item Description'].str[:6].astype('int32')) &
+                    ((df['Expected Received Month_轉換格式'] > df['YMs of Item Description'].str[:6].astype('Int32')) &
                         (df['Expected Received Month_轉換格式'] > date) &
                         (df['YMs of Item Description'] != '100001,100002')
                      )
@@ -1759,9 +1973,9 @@ class StatusStage1Step(PipelineStep):
             po_general_fa = df['Remarked by 上月 FN'].str.contains('入FA', na=False)
             po_specific_pattern = df['Remarked by 上月 FN'].str.contains(r'部分完成.*\d{6}入FA', na=False, regex=True)
 
-            pr_general_fa = df['Remarked by 上月 FN PR'].astype(str).str.contains('入FA', na=False)
+            pr_general_fa = df['Remarked by 上月 FN PR'].astype('string').str.contains('入FA', na=False)
             pr_specific_pattern = (df['Remarked by 上月 FN PR']
-                                   .astype(str).str.contains(r'部分完成.*\d{6}入FA', na=False, regex=True))
+                                   .astype('string').str.contains(r'部分完成.*\d{6}入FA', na=False, regex=True))
 
             doesnt_contain_fa = (~pr_general_fa & ~po_general_fa)
             specific_pattern = (pr_specific_pattern | po_specific_pattern)
@@ -1782,7 +1996,7 @@ class StatusStage1Step(PipelineStep):
             
             # 定義「上月FN」備註關單條件
             remarked_close_by_fn_last_month = (
-                df['Remarked by 上月 FN'].astype(str).str.contains('刪|關', na=False)
+                df['Remarked by 上月 FN'].astype('string').str.contains('刪|關', na=False)
             )
             
             # 統一轉換日期格式
@@ -1792,7 +2006,7 @@ class StatusStage1Step(PipelineStep):
             cond1 = \
                 df['Item Description'].str.contains(config_manager.get(entity_type, 'deposit_keywords'), 
                                                     na=False)
-            is_fa = df['GL#'].astype(str) == config_manager.get('FA_ACCOUNTS', entity_type, '199999')
+            is_fa = df['GL#'].astype('string') == config_manager.get('FA_ACCOUNTS', entity_type, '199999')
             cond_exclude = df['Item Description'].str.contains('(?i)繳費機訂金', na=False)  # 繳費機訂金屬FA
             df.loc[cond1 & ~is_fa & ~cond_exclude, tag_column] = \
                 config_manager.get(entity_type, 'deposit_keywords_label')
@@ -1804,11 +2018,11 @@ class StatusStage1Step(PipelineStep):
             df.loc[cond2, tag_column] = 'GL調整'
             
             # 條件3：該PR#在待關單清單中
-            cond3 = df['PR#'].astype(str).isin([str(x) for x in to_be_close])
+            cond3 = df['PR#'].astype('string').isin([str(x) for x in to_be_close])
             df.loc[cond3, tag_column] = '待關單'
             
             # 條件4：該PR#在已關單清單中
-            cond4 = df['PR#'].astype(str).isin([str(x) for x in closed])
+            cond4 = df['PR#'].astype('string').isin([str(x) for x in closed])
             df.loc[cond4, tag_column] = '已關單'
             
             # 條件5：上月FN備註含有「刪」或「關」
@@ -1818,8 +2032,8 @@ class StatusStage1Step(PipelineStep):
             # 條件6：若「Remarked by 上月 FN」含有「入FA」，則提取該數字，並更新狀態(xxxxxx入FA)
             # 部分完成xxxxxx入FA不計入，前期FN備註如果是部分完成的會掉到erm邏輯判斷
             cond6 = (
-                (df['Remarked by 上月 FN'].astype(str).str.contains('入FA', na=False)) & 
-                (~df['Remarked by 上月 FN'].astype(str).str.contains('部分完成', na=False))
+                (df['Remarked by 上月 FN'].astype('string').str.contains('入FA', na=False)) & 
+                (~df['Remarked by 上月 FN'].astype('string').str.contains('部分完成', na=False))
             )
             if cond6.any():
                 extracted_fn = self.extract_fa_remark(df.loc[cond6, 'Remarked by 上月 FN'])
@@ -1839,7 +2053,7 @@ class StatusStage1Step(PipelineStep):
             mask_erm_equals_current = df['Expected Received Month_轉換格式'] == date
             mask_account_rent = df['GL#'] == account_rent
             mask_ops_rent = df['Requester'] == ops_rent
-            mask_descerm_equals_current = df['YMs of Item Description'].str[:6].astype(int) == date
+            mask_descerm_equals_current = df['YMs of Item Description'].str[:6].astype('Int64') == date
             mask_desc_contains_intermediary = df['Item Description'].fillna('na').str.contains('(?i)intermediary')
             mask_ops_intermediary = df['Requester'] == ops_intermediary
 
@@ -1858,11 +2072,11 @@ class StatusStage1Step(PipelineStep):
                  ) &
                 
                 (
-                    ((df['Expected Received Month_轉換格式'] <= df['YMs of Item Description'].str[:6].astype('int32')) &
+                    ((df['Expected Received Month_轉換格式'] <= df['YMs of Item Description'].str[:6].astype('Int32')) &
                         (df['Expected Received Month_轉換格式'] > date) &
                         (df['YMs of Item Description'] != '100001,100002')
                      ) |
-                    ((df['Expected Received Month_轉換格式'] > df['YMs of Item Description'].str[:6].astype('int32')) &
+                    ((df['Expected Received Month_轉換格式'] > df['YMs of Item Description'].str[:6].astype('Int32')) &
                         (df['Expected Received Month_轉換格式'] > date) &
                         (df['YMs of Item Description'] != '100001,100002')
                      )
@@ -1874,7 +2088,7 @@ class StatusStage1Step(PipelineStep):
             combined_cond = is_non_labeled & mask_ops_intermediary & mask_desc_contains_intermediary & \
                 ((df['Expected Received Month_轉換格式'] == date) |
                     ((df['Expected Received Month_轉換格式'] < date) & (df['Remarked by 上月 FN']
-                                                                    .astype(str).str.contains('已完成')))
+                                                                    .astype('string').str.contains('已完成')))
                  )
             df.loc[combined_cond, tag_column] = '已完成_intermediary'
             
@@ -1937,7 +2151,7 @@ class StatusStage1Step(PipelineStep):
             pd.Series: 轉換後的Series
         """
         try:
-            return series.astype(str).str.replace(r'(\d{4})/(\d{2})', r'\1\2', regex=True)
+            return series.astype('string').str.replace(r'(\d{4})/(\d{2})', r'\1\2', regex=True)
         except Exception as e:
             self.logger.error(f"轉換日期格式時出錯: {str(e)}", exc_info=True)
             return series
@@ -1952,7 +2166,7 @@ class StatusStage1Step(PipelineStep):
             pd.Series: 提取的日期Series
         """
         try:
-            return series.astype(str).str.extract(r'(\d{6}入FA)', expand=False)
+            return series.astype('string').str.extract(r'(\d{6}入FA)', expand=False)
         except Exception as e:
             self.logger.error(f"提取FA備註時出錯: {str(e)}", exc_info=True)
             return series
@@ -2040,6 +2254,7 @@ class SPXERMLogicStep(PipelineStep):
     
     async def execute(self, context: ProcessingContext) -> StepResult:
         """執行 ERM 邏輯"""
+        start_time = time.time()
         try:
             df = context.data.copy()
             processing_date = context.get_variable('processing_date')
@@ -2085,22 +2300,26 @@ class SPXERMLogicStep(PipelineStep):
                 f"需估列: {stats['accrual_count']} 筆, "
                 f"總計: {stats['total_count']} 筆"
             )
+            duration = time.time() - start_time
             
             return StepResult(
                 step_name=self.name,
                 status=StepStatus.SUCCESS,
                 data=df,
                 message=f"ERM 邏輯已應用，{stats['accrual_count']} 筆需估列",
+                duration=duration,
                 metadata=stats
             )
             
         except Exception as e:
             self.logger.error(f"ERM 邏輯處理失敗: {str(e)}", exc_info=True)
             context.add_error(f"ERM 邏輯失敗: {str(e)}")
+            duration = time.time() - start_time
             return StepResult(
                 step_name=self.name,
                 status=StepStatus.FAILED,
                 error=e,
+                duration=duration,
                 message=str(e)
             )
     
@@ -2124,8 +2343,8 @@ class SPXERMLogicStep(PipelineStep):
         no_status = (df['PO狀態'].isna()) | (df['PO狀態'] == 'nan')
         
         # 日期範圍條件
-        ym_start = df['YMs of Item Description'].str[:6].astype('int32')
-        ym_end = df['YMs of Item Description'].str[7:].astype('int32')
+        ym_start = df['YMs of Item Description'].str[:6].astype('Int32')
+        ym_end = df['YMs of Item Description'].str[7:].astype('Int32')
         erm = df['Expected Received Month_轉換格式']
         
         in_date_range = erm.between(ym_start, ym_end, inclusive='both')
@@ -2136,15 +2355,15 @@ class SPXERMLogicStep(PipelineStep):
         quantity_matched = df['Entry Quantity'] == df['Received Quantity']
         
         # 帳務條件
-        not_billed = df['Entry Billed Amount'].astype(float) == 0
+        not_billed = df['Entry Billed Amount'].astype('Float64') == 0
         has_billing = df['Billed Quantity'] != '0'
         fully_billed = (
-            df['Entry Amount'].astype(float) - 
-            df['Entry Billed Amount'].astype(float)
+            df['Entry Amount'].astype('Float64') - 
+            df['Entry Billed Amount'].astype('Float64')
         ) == 0
         has_unpaid_amount = (
-            df['Entry Amount'].astype(float) - 
-            df['Entry Billed Amount'].astype(float)
+            df['Entry Amount'].astype('Float64') - 
+            df['Entry Billed Amount'].astype('Float64')
         ) != 0
         
         # 備註條件
@@ -2159,7 +2378,7 @@ class SPXERMLogicStep(PipelineStep):
         )
         
         # FA 條件
-        is_fa = df['GL#'].astype(str).isin([str(x) for x in self.fa_accounts])
+        is_fa = df['GL#'].astype('string').isin([str(x) for x in self.fa_accounts])
         
         # 錯誤條件
         procurement_not_error = df['Remarked by Procurement'] != 'error'
@@ -2245,7 +2464,7 @@ class SPXERMLogicStep(PipelineStep):
             cond.in_date_range &
             cond.erm_before_or_equal_file_date &
             cond.quantity_matched &
-            (df['Entry Billed Amount'].astype(float) != 0) &
+            (df['Entry Billed Amount'].astype('Float64') != 0) &
             cond.fully_billed
         )
         df.loc[condition_4, 'PO狀態'] = '全付完，未關單?'
@@ -2261,7 +2480,7 @@ class SPXERMLogicStep(PipelineStep):
             cond.in_date_range &
             cond.erm_before_or_equal_file_date &
             cond.quantity_matched &
-            (df['Entry Billed Amount'].astype(float) != 0) &
+            (df['Entry Billed Amount'].astype('Float64') != 0) &
             cond.has_unpaid_amount
         )
         df.loc[condition_5, 'PO狀態'] = '已完成'
@@ -2340,7 +2559,7 @@ class SPXERMLogicStep(PipelineStep):
             cond.procurement_not_error &
             cond.no_status &
             cond.out_of_date_range &
-            (df['Received Quantity'].astype(float) != 0) &
+            (df['Received Quantity'].astype('Float64') != 0) &
             (~cond.quantity_matched)
         )
         df.loc[condition_11, 'PO狀態'] = '部分完成ERM'
@@ -2450,7 +2669,7 @@ class SPXERMLogicStep(PipelineStep):
         - 如果科目在 dept_accounts 清單中，取 Department 前3碼
         - 否則設為 '000'
         """
-        isin_dept = df['Account code'].astype(str).isin(
+        isin_dept = df['Account code'].astype('string').isin(
             [str(x) for x in self.dept_accounts]
         )
         
@@ -2471,9 +2690,9 @@ class SPXERMLogicStep(PipelineStep):
         公式：Unit Price × (Entry Quantity - Billed Quantity)
         """
         df['temp_amount'] = (
-            df['Unit Price'].astype(float) * 
-            (df['Entry Quantity'].astype(float) - 
-             df['Billed Quantity'].astype(float))
+            df['Unit Price'].astype('Float64') * 
+            (df['Entry Quantity'].astype('Float64') - 
+             df['Billed Quantity'].astype('Float64'))
         )
         
         df.loc[mask, 'Accr. Amount'] = df.loc[mask, 'temp_amount']
@@ -2647,6 +2866,7 @@ class ValidationDataProcessingStep(PipelineStep):
     
     async def execute(self, context: ProcessingContext) -> StepResult:
         """執行驗收數據處理"""
+        start_time = time.time()
         try:
             df = context.data.copy()
             processing_date = context.metadata.processing_date
@@ -2687,12 +2907,14 @@ class ValidationDataProcessingStep(PipelineStep):
             validation_count = (df['本期驗收數量/金額'] != 0).sum() if '本期驗收數量/金額' in df.columns else 0
             
             self.logger.info(f"Validation data processed: {validation_count} records updated")
+            duration = time.time() - start_time
             
             return StepResult(
                 step_name=self.name,
                 status=StepStatus.SUCCESS,
                 data=df,
                 message=f"Validation data applied to {validation_count} records",
+                duration=duration,
                 metadata={
                     'validation_records': int(validation_count),
                     'locker_non_discount_count': len(locker_non_discount),
@@ -2704,10 +2926,12 @@ class ValidationDataProcessingStep(PipelineStep):
         except Exception as e:
             self.logger.error(f"Validation data processing failed: {str(e)}", exc_info=True)
             context.add_error(f"Validation data processing failed: {str(e)}")
+            duration = time.time() - start_time
             return StepResult(
                 step_name=self.name,
                 status=StepStatus.FAILED,
                 error=e,
+                duration=duration,
                 message=str(e)
             )
     
@@ -2844,7 +3068,7 @@ class ValidationDataProcessingStep(PipelineStep):
             df['discount'] = ''
         
         # 確保 discount 欄位為字符串類型
-        df['discount'] = df['discount'].fillna('').astype(str)
+        df['discount'] = df['discount'].fillna('').astype('string')
         
         # 非折扣驗收 (不包含 X折驗收/出貨 的記錄)
         locker_discount_pattern = config_manager.get('SPX', 'locker_discount_pattern', r'\d+折')
@@ -3114,14 +3338,14 @@ class ValidationDataProcessingStep(PipelineStep):
         
         # 計算 Accr. Amount
         df['temp_amount'] = (
-            df['Unit Price'].astype(float) * df['本期驗收數量/金額'].fillna(0).astype(float)
+            df['Unit Price'].astype('Float64') * df['本期驗收數量/金額'].fillna(0).astype('Float64')
         )
         
         # 套用折扣
         if '折扣率' in df.columns:
             has_discount = df['折扣率'].notna()
             df.loc[has_discount, 'temp_amount'] = (
-                df.loc[has_discount, 'temp_amount'] * df.loc[has_discount, '折扣率'].astype(float)
+                df.loc[has_discount, 'temp_amount'] * df.loc[has_discount, '折扣率'].astype('Float64')
             )
             df.drop('折扣率', axis=1, inplace=True)
         
@@ -3170,6 +3394,7 @@ class DataReformattingStep(PipelineStep):
     
     async def execute(self, context: ProcessingContext) -> StepResult:
         """執行數據格式化"""
+        start_time = time.time()
         try:
             df = context.data.copy()
             
@@ -3211,12 +3436,14 @@ class DataReformattingStep(PipelineStep):
             context.update_data(df)
             
             self.logger.info("Data reformatting completed")
+            duration = time.time() - start_time
             
             return StepResult(
                 step_name=self.name,
                 status=StepStatus.SUCCESS,
                 data=df,
                 message="Data reformatted successfully",
+                duration=duration,
                 metadata={
                     'total_columns': len(df.columns),
                     'total_rows': len(df)
@@ -3226,10 +3453,12 @@ class DataReformattingStep(PipelineStep):
         except Exception as e:
             self.logger.error(f"Data reformatting failed: {str(e)}", exc_info=True)
             context.add_error(f"Data reformatting failed: {str(e)}")
+            duration = time.time() - start_time
             return StepResult(
                 step_name=self.name,
                 status=StepStatus.FAILED,
                 error=e,
+                duration=duration,
                 message=str(e)
             )
     
@@ -3240,7 +3469,7 @@ class DataReformattingStep(PipelineStep):
         for col in int_columns:
             if col in df.columns:
                 try:
-                    df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype('int64')
+                    df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype('Int64')
                 except Exception as e:
                     self.logger.warning(f"Failed to format {col}: {str(e)}")
         
@@ -3289,17 +3518,17 @@ class DataReformattingStep(PipelineStep):
         
         for col in columns_to_clean:
             if col in df.columns:
-                df[col] = df[col].replace('nan', np.nan)
-                df[col] = df[col].replace('<NA>', np.nan)
+                df[col] = df[col].replace('nan', pd.NA)
+                df[col] = df[col].replace('<NA>', pd.NA)
         
         # 特殊處理 Accr. Amount
         if 'Accr. Amount' in df.columns:
             try:
                 df['Accr. Amount'] = (
-                    df['Accr. Amount'].astype(str).str.replace(',', '')
+                    df['Accr. Amount'].astype('string').str.replace(',', '')
                     .replace('nan', '0')
                     .replace('<NA>', '0')
-                    .astype(float)
+                    .astype('Float64')
                 )
                 df['Accr. Amount'] = df['Accr. Amount'].apply(lambda x: x if x != 0 else None)
             except Exception as e:
@@ -3350,7 +3579,7 @@ class DataReformattingStep(PipelineStep):
             df['CATEGORY'] = df['Item Description'].apply(classify_description)
         except Exception as e:
             self.logger.warning(f"Failed to add classification: {str(e)}")
-            df['CATEGORY'] = np.nan
+            df['CATEGORY'] = pd.NA
         
         return df
     
@@ -3377,7 +3606,7 @@ class DataReformattingStep(PipelineStep):
         ]
         choices = ['分期', '一般']
         
-        df['裝修一般/分期'] = np.select(conditions, choices, default=None)
+        df['裝修一般/分期'] = np.select(conditions, choices, default=pd.NA)
         
         return df
     
@@ -3413,11 +3642,12 @@ class SPXExportStep(PipelineStep):
     
     async def execute(self, context: ProcessingContext) -> StepResult:
         """執行導出"""
+        start_time = time.time()
         try:
             df = context.data.copy()
             
             # 清理 <NA> 值
-            df_export = df.replace('<NA>', np.nan)
+            df_export = df.replace('<NA>', pd.NA)
             
             # 生成文件名
             processing_date = context.metadata.processing_date
@@ -3443,11 +3673,13 @@ class SPXExportStep(PipelineStep):
             df_export.to_excel(output_path, index=False)
             
             self.logger.info(f"Data exported to: {output_path}")
+            duration = time.time() - start_time
             
             return StepResult(
                 step_name=self.name,
                 status=StepStatus.SUCCESS,
                 message=f"Exported to {output_path}",
+                duration=duration,
                 metadata={
                     'output_path': output_path,
                     'rows_exported': len(df_export),
@@ -3458,10 +3690,12 @@ class SPXExportStep(PipelineStep):
         except Exception as e:
             self.logger.error(f"Export failed: {str(e)}", exc_info=True)
             context.add_error(f"Export failed: {str(e)}")
+            duration = time.time() - start_time
             return StepResult(
                 step_name=self.name,
                 status=StepStatus.FAILED,
                 error=e,
+                duration=duration,
                 message=str(e)
             )
     
