@@ -3,9 +3,9 @@ SPX實體特定處理步驟
 包含SPX特有的複雜業務邏輯
 """
 
+import re
 import pandas as pd
 import numpy as np
-from typing import Optional, Dict, List, Tuple
 
 from ..base import PipelineStep, StepResult, StepStatus
 from ..context import ProcessingContext
@@ -287,7 +287,6 @@ class SPXRentProcessingStep(PipelineStep):
     def _extract_rent_period(self, description: str) -> str:
         """提取租金期間"""
         # 簡化實現，實際應使用正則表達式提取
-        import re
         
         # 嘗試匹配YYYY/MM格式
         pattern = r'(\d{4})[/\-](\d{1,2})'

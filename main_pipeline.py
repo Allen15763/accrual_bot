@@ -260,7 +260,7 @@ class PipelineWithCheckpoint:
                 )
             
             # 如果失敗且設定為遇錯即停
-            if not result.is_success and self.pipeline.stop_on_error:
+            if not result.is_success and self.pipeline.config.stop_on_error:
                 print(f"❌ 步驟失敗,停止執行: {result.message}")
                 break
         
@@ -306,6 +306,47 @@ async def execute_with_checkpoint(
     
     # 創建 pipeline 和 checkpoint manager
     pipeline = create_spx_po_complete_pipeline(file_paths)
+    checkpoint_manager = CheckpointManager(checkpoint_dir)
+    
+    # 創建上下文
+    context = ProcessingContext(
+        data=pd.DataFrame(),
+        entity_type="SPX",
+        processing_date=processing_date,
+        processing_type="PO"
+    )
+    
+    # 執行
+    executor = PipelineWithCheckpoint(pipeline, checkpoint_manager)
+    result = await executor.execute_with_checkpoint(
+        context=context,
+        save_after_each_step=save_checkpoints
+    )
+    
+    return result
+
+async def execute_ppe_with_checkpoint(
+    file_paths: str,
+    processing_date: int,
+    checkpoint_dir: str = "./checkpoints",
+    save_checkpoints: bool = True
+) -> Dict[str, Any]:
+    """
+    執行完整 pipeline 並自動儲存 checkpoint
+    
+    Args:
+        file_paths: 文件路徑字串
+        processing_date: 處理日期
+        checkpoint_dir: checkpoint 儲存目錄
+        save_checkpoints: 是否儲存 checkpoint
+        
+    Returns:
+        Dict: 執行結果
+    """
+    from accrual_bot.core.pipeline.steps.spx_po_steps import create_ppe_pipeline  # 替換成實際路徑
+    
+    # 創建 pipeline 和 checkpoint manager
+    pipeline = create_ppe_pipeline(file_paths, processing_date)
     checkpoint_manager = CheckpointManager(checkpoint_dir)
     
     # 創建上下文
@@ -584,4 +625,12 @@ if __name__ == "__main__":
     #     checkpoint_name="SPX_202509_after_Add_Columns",
     #     step_to_test="Integrate_AP_Invoice"
     # ))
+
+    # Run PPE steps
+    # result = asyncio.run(execute_ppe_with_checkpoint(
+    #     file_paths=r'G:\共用雲端硬碟\INT_TWN_SEA_FN_Shared_Resources\00_Temp_Internal_share\SPX\租金\SPX租金合約歸檔清單及匯款狀態_marge1.xlsx',
+    #     processing_date=202509,
+    #     save_checkpoints=True
+    # ))
+    
     print(1)
