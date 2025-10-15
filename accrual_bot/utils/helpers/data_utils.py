@@ -9,6 +9,7 @@ from typing import List, Dict, Any, Optional, Union, Tuple
 from datetime import datetime, timedelta
 import concurrent.futures
 import threading
+import logging
 
 from ..config.constants import REGEX_PATTERNS, DEFAULT_DATE_RANGE
 
@@ -188,7 +189,7 @@ def _validate_date_format(date_str: str, has_day: bool = False) -> bool:
 def extract_date_range_from_description(
     description: str, 
     patterns: Optional[Dict[str, str]] = None,
-    logger=None
+    logger: Optional[logging.Logger] = None
 ) -> str:
     """
     從描述中提取日期範圍
