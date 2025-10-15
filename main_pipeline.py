@@ -605,20 +605,20 @@ if __name__ == "__main__":
     # }
     
     # Run all steps
-    result = asyncio.run(execute_with_checkpoint(
-        file_paths=file_paths,
-        processing_date=202509,
-        save_checkpoints=True
-    ))
+    # result = asyncio.run(execute_with_checkpoint(
+    #     file_paths=file_paths,
+    #     processing_date=202509,
+    #     save_checkpoints=True
+    # ))
 
     # Start from specific point
-    # asyncio.run(resume_from_step(
-    #     # checkpoint_name="SPX_202509_after_Filter_SPX_Products",    # checkpoint資料夾路徑名稱
-    #     # start_from_step="Add_Columns",
-    #     checkpoint_name="SPX_202509_after_Process_Dates",    # checkpoint資料夾路徑名稱
-    #     start_from_step="Integrate_Closing_List",
-    #     file_paths=file_paths  # 可選,如果 checkpoint 中沒有
-    # ))
+    result = asyncio.run(resume_from_step(
+        checkpoint_name="SPX_202509_after_Filter_SPX_Products",    # checkpoint資料夾路徑名稱
+        start_from_step="Add_Columns",
+        # checkpoint_name="SPX_202509_after_Process_Dates",    # checkpoint資料夾路徑名稱
+        # start_from_step="Integrate_Closing_List",
+        file_paths=file_paths  # 可選,如果 checkpoint 中沒有
+    ))
 
     # 從特定步驟開始，跟resume_from_step類似
     # result = asyncio.run(quick_test_step(

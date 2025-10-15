@@ -32,15 +32,17 @@ class StatusStage1Step(PipelineStep):
     async def execute(self, context: ProcessingContext) -> StepResult:
         """執行第一階段狀態判斷"""
         start_time = time.time()
+        
         try:
             df = context.data.copy()
             df_spx_closing = context.get_auxiliary_data('closing_list')
             processing_date = context.metadata.processing_date
             
-            self.logger.info("Evaluating status stage 1...")
+            self.logger.info("🔄 開始執行第一階段狀態判斷...")
             
+            # === 階段 1: 驗證數據 ===
             if df_spx_closing is None or df_spx_closing.empty:
-                self.logger.warning("No closing list data, skipping status stage 1")
+                self.logger.warning("⚠️  關單清單為空，跳過狀態判斷")
                 return StepResult(
                     step_name=self.name,
                     status=StepStatus.SKIPPED,
@@ -48,30 +50,42 @@ class StatusStage1Step(PipelineStep):
                     message="No closing list data"
                 )
             
-            # 給予第一階段狀態
+            self.logger.info(f"📅 處理日期: {processing_date}")
+            self.logger.info(f"📊 輸入記錄數: {len(df):,}")
+            self.logger.info(f"📋 關單清單記錄數: {len(df_spx_closing):,}")
+            
+            # === 階段 2: 給予狀態標籤 ===
+            self.logger.info("🏷️  開始分配狀態標籤...")
             df = self._give_status_stage_1(df, 
                                            df_spx_closing, 
                                            processing_date,
                                            entity_type=context.metadata.entity_type)
             
+            # === 階段 3: 生成摘要 ===
+            tag_column = 'PO狀態' if 'PO狀態' in df.columns else 'PR狀態'
+            summary = self._generate_label_summary(df, tag_column)
+            
+            # === 階段 4: 記錄摘要到 Logger ===
+            self._log_label_summary(summary, tag_column)
+            
+            # === 階段 5: 更新上下文 ===
             context.update_data(df)
             
-            status_counts = df['PO狀態'].value_counts().to_dict() if 'PO狀態' in df.columns else {}
-            
-            self.logger.info("Status stage 1 evaluation completed")
             duration = time.time() - start_time
+            
+            self.logger.info(f"✅ 第一階段狀態判斷完成 (耗時: {duration:.2f}秒)")
             
             return StepResult(
                 step_name=self.name,
                 status=StepStatus.SUCCESS,
                 data=df,
-                message="Status stage 1 evaluated",
+                message=f"狀態標籤分配完成: {summary['labeled_count']} 筆已標籤",
                 duration=duration,
-                metadata={'status_counts': status_counts}
+                metadata=summary  # 將完整摘要放入 metadata
             )
             
         except Exception as e:
-            self.logger.error(f"Status stage 1 evaluation failed: {str(e)}", exc_info=True)
+            self.logger.error(f"❌ 第一階段狀態判斷失敗: {str(e)}", exc_info=True)
             context.add_error(f"Status stage 1 evaluation failed: {str(e)}")
             duration = time.time() - start_time
             return StepResult(
@@ -81,6 +95,119 @@ class StatusStage1Step(PipelineStep):
                 duration=duration,
                 message=str(e)
             )
+    
+    def _generate_label_summary(self, df: pd.DataFrame, 
+                                tag_column: str) -> Dict[str, Any]:
+        """
+        生成標籤分配的詳細摘要
+        
+        統計內容：
+        1. 各標籤數量與百分比
+        2. 分類統計（已完成、未完成、錯誤等）
+        3. 需要關注的異常標籤
+        
+        Args:
+            df: 處理後的 DataFrame
+            tag_column: 標籤欄位名稱 ('PO狀態' 或 'PR狀態')
+            
+        Returns:
+            Dict: 包含完整統計信息的字典
+        """
+        total_count = len(df)
+        
+        # 標籤分布統計
+        label_counts = df[tag_column].value_counts().to_dict()
+        label_percentages = (df[tag_column].value_counts(normalize=True) * 100).to_dict()
+        
+        # 分類統計
+        completed_labels = ['已完成_租金', '已完成_intermediary', '已入帳']
+        incomplete_labels = ['未完成_租金', '未完成_intermediary']
+        pending_labels = ['待關單', 'Pending_validating']
+        closed_labels = ['已關單', '參照上月關單']
+        error_labels = [k for k in label_counts.keys() if 'error' in str(k).lower()]
+        
+        # 構建摘要
+        summary = {
+            'total_records': total_count,
+            'labeled_count': df[tag_column].notna().sum(),
+            'unlabeled_count': df[tag_column].isna().sum(),
+            
+            # 標籤分布
+            'label_distribution': label_counts,
+            'label_percentages': {k: round(v, 2) for k, v in label_percentages.items()},
+            
+            # 分類統計
+            'category_stats': {
+                'completed': sum(label_counts.get(label, 0) for label in completed_labels),
+                'incomplete': sum(label_counts.get(label, 0) for label in incomplete_labels),
+                'pending': sum(label_counts.get(label, 0) for label in pending_labels),
+                'closed': sum(label_counts.get(label, 0) for label in closed_labels),
+                'errors': sum(label_counts.get(label, 0) for label in error_labels),
+            },
+            
+            # Top 5 標籤
+            'top_5_labels': dict(sorted(label_counts.items(), 
+                                        key=lambda x: x[1], 
+                                        reverse=True)[:5]),
+        }
+        
+        return summary
+    
+    def _log_label_summary(self, summary: Dict[str, Any], tag_column: str):
+        """
+        以結構化方式記錄標籤摘要到 logger
+        
+        輸出格式清晰易讀，便於監控和調試
+        
+        Args:
+            summary: 摘要統計數據
+            tag_column: 標籤欄位名稱
+        """
+        self.logger.info("=" * 60)
+        self.logger.info(f"📊 {tag_column} 標籤分配摘要")
+        self.logger.info("=" * 60)
+        
+        # 總覽統計
+        self.logger.info(f"📈 總記錄數: {summary['total_records']:,}")
+        self.logger.info(f"   ├─ 已標籤: {summary['labeled_count']:,} "
+                         f"({summary['labeled_count']/summary['total_records']*100:.1f}%)")
+        self.logger.info(f"   └─ 未標籤: {summary['unlabeled_count']:,}")
+        
+        # 分類統計
+        self.logger.info("\n📂 分類統計:")
+        category_stats = summary['category_stats']
+        for category, count in category_stats.items():
+            if count > 0:
+                self.logger.info(f"   • {category:12s}: {count:5,} "
+                                 f"({count/summary['total_records']*100:5.1f}%)")
+        
+        # Top 5 標籤
+        self.logger.info("\n🏆 Top 5 標籤:")
+        for i, (label, count) in enumerate(summary['top_5_labels'].items(), 1):
+            percentage = summary['label_percentages'].get(label, 0)
+            self.logger.info(f"   {i}. {label:30s}: {count:5,} ({percentage:5.1f}%)")
+        
+        # 異常警告
+        if category_stats['errors'] > 0:
+            self.logger.warning(f"\n⚠️  發現 {category_stats['errors']} 筆錯誤記錄")
+        
+        self.logger.info("=" * 60)
+    
+    def _log_label_condition(self, condition_name: str, 
+                             count: int, 
+                             label: str):
+        """
+        記錄單一標籤條件的結果
+        
+        參考 SPXERMLogicStep._log_condition_result 的風格
+        
+        Args:
+            condition_name: 條件名稱
+            count: 符合條件的記錄數
+            label: 賦予的標籤
+        """
+        if count > 0:
+            self.logger.debug(f"✓ [{condition_name:30s}] → '{label:20s}': {count:5,} 筆")
     
     def _give_status_stage_1(self, 
                              df: pd.DataFrame, 
@@ -127,26 +254,31 @@ class StatusStage1Step(PipelineStep):
                                                     na=False)
             is_fa = df['GL#'].astype('string') == config_manager.get('FA_ACCOUNTS', entity_type, '199999')
             cond_exclude = df['Item Description'].str.contains('(?i)繳費機訂金', na=False)  # 繳費機訂金屬FA
-            df.loc[cond1 & ~is_fa & ~cond_exclude, tag_column] = \
-                config_manager.get(entity_type, 'deposit_keywords_label')
+            label_deposit = config_manager.get(entity_type, 'deposit_keywords_label')
+            df.loc[cond1 & ~is_fa & ~cond_exclude, tag_column] = label_deposit
+            self._log_label_condition('押金/保證金', (cond1 & ~is_fa & ~cond_exclude).sum(), label_deposit)
             
             # 條件2：供應商與類別對應，做GL調整
             bao_supplier: list = config_manager.get_list(entity_type, 'bao_supplier')
             bao_categories: list = config_manager.get_list(entity_type, 'bao_categories')
             cond2 = (df['PO Supplier'].isin(bao_supplier)) & (df['Category'].isin(bao_categories))
             df.loc[cond2, tag_column] = 'GL調整'
+            self._log_label_condition('BAO供應商GL調整', cond2.sum(), 'GL調整')
             
             # 條件3：該PO#在待關單清單中
             cond3 = df['PO#'].astype('string').isin([str(x) for x in to_be_close])
             df.loc[cond3, tag_column] = '待關單'
+            self._log_label_condition('PO在待關單清單', cond3.sum(), '待關單')
             
             # 條件4：該PO#在已關單清單中
             cond4 = df['PO#'].astype('string').isin([str(x) for x in closed])
             df.loc[cond4, tag_column] = '已關單'
+            self._log_label_condition('PO在已關單清單', cond4.sum(), '已關單')
             
             # 條件5：上月FN備註含有「刪」或「關」
             cond5 = remarked_close_by_fn_last_month
             df.loc[cond5, tag_column] = '參照上月關單'
+            self._log_label_condition('上月FN備註關單', cond5.sum(), '參照上月關單')
             
             # 條件6：若「Remarked by 上月 FN」含有「入FA」，則提取該數字，並更新狀態(xxxxxx入FA)
             # 部分完成xxxxxx入FA不計入，前期FN備註如果是部分完成的會掉到erm邏輯判斷
@@ -157,6 +289,7 @@ class StatusStage1Step(PipelineStep):
             if cond6.any():
                 extracted_fn = self.extract_fa_remark(df.loc[cond6, 'Remarked by 上月 FN'])
                 df.loc[cond6, tag_column] = extracted_fn
+                self._log_label_condition('PO備註入FA', cond6.sum(), 'xxxxxx入FA')
             
             # 條件7：若「Remarked by 上月 FN PR」含有「入FA」，則提取該數字，並更新狀態
             cond7 = (
@@ -166,10 +299,12 @@ class StatusStage1Step(PipelineStep):
             if cond7.any():
                 extracted_pr = self.extract_fa_remark(df.loc[cond7, 'Remarked by 上月 FN PR'])
                 df.loc[cond7, tag_column] = extracted_pr
+                self._log_label_condition('PR備註入FA', cond7.sum(), 'xxxxxx入FA')
 
             # 條件8：該筆資料supplier是"台電"、"台水"、"北水"等公共費用
             cond8 = df['PO Supplier'].fillna('system_filled').str.contains(utility_suppliers)
             df.loc[cond8, tag_column] = '授扣GL調整'
+            self._log_label_condition('公共費用供應商', cond8.sum(), '授扣GL調整')
 
             # 費用類按申請人篩選
             is_non_labeled = (df[tag_column].isna()) | (df[tag_column] == '') | (df[tag_column] == 'nan')
@@ -187,13 +322,17 @@ class StatusStage1Step(PipelineStep):
 
             combined_cond = is_non_labeled & mask_erm_equals_current & mask_account_rent & mask_ops_rent
             df.loc[combined_cond, tag_column] = '已完成_租金'
+            self._log_label_condition('ERM=當月租金', combined_cond.sum(), '已完成_租金')
 
             combined_cond = is_non_labeled & mask_descerm_equals_current & mask_account_rent & mask_ops_rent
             df.loc[combined_cond, tag_column] = '已完成_租金'
+            self._log_label_condition('摘要月=當月租金', combined_cond.sum(), '已完成_租金')
 
             # 租金已入帳
             booked_in_ap = (~df['GL DATE'].isna()) & ((df['GL DATE'] != '') | (df['GL DATE'] != 'nan'))
-            df.loc[(df[tag_column] == '已完成_租金') & (booked_in_ap), tag_column] = '已入帳'
+            rent_booked = (df[tag_column] == '已完成_租金') & (booked_in_ap)
+            df.loc[rent_booked, tag_column] = '已入帳'
+            self._log_label_condition('租金已入帳', rent_booked.sum(), '已入帳')
 
             uncompleted_rent = (
                 ((df['Remarked by Procurement'] != 'error') &
@@ -217,16 +356,19 @@ class StatusStage1Step(PipelineStep):
 
             )
             df.loc[uncompleted_rent, tag_column] = '未完成_租金'
+            self._log_label_condition('未完成租金', uncompleted_rent.sum(), '未完成_租金')
 
             combined_cond = is_non_labeled & mask_ops_intermediary & mask_desc_contains_intermediary & \
                 ((df['Expected Received Month_轉換格式'] == date) |
                     ((df['Expected Received Month_轉換格式'] < date) & (df['Remarked by 上月 FN'].str.contains('已完成')))
                  )
             df.loc[combined_cond, tag_column] = '已完成_intermediary'
+            self._log_label_condition('Intermediary已完成', combined_cond.sum(), '已完成_intermediary')
             
             combined_cond = is_non_labeled & mask_ops_intermediary & mask_desc_contains_intermediary & \
                 (df['Expected Received Month_轉換格式'] > date)
             df.loc[combined_cond, tag_column] = '未完成_intermediary'
+            self._log_label_condition('Intermediary未完成', combined_cond.sum(), '未完成_intermediary')
 
             # 要判斷OPS驗收數
             kiosk_suppliers: list = config_manager.get_list(entity_type, 'kiosk_suppliers')
@@ -248,6 +390,7 @@ class StatusStage1Step(PipelineStep):
                     (doesnt_contain_fa | specific_pattern) & 
                     (ignore_closed))
             df.loc[mask, tag_column] = 'Pending_validating'
+            self._log_label_condition('資產驗收待確認', mask.sum(), 'Pending_validating')
             
             self.logger.info("成功給予第一階段狀態")
             return df
@@ -272,26 +415,31 @@ class StatusStage1Step(PipelineStep):
                                                     na=False)
             is_fa = df['GL#'].astype('string') == config_manager.get('FA_ACCOUNTS', entity_type, '199999')
             cond_exclude = df['Item Description'].str.contains('(?i)繳費機訂金', na=False)  # 繳費機訂金屬FA
-            df.loc[cond1 & ~is_fa & ~cond_exclude, tag_column] = \
-                config_manager.get(entity_type, 'deposit_keywords_label')
+            label_deposit = config_manager.get(entity_type, 'deposit_keywords_label')
+            df.loc[cond1 & ~is_fa & ~cond_exclude, tag_column] = label_deposit
+            self._log_label_condition('PR押金/保證金', (cond1 & ~is_fa & ~cond_exclude).sum(), label_deposit)
             
             # 條件2：供應商與類別對應，做GL調整
             bao_supplier: list = config_manager.get_list(entity_type, 'bao_supplier')
             bao_categories: list = config_manager.get_list(entity_type, 'bao_categories')
             cond2 = (df['PR Supplier'].isin(bao_supplier)) & (df['Category'].isin(bao_categories))
             df.loc[cond2, tag_column] = 'GL調整'
+            self._log_label_condition('PR BAO供應商GL調整', cond2.sum(), 'GL調整')
             
             # 條件3：該PR#在待關單清單中
             cond3 = df['PR#'].astype('string').isin([str(x) for x in to_be_close])
             df.loc[cond3, tag_column] = '待關單'
+            self._log_label_condition('PR在待關單清單', cond3.sum(), '待關單')
             
             # 條件4：該PR#在已關單清單中
             cond4 = df['PR#'].astype('string').isin([str(x) for x in closed])
             df.loc[cond4, tag_column] = '已關單'
+            self._log_label_condition('PR在已關單清單', cond4.sum(), '已關單')
             
             # 條件5：上月FN備註含有「刪」或「關」
             cond5 = remarked_close_by_fn_last_month
             df.loc[cond5, tag_column] = '參照上月關單'
+            self._log_label_condition('PR上月FN備註關單', cond5.sum(), '參照上月關單')
             
             # 條件6：若「Remarked by 上月 FN」含有「入FA」，則提取該數字，並更新狀態(xxxxxx入FA)
             # 部分完成xxxxxx入FA不計入，前期FN備註如果是部分完成的會掉到erm邏輯判斷
@@ -302,10 +450,12 @@ class StatusStage1Step(PipelineStep):
             if cond6.any():
                 extracted_fn = self.extract_fa_remark(df.loc[cond6, 'Remarked by 上月 FN'])
                 df.loc[cond6, tag_column] = extracted_fn
+                self._log_label_condition('PR備註入FA', cond6.sum(), 'xxxxxx入FA')
             
             # 條件8：該筆資料supplier是"台電"、"台水"、"北水"等公共費用
             cond8 = df['PR Supplier'].fillna('system_filled').str.contains(utility_suppliers)
             df.loc[cond8, tag_column] = '授扣GL調整'
+            self._log_label_condition('PR公共費用供應商', cond8.sum(), '授扣GL調整')
 
             # 費用類按申請人篩選
             is_non_labeled = (df[tag_column].isna()) | (df[tag_column] == '') | (df[tag_column] == 'nan')
@@ -323,9 +473,11 @@ class StatusStage1Step(PipelineStep):
 
             combined_cond = is_non_labeled & mask_erm_equals_current & mask_account_rent & mask_ops_rent
             df.loc[combined_cond, tag_column] = '已完成_租金'
+            self._log_label_condition('PR ERM=當月租金', combined_cond.sum(), '已完成_租金')
 
             combined_cond = is_non_labeled & mask_descerm_equals_current & mask_account_rent & mask_ops_rent
             df.loc[combined_cond, tag_column] = '已完成_租金'
+            self._log_label_condition('PR摘要月=當月租金', combined_cond.sum(), '已完成_租金')
 
             uncompleted_rent = (
                 ((df['Remarked by Procurement'] != 'error') &
@@ -348,6 +500,7 @@ class StatusStage1Step(PipelineStep):
 
             )
             df.loc[uncompleted_rent, tag_column] = '未完成_租金'
+            self._log_label_condition('PR未完成租金', uncompleted_rent.sum(), '未完成_租金')
 
             combined_cond = is_non_labeled & mask_ops_intermediary & mask_desc_contains_intermediary & \
                 ((df['Expected Received Month_轉換格式'] == date) |
@@ -355,10 +508,12 @@ class StatusStage1Step(PipelineStep):
                                                                     .astype('string').str.contains('已完成')))
                  )
             df.loc[combined_cond, tag_column] = '已完成_intermediary'
+            self._log_label_condition('PR Intermediary已完成', combined_cond.sum(), '已完成_intermediary')
             
             combined_cond = is_non_labeled & mask_ops_intermediary & mask_desc_contains_intermediary & \
                 (df['Expected Received Month_轉換格式'] > date)
             df.loc[combined_cond, tag_column] = '未完成_intermediary'
+            self._log_label_condition('PR Intermediary未完成', combined_cond.sum(), '未完成_intermediary')
 
             # PR的智取櫃與繳費機，不會在PR驗收不估
             kiosk_suppliers: list = config_manager.get_list(entity_type, 'kiosk_suppliers')
@@ -368,6 +523,7 @@ class StatusStage1Step(PipelineStep):
             mask = ((df['PR Supplier'].isin(asset_suppliers)) & 
                     (ignore_closed))
             df.loc[mask, tag_column] = '智取櫃與繳費機'
+            self._log_label_condition('PR智取櫃與繳費機', mask.sum(), '智取櫃與繳費機')
 
             self.logger.info("成功給予第一階段狀態")
             # return df
