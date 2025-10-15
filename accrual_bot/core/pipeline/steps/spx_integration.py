@@ -822,22 +822,22 @@ class ValidationDataProcessingStep(PipelineStep):
         如果輸入為陣列，預設只會處理第一個元素。
 
         Args:
-            discount_input: 折扣字串 (e.g., "8折驗收") 或包含此類字串的 NumPy 陣列。
+            discount_input: 折扣字串 (e.g., "8折驗收") 或包含此類字串的陣列。
             
         Returns:
             折扣率 (e.g., 0.8)，若無法提取或輸入無效則返回 None。
         """
-        # --- 步驟 1: 輸入正規化 (Input Normalization) ---
-        target_str: Optional[str] = None
-
         if discount_input is None:
             return None
         
+        # --- 輸入正規化 ---
+        target_str: Optional[str] = None
+        
         if isinstance(discount_input, str):
             target_str = discount_input
-        elif isinstance(discount_input, np.ndarray):
+        elif isinstance(discount_input, (np.ndarray, pd.arrays.StringArray)):
             if discount_input.size == 0:
-                self.logger.info("輸入的 ndarray 為空，無法提取折扣率。")
+                self.logger.debug("輸入的陣列為空，無法提取折扣率。")
                 return None
             
             if discount_input.size > 1:
@@ -845,36 +845,37 @@ class ValidationDataProcessingStep(PipelineStep):
                     f"輸入為多值陣列，只處理第一個元素 '{discount_input[0]}'. "
                     f"被忽略的值: {list(discount_input[1:])}"
                 )
-            target_str = str(discount_input[0])  # 確保取出的元素是字串
-        elif isinstance(discount_input, pd.arrays.StringArray):
-            if discount_input.size == 0:
-                self.logger.info("輸入的 StringArray 為空，無法提取折扣率。")
+            
+            first_element = discount_input[0]
+            # 處理 NaN 或 None
+            if first_element is None or (isinstance(first_element, float) and np.isnan(first_element)):
+                self.logger.debug("陣列第一個元素為空值，無法提取折扣率。")
                 return None
             
-            if discount_input.size > 1:
-                self.logger.warning(
-                    f"輸入為多值陣列，只處理第一個元素 '{discount_input[0]}'. "
-                    f"被忽略的值: {list(discount_input[1:])}"
-                )
-            target_str = str(discount_input[0])  # 確保取出的元素是字串
+            target_str = str(first_element)  # 確保取出的元素是字串
         else:
             self.logger.error(f"不支援的輸入類型: {type(discount_input)}")
-            raise TypeError(f"Input must be str or np.ndarray, not {type(discount_input)}")
+            raise TypeError(
+                f"Input must be str, np.ndarray, or pd.arrays.StringArray, not {type(discount_input)}"
+            )
 
-        # --- 步驟 2: 核心提取邏輯 (Core Extraction Logic) ---
-        if not target_str:  # 處理空字串或 None 的情況
+        # --- 核心提取邏輯 ---
+        if not target_str or not target_str.strip():  # 處理空字串或 None 的情況
             return None
 
-        match = re.search(r'(\d+)折', target_str)
+        # 支援小數點和空格: "8折", "8.5折", "8 折"
+        match = re.search(r'(\d+(?:\.\d+)?)[\s]*折', target_str)
         if match:
-            try:
-                discount_num = int(match.group(1))
-                rate = discount_num / 10.0
-                self.logger.info(f"從 '{target_str}' 成功提取折扣率: {rate}")
-                return rate
-            except (ValueError, IndexError):
-                self.logger.error(f"從 '{target_str}' 匹配到數字但轉換失敗。")
+            discount_num = float(match.group(1))
+            
+            # 驗證折扣數值合理性
+            if not (0 < discount_num <= 10):
+                self.logger.warning(f"提取到異常折扣數值: {discount_num}，超出合理範圍 (0-10]")
                 return None
+            
+            rate = discount_num / 10.0
+            self.logger.info(f"從 '{target_str}' 成功提取折扣率: {rate}")
+            return rate
 
         self.logger.debug(f"在 '{target_str}' 中未找到符合 'N折' 格式的內容。")
         return None

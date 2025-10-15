@@ -165,67 +165,113 @@ def parse_date_string(date_str: str, input_format: str = None,
         return None
 
 
-def extract_date_range_from_description(description: str, patterns: Dict[str, str] = None) -> str:
+def _validate_date_format(date_str: str, has_day: bool = False) -> bool:
+    """驗證日期格式是否有效"""
+    try:
+        parts = date_str.split('/')
+        year, month = int(parts[0]), int(parts[1])
+        
+        if not (1900 <= year <= 9999 and 1 <= month <= 12):
+            return False
+        
+        if has_day and len(parts) == 3:
+            day = int(parts[2])
+            # 簡單驗證（不考慮閏年等複雜情況）
+            if not (1 <= day <= 31):
+                return False
+        
+        return True
+    except (ValueError, IndexError):
+        return False
+
+
+def extract_date_range_from_description(
+    description: str, 
+    patterns: Optional[Dict[str, str]] = None,
+    logger=None
+) -> str:
     """
     從描述中提取日期範圍
     
     Args:
-        description: 描述文字
-        patterns: 正規表達式模式字典
+        description: 描述文字，可能包含日期範圍資訊
+        patterns: 自訂正規表達式模式字典（可選）
         
     Returns:
-        str: 日期範圍字符串 (格式: "YYYYMM,YYYYMM")
+        str: 日期範圍字符串 (格式: "YYYYMM,YYYYMM")，
+             無法解析時返回 DEFAULT_DATE_RANGE ("100001,100002")
+             
+    Examples:
+        >>> extract_date_range_from_description("2024/01-2024/12")
+        "202401,202412"
+        >>> extract_date_range_from_description("期間：2024/01/01 - 2024/12/31")
+        "202401,202412"
     """
     if patterns is None:
-        patterns = REGEX_PATTERNS
+        import tomllib
+        path = r'C:\SEA\Accrual\prpo_bot\accrual_bot\accrual_bot\config\stagging.toml'
+        with open(path, "rb") as f:
+            config = tomllib.load(f)
+        
+        patterns = config.get("date_patterns", {})
     
     try:
-        if pd.isna(description) or description == '':
+        # 處理空值
+        if pd.isna(description) or not description or str(description).strip() == '':
+            logger.warning("描述為空，返回預設日期範圍")
             return DEFAULT_DATE_RANGE
         
-        desc_str = str(description)
+        desc_str = str(description).strip()
         
-        # 檢查各種日期格式
-        pt_YM = patterns.get('DATE_YM', r'(\d{4}\/\d{2})')
-        pt_YMD = patterns.get('DATE_YMD', r'(\d{4}\/\d{2}\/\d{2})')
-        pt_YMtoYM = patterns.get('DATE_YM_TO_YM', r'(\d{4}\/\d{2}[-]\d{4}\/\d{2})')
-        pt_YMtoYM_s = patterns.get('DATE_YM_TO_YM_s', r'(\d{4}\/\d{2} [-] \d{4}\/\d{2})')
-        pt_YMDtoYMD = patterns.get('DATE_YMD_TO_YMD', r'(\d{4}\/\d{2}\/\d{2}[-]\d{4}\/\d{2}\/\d{2})')
-        pt_YMDtoYMD_s = patterns.get('DATE_YMD_TO_YMD_s', r'(\d{4}\/\d{2}\/\d{2} [-] \d{4}\/\d{2}\/\d{2})')
+        # 按照從最具體到最一般的順序檢查
+        # 1. 日期範圍（含日）：YYYY/MM/DD - YYYY/MM/DD
+        if match := re.search(patterns['DATE_YMD_TO_YMD'], desc_str):
+            start_full, end_full = match.groups()
+            if _validate_date_format(start_full, has_day=True) and \
+               _validate_date_format(end_full, has_day=True):
+                start_date = start_full[:7].replace('/', '')  # YYYY/MM -> YYYYMM
+                end_date = end_full[:7].replace('/', '')
+                return f"{start_date},{end_date}"
+            else:
+                logger.warning(f"日期格式無效: {start_full} 或 {end_full}")
         
-        # 組合單一日期模式
-        pt_YMYMD = f'({pt_YM}|{pt_YMD})'
+        # 2. 日期範圍（月）：YYYY/MM - YYYY/MM
+        if match := re.search(patterns['DATE_YM_TO_YM'], desc_str):
+            start_ym, end_ym = match.groups()
+            if _validate_date_format(start_ym) and _validate_date_format(end_ym):
+                start_date = start_ym.replace('/', '')
+                end_date = end_ym.replace('/', '')
+                return f"{start_date},{end_date}"
+            else:
+                logger.warning(f"日期格式無效: {start_ym} 或 {end_ym}")
         
-        # 檢查日期範圍格式
-        if re.match(pt_YMDtoYMD, desc_str):
-            # YYYY/MM/DD-YYYY/MM/DD 格式
-            start_date = desc_str[:7].replace('/', '')
-            end_date = desc_str[11:18].replace('/', '')
-            return f"{start_date},{end_date}"
-        elif re.match(pt_YMDtoYMD_s, desc_str):
-            # YYYY/MM/DD - YYYY/MM/DD 格式
-            start_date = desc_str[:7].replace('/', '')
-            end_date = desc_str[13:20].replace('/', '')
-            return f"{start_date},{end_date}"
-        elif re.match(pt_YMtoYM, desc_str):
-            # YYYY/MM-YYYY/MM 格式
-            start_date = desc_str[:7].replace('/', '')
-            end_date = desc_str[8:15].replace('/', '')
-            return f"{start_date},{end_date}"
-        elif re.match(pt_YMtoYM_s, desc_str):
-            # YYYY/MM - YYYY/MM 格式
-            start_date = desc_str[:7].replace('/', '')
-            end_date = desc_str[10:17].replace('/', '')
-            return f"{start_date},{end_date}"
-        elif re.match(pt_YMYMD, desc_str):
-            # 單一日期格式
-            single_date = desc_str[:7].replace('/', '')
-            return f"{single_date},{single_date}"
-        else:
-            # 無法解析的格式
-            return DEFAULT_DATE_RANGE
+        # 3. 單一日期（含日）：YYYY/MM/DD
+        if match := re.search(patterns['DATE_YMD'], desc_str):
+            date_full = match.group(1)
+            if _validate_date_format(date_full, has_day=True):
+                single_date = date_full[:7].replace('/', '')
+                return f"{single_date},{single_date}"
+            else:
+                logger.warning(f"日期格式無效: {date_full}")
+        
+        # 4. 單一日期（月）：YYYY/MM
+        if match := re.search(patterns['DATE_YM'], desc_str):
+            date_ym = match.group(1)
+            if _validate_date_format(date_ym):
+                single_date = date_ym.replace('/', '')
+                return f"{single_date},{single_date}"
+            else:
+                logger.warning(f"日期格式無效: {date_ym}")
+        
+        # 無法匹配任何格式
+        logger.warning(f"無法從描述中提取日期: {desc_str}")
+        return DEFAULT_DATE_RANGE
             
-    except Exception:
+    except (ValueError, AttributeError, IndexError) as e:
+        logger.warning(f"解析日期時發生錯誤: {description}, 錯誤: {e}")
+        return DEFAULT_DATE_RANGE
+    except Exception as e:
+        logger.warning(f"未預期的錯誤: {description}, 錯誤: {e}", exc_info=True)
         return DEFAULT_DATE_RANGE
 
 

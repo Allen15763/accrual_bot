@@ -982,7 +982,7 @@ class DateLogicStep(PipelineStep):
             # 解析Item Description中的日期範圍
             if 'Item Description' in df_copy.columns:
                 df_copy['YMs of Item Description'] = df_copy['Item Description'].apply(
-                    lambda x: extract_date_range_from_description(x, self.regex_patterns)
+                    lambda x: extract_date_range_from_description(x, logger=self.logger)
                 )
             
             return df_copy
