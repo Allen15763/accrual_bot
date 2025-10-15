@@ -189,7 +189,9 @@ def extract_date_range_from_description(description: str, patterns: Dict[str, st
         pt_YM = patterns.get('DATE_YM', r'(\d{4}\/\d{2})')
         pt_YMD = patterns.get('DATE_YMD', r'(\d{4}\/\d{2}\/\d{2})')
         pt_YMtoYM = patterns.get('DATE_YM_TO_YM', r'(\d{4}\/\d{2}[-]\d{4}\/\d{2})')
+        pt_YMtoYM_s = patterns.get('DATE_YM_TO_YM_s', r'(\d{4}\/\d{2} [-] \d{4}\/\d{2})')
         pt_YMDtoYMD = patterns.get('DATE_YMD_TO_YMD', r'(\d{4}\/\d{2}\/\d{2}[-]\d{4}\/\d{2}\/\d{2})')
+        pt_YMDtoYMD_s = patterns.get('DATE_YMD_TO_YMD_s', r'(\d{4}\/\d{2}\/\d{2} [-] \d{4}\/\d{2}\/\d{2})')
         
         # 組合單一日期模式
         pt_YMYMD = f'({pt_YM}|{pt_YMD})'
@@ -200,10 +202,20 @@ def extract_date_range_from_description(description: str, patterns: Dict[str, st
             start_date = desc_str[:7].replace('/', '')
             end_date = desc_str[11:18].replace('/', '')
             return f"{start_date},{end_date}"
+        elif re.match(pt_YMDtoYMD_s, desc_str):
+            # YYYY/MM/DD - YYYY/MM/DD 格式
+            start_date = desc_str[:7].replace('/', '')
+            end_date = desc_str[13:20].replace('/', '')
+            return f"{start_date},{end_date}"
         elif re.match(pt_YMtoYM, desc_str):
             # YYYY/MM-YYYY/MM 格式
             start_date = desc_str[:7].replace('/', '')
             end_date = desc_str[8:15].replace('/', '')
+            return f"{start_date},{end_date}"
+        elif re.match(pt_YMtoYM_s, desc_str):
+            # YYYY/MM - YYYY/MM 格式
+            start_date = desc_str[:7].replace('/', '')
+            end_date = desc_str[10:17].replace('/', '')
             return f"{start_date},{end_date}"
         elif re.match(pt_YMYMD, desc_str):
             # 單一日期格式

@@ -813,7 +813,9 @@ class ValidationDataProcessingStep(PipelineStep):
         
         return validation_results
     
-    def _extract_discount_rate(self, discount_input: Optional[Union[str, np.ndarray]]) -> Optional[float]:
+    def _extract_discount_rate(self, 
+                               discount_input: Optional[Union[str, np.ndarray, pd.arrays.StringArray]]
+                               ) -> Optional[float]:
         """從輸入中提取折扣率。
         
         此函數能處理字串或包含字串的 NumPy 陣列。
@@ -836,6 +838,17 @@ class ValidationDataProcessingStep(PipelineStep):
         elif isinstance(discount_input, np.ndarray):
             if discount_input.size == 0:
                 self.logger.info("輸入的 ndarray 為空，無法提取折扣率。")
+                return None
+            
+            if discount_input.size > 1:
+                self.logger.warning(
+                    f"輸入為多值陣列，只處理第一個元素 '{discount_input[0]}'. "
+                    f"被忽略的值: {list(discount_input[1:])}"
+                )
+            target_str = str(discount_input[0])  # 確保取出的元素是字串
+        elif isinstance(discount_input, pd.arrays.StringArray):
+            if discount_input.size == 0:
+                self.logger.info("輸入的 StringArray 為空，無法提取折扣率。")
                 return None
             
             if discount_input.size > 1:

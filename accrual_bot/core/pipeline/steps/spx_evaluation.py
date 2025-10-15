@@ -717,6 +717,7 @@ class SPXERMLogicStep(PipelineStep):
         cond.no_status = (df['PO狀態'].isna()) | (df['PO狀態'] == 'nan')
         
         # === 條件 4: 全付完，未關單 ===
+        # ERM小於等於結帳月 and ERM在摘要期間內 and Entry Qty等於Received Qty and Entry Amount - Entry Billed Amount = 0--> 理論上要估計
         condition_4 = (
             (cond.procurement_completed_or_rent | cond.fn_completed_or_posted) &
             cond.no_status &
@@ -749,6 +750,7 @@ class SPXERMLogicStep(PipelineStep):
         cond.no_status = (df['PO狀態'].isna()) | (df['PO狀態'] == 'nan')
         
         # === 條件 6: Check收貨 ===
+        # ERM小於等於結帳月 and ERM在摘要期間內 and Entry Qty不等於Received Qty --> 理論上要估計
         condition_6 = (
             cond.procurement_not_error &
             cond.no_status &
