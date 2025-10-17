@@ -550,20 +550,23 @@ def classify_description(description: str) -> str:
         # --- 新增與調整的分類 ---
         'Management Fee': r'管理費',
         'Employee Welfare': r'(?i)^(?!.*Postage and Courier).*(?:Welfare|體檢)',
-        'Equipment Rental': r'(?i)租賃費|租賃第|月租費',
+        'Equipment Rental': r'(?i)租賃費|租賃第|月租費|事務機租賃',
         'IT Hardware': r'(?i)IT - EE - FS|cisco|meraki',
-        'Transportation Fees': r'(?i)^(?!.*Travel).*(?:etag|紅單|ticket)',
-        'Printing & Stationery': r'(?i)^(?!.*Postage and Courier).*(?:Printing and Stationery|影印|stationery|tape|膠帶|文宣)',
+        'Transportation Fees': r'(?i)^(?!.*Travel).*(?:etag|紅單|ticket|car rent|租車)',
+        'Printing & Stationery': r'(?i)^(?!.*Postage and Courier).*(?:Printing and Stationery|影印|計張|事務機耗材|stationery|tape|膠帶|文宣)',
         'Legal/Consulting Fees': r'(?i)^(?!.*Travel).*(?:legal consultant|公證)',
-
+        "Change": r"找零金",
+        "Locker": r"智取櫃",
+        "Kiosk Payment": r'(?i)^(?!.*(?:找零金|租賃))(?=.*繳費機)(?=.*payment).*',
+        
         # --- 原有的分類 ---
+        'Deposit': r'(?i)deposit|押金設算息|押金',
         'Rental': r'(?i)rental|租金',
-        'Deposit': r'押金設算息|押金',
-        'Logistics': r'(?i)^(?!.*(?:安裝運費|櫃體運費)).*(?:logistics|shipping fee|運費|運什費)',
+        'Logistics': r'(?i)^(?!.*(?:安裝運費|櫃體運費)).*(?:logistics|shipping fee|運費|運什費|物流袋|物流籠車|roller container)',
         'Salary & Agency Fee': r'(?i)salary|agency fee',
         'Utilities': r'(?i)^(?!.*Supplies).*(?:水費|電費|internet|telephone|telecom|飲水|Utilities|Electricity)',
         # 排除 "Travel" 的維修費用
-        'Repair & Maintenance': r'(?i)^(?!.*Travel).*(?:維修|修繕|工程|cleaning)',
+        'Repair & Maintenance': r'(?i)^(?!.*Travel).*(?:維修|修繕|工程|cleaning|維護保養)',
         'Supplies': r'(?i)supplies|consumables|equipment|mouse|battery|pda|cctv|pallet|硬體|hardware|手工具|標示',
         'Travel Expense': r'(?i)Travel Exp.',
         'Insurance': r'(?i)insurance|保險',
