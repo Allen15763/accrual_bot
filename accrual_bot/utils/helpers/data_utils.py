@@ -8,10 +8,41 @@ import numpy as np
 from typing import List, Dict, Any, Optional, Union, Tuple
 from datetime import datetime, timedelta
 import concurrent.futures
-import threading
 import logging
+import tomllib
 
 from ..config.constants import REGEX_PATTERNS, DEFAULT_DATE_RANGE
+
+
+toml_path = r"C:\SEA\Accrual\prpo_bot\accrual_bot\accrual_bot\config\stagging.toml"
+def load_config_from_toml(file_path: str, key: str, output_format=None) -> Union[List, Dict]:
+    """
+    從指定的 TOML 檔案中載入規則。
+
+    Args:
+        file_path (str): TOML 檔案的路徑。
+        key: TOML 檔案的抬頭
+
+    Returns:
+        list: 一個包含 (account, regex_pattern) 元組的列表。
+        OR
+        raw: [dict]
+    """
+    if output_format is not None:
+        with open(file_path, "rb") as f:
+            data = tomllib.load(f)
+        # 將字典轉換為原始程式碼所使用的 (key, value) 元組列表格式
+        config: List = list(data.get(key, {}).items())
+        return config
+    else:
+        with open(file_path, "rb") as f:
+            data = tomllib.load(f)
+        config: Dict = data.get(key, {})
+        return config
+    
+ACCOUNT_RULES = load_config_from_toml(toml_path, "account_rules", output_format='list')
+CATEGORY_PATTERNS_BY_DESC = load_config_from_toml(toml_path, "category_patterns_by_desc")
+DATE_PATTERNS = load_config_from_toml(toml_path, "date_patterns")
 
 
 def clean_nan_values(df: pd.DataFrame, columns: List[str]) -> pd.DataFrame:
@@ -209,12 +240,7 @@ def extract_date_range_from_description(
         "202401,202412"
     """
     if patterns is None:
-        import tomllib
-        path = r'C:\SEA\Accrual\prpo_bot\accrual_bot\accrual_bot\config\stagging.toml'
-        with open(path, "rb") as f:
-            config = tomllib.load(f)
-        
-        patterns = config.get("date_patterns", {})
+        patterns = DATE_PATTERNS
     
     try:
         # 處理空值
@@ -545,35 +571,7 @@ def classify_description(description: str) -> str:
     Returns:
         The category label for the description.
     """
-    # Define the regex patterns and their corresponding labels
-    patterns = {
-        # --- 新增與調整的分類 ---
-        'Management Fee': r'管理費',
-        'Employee Welfare': r'(?i)^(?!.*Postage and Courier).*(?:Welfare|體檢)',
-        'Equipment Rental': r'(?i)租賃費|租賃第|月租費|事務機租賃',
-        'IT Hardware': r'(?i)IT - EE - FS|cisco|meraki',
-        'Transportation Fees': r'(?i)^(?!.*Travel).*(?:etag|紅單|ticket|car rent|租車)',
-        'Printing & Stationery': r'(?i)^(?!.*Postage and Courier).*(?:Printing and Stationery|影印|計張|事務機耗材|stationery|tape|膠帶|文宣)',
-        'Legal/Consulting Fees': r'(?i)^(?!.*Travel).*(?:legal consultant|公證)',
-        "Change": r"找零金",
-        "Locker": r"智取櫃",
-        "Kiosk Payment": r'(?i)^(?!.*(?:找零金|租賃))(?=.*繳費機)(?=.*payment).*',
-        
-        # --- 原有的分類 ---
-        'Deposit': r'(?i)deposit|押金設算息|押金',
-        'Rental': r'(?i)rental|租金',
-        'Logistics': r'(?i)^(?!.*(?:安裝運費|櫃體運費)).*(?:logistics|shipping fee|運費|運什費|物流袋|物流籠車|roller container)',
-        'Salary & Agency Fee': r'(?i)salary|agency fee',
-        'Utilities': r'(?i)^(?!.*Supplies).*(?:水費|電費|internet|telephone|telecom|飲水|Utilities|Electricity)',
-        # 排除 "Travel" 的維修費用
-        'Repair & Maintenance': r'(?i)^(?!.*Travel).*(?:維修|修繕|工程|cleaning|維護保養)',
-        'Supplies': r'(?i)supplies|consumables|equipment|mouse|battery|pda|cctv|pallet|硬體|hardware|手工具|標示',
-        'Travel Expense': r'(?i)Travel Exp.',
-        'Insurance': r'(?i)insurance|保險',
-        'Postage & Courier': r'(?i)postage and courier|郵資',
-        # 將服務費放在較後面，避免攔截掉更具體的項目
-        'Service Fee': r'(?i)service fee|服務費|service charge',
-    }
+    patterns = CATEGORY_PATTERNS_BY_DESC
 
     # Iterate through the patterns and return the first match
     for label, pattern in patterns.items():
@@ -599,24 +597,7 @@ def give_account_by_keyword(df, column_name, rules=None, export_keyword=False):
         pd.DataFrame: 'Predicted_Account' 和 (可選的) 'Matched_Keyword' 欄位的 DataFrame。
     """
     # 步驟 1: 規則列表現在從函數參數傳入，不再硬編碼。
-    import tomllib
-
-    def load_rules_from_toml(file_path):
-        """
-        從指定的 TOML 檔案中載入規則。
-
-        Args:
-            file_path (str): TOML 檔案的路徑。
-
-        Returns:
-            list: 一個包含 (account, regex_pattern) 元組的列表。
-        """
-        with open(file_path, "rb") as f:
-            data = tomllib.load(f)
-        # 將字典轉換為原始程式碼所使用的 (key, value) 元組列表格式
-        rules = list(data.get('account_rules', {}).items())
-        return rules
-    rules = load_rules_from_toml(r"C:\SEA\Accrual\prpo_bot\accrual_bot\accrual_bot\config\stagging.toml")
+    rules = ACCOUNT_RULES
     
     # 步驟 2: 修改輔助函數，使其返回 (科目, 匹配到的關鍵字) 的元組 (tuple)
     def find_match_details(text):

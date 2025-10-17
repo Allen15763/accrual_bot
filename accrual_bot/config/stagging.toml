@@ -15,6 +15,34 @@ DATE_YM_TO_YM = '(\d{4}/\d{2})\s*-\s*(\d{4}/\d{2})'
 DATE_YMD = '(\d{4}/\d{2}/\d{2})'
 DATE_YM = '(\d{4}/\d{2})'
 
+[category_patterns_by_desc]
+# --- 新增與調整的分類 ---
+"Management Fee" = '管理費'
+"Employee Welfare" = '(?i)^(?!.*Postage and Courier).*(?:Welfare|體檢)'
+"Equipment Rental" = '(?i)租賃費|租賃第|月租費|事務機租賃'
+"IT Hardware" = '(?i)IT - EE - FS|cisco|meraki'
+"Transportation Fees" = '(?i)^(?!.*Travel).*(?:etag|紅單|ticket|car rent|租車)'
+"Printing & Stationery" = '(?i)^(?!.*Postage and Courier).*(?:Printing and Stationery|影印|計張|事務機耗材|stationery|tape|膠帶|文宣)'
+"Legal/Consulting Fees" = '(?i)^(?!.*Travel).*(?:legal consultant|公證)'
+"Change" = '找零金'
+"Locker" = '智取櫃'
+"Kiosk Payment" = '(?i)^(?!.*(?:找零金|租賃))(?=.*繳費機)(?=.*payment).*'
+
+# --- 原有的分類 ---
+"Deposit" = '(?i)deposit|押金設算息|押金'
+"Rental" = '(?i)rental|租金'
+"Logistics" = '(?i)^(?!.*(?:安裝運費|櫃體運費)).*(?:logistics|shipping fee|運費|運什費|物流袋|物流籠車|roller container)'
+"Salary & Agency Fee" = '(?i)salary|agency fee'
+"Utilities" = '(?i)^(?!.*Supplies).*(?:水費|電費|internet|telephone|telecom|飲水|Utilities|Electricity)'
+# 排除 "Travel" 的維修費用
+"Repair & Maintenance" = '(?i)^(?!.*Travel).*(?:維修|修繕|工程|cleaning|維護保養)'
+"Supplies" = '(?i)supplies|consumables|equipment|mouse|battery|pda|cctv|pallet|硬體|hardware|手工具|標示'
+"Travel Expense" = '(?i)Travel Exp.'
+"Insurance" = '(?i)insurance|保險'
+"Postage & Courier" = '(?i)postage and courier|郵資'
+# 將服務費放在較後面，避免攔截掉更具體的項目
+"Service Fee" = '(?i)service fee|服務費|service charge'
+
 [mob]
 pr_pivot_index = [
     "PR#", "Project", "Supplier", "Account code_variable", 
