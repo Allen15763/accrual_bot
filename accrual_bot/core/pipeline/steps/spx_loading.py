@@ -656,3 +656,551 @@ class PPEDataLoadingStep(PipelineStep):
         
         return True
 
+
+class AccountingOPSDataLoadingStep(PipelineStep):
+    """
+    會計與 OPS 底稿並發載入步驟
+    用於讀取並驗證會計前期底稿與 OPS 驗收檔案底稿
+    
+    功能:
+    1. 並發讀取會計前期底稿和 OPS 驗收檔案底稿
+    2. 驗證必要欄位存在性
+    3. 標準化資料格式（PO Line 統一為 string）
+    4. 將資料儲存到 ProcessingContext
+    5. 自動管理資源釋放
+    
+    使用範例:
+        step = AccountingOPSDataLoadingStep(
+            name="LoadAccountingOPS",
+            file_paths={
+                'accounting_workpaper': {
+                    'path': 'accounting_202410.xlsx',
+                    'params': {'sheet_name': 0, 'usecols': 'A:AE', 'header': 1}
+                },
+                'ops_validation': {
+                    'path': 'ops_validation_202410.xlsx',
+                    'params': {'sheet_name': 'Sheet1', 'header': 0}
+                }
+            },
+            required_columns={
+                'accounting': ['PO Line', 'memo'],
+                'ops': ['PO Number', 'Line', 'Validation Status']
+            }
+        )
+    """
+    
+    def __init__(
+        self,
+        name: str = "AccountingOPSDataLoading",
+        file_paths: Optional[Dict[str, Union[str, Dict[str, Any]]]] = None,
+        required_columns: Optional[Dict[str, List[str]]] = None,
+        **kwargs
+    ):
+        """
+        初始化步驟
+        
+        Args:
+            name: 步驟名稱
+            file_paths: 檔案路徑配置，格式:
+                {
+                    'accounting_workpaper': {
+                        'path': '檔案路徑',
+                        'params': {'sheet_name': 0, 'usecols': 'A:Z', ...}
+                    },
+                    'ops_validation': {
+                        'path': '檔案路徑',
+                        'params': {...}
+                    }
+                }
+            required_columns: 必要欄位配置，格式:
+                {
+                    'accounting': ['PO Line', 'memo'],
+                    'ops': ['PO Number', 'Line', 'Status']
+                }
+            **kwargs: 其他 PipelineStep 參數
+        """
+        super().__init__(
+            name,
+            description="Load accounting workpaper and OPS validation files",
+            **kwargs
+        )
+        
+        # 標準化檔案配置格式
+        self.file_configs = self._normalize_file_paths(file_paths or {})
+        
+        # 必要欄位配置
+        self.required_columns = required_columns or {
+            'accounting': ['PO Line', 'memo'],
+            'ops': config_manager.get_list('SPX', 'locker_columns')[5:23]  # 第2行的櫃型
+        }
+        
+        # 數據源連接池
+        self.pool = DataSourcePool()
+    
+    def _normalize_file_paths(
+        self, 
+        file_paths: Dict[str, Union[str, Dict[str, Any]]]
+    ) -> Dict[str, Dict[str, Any]]:
+        """
+        標準化檔案路徑格式
+        
+        支援兩種格式:
+        1. 簡單格式: {'accounting_workpaper': 'path/to/file.xlsx'}
+        2. 完整格式: {'accounting_workpaper': {'path': '...', 'params': {...}}}
+        
+        Args:
+            file_paths: 原始檔案路徑字典
+            
+        Returns:
+            標準化後的配置字典
+        """
+        normalized = {}
+        
+        for file_type, config in file_paths.items():
+            if isinstance(config, str):
+                # 簡單格式：直接路徑字串
+                normalized[file_type] = {
+                    'path': config,
+                    'params': {}
+                }
+            elif isinstance(config, dict):
+                # 完整格式：已包含參數
+                if 'path' not in config:
+                    raise ValueError(f"Missing 'path' in config for {file_type}")
+                normalized[file_type] = {
+                    'path': config['path'],
+                    'params': config.get('params', {})
+                }
+            else:
+                raise ValueError(
+                    f"Invalid config type for {file_type}: {type(config)}"
+                )
+        
+        return normalized
+    
+    async def execute(self, context: ProcessingContext) -> StepResult:
+        """執行數據載入"""
+        start_time = time.time()
+        start_datetime = datetime.now()
+        
+        try:
+            self.logger.info("Starting concurrent loading of accounting and OPS files...")
+            
+            # 階段 1: 驗證檔案存在性
+            validated_configs = self._validate_file_configs()
+            
+            # 階段 2: 並發讀取兩個檔案
+            loaded_data = await self._load_files_concurrent(validated_configs)
+            
+            # 階段 3: 驗證必要欄位
+            self._validate_required_columns(loaded_data)
+            
+            # 階段 4: 標準化資料格式
+            processed_data = self._standardize_data(loaded_data, context.metadata.processing_date)
+            
+            # 階段 5: 儲存到 Context
+            self._store_to_context(context, processed_data)
+            
+            # 計算執行時間
+            duration = time.time() - start_time
+            end_datetime = datetime.now()
+            
+            # 構建標準化 metadata
+            accounting_shape = processed_data['accounting_workpaper'].shape
+            ops_shape = processed_data['ops_validation'].shape
+            
+            metadata = (
+                StepMetadataBuilder()
+                .set_row_counts(0, accounting_shape[0] + ops_shape[0])
+                .set_process_counts(processed=accounting_shape[0] + ops_shape[0])
+                .set_time_info(start_datetime, end_datetime)
+                .add_custom('accounting_records', accounting_shape[0])
+                .add_custom('accounting_columns', accounting_shape[1])
+                .add_custom('ops_records', ops_shape[0])
+                .add_custom('ops_columns', ops_shape[1])
+                .add_custom('loaded_files', list(loaded_data.keys()))
+                .build()
+            )
+            
+            self.logger.info(
+                f"Successfully loaded accounting ({accounting_shape}) "
+                f"and OPS ({ops_shape}) data in {duration:.2f}s"
+            )
+            
+            return StepResult(
+                step_name=self.name,
+                status=StepStatus.SUCCESS,
+                data=processed_data['accounting_workpaper'],  # 主數據
+                message=(
+                    f"Loaded {accounting_shape[0]} accounting records "
+                    f"and {ops_shape[0]} OPS validation records"
+                ),
+                duration=duration,
+                metadata=metadata
+            )
+            
+        except Exception as e:
+            duration = time.time() - start_time
+            
+            self.logger.error(f"Data loading failed: {str(e)}", exc_info=True)
+            context.add_error(f"Accounting/OPS loading failed: {str(e)}")
+            
+            # 創建錯誤 metadata
+            error_metadata = create_error_metadata(
+                e, context, self.name,
+                validated_files=list(self.file_configs.keys()),
+                stage='accounting_ops_loading'
+            )
+            
+            return StepResult(
+                step_name=self.name,
+                status=StepStatus.FAILED,
+                error=e,
+                message=f"Failed to load data: {str(e)}",
+                duration=duration,
+                metadata=error_metadata
+            )
+        
+        finally:
+            # 清理資源
+            await self._cleanup_resources()
+    
+    async def _load_files_concurrent(
+        self,
+        validated_configs: Dict[str, Dict[str, Any]]
+    ) -> Dict[str, pd.DataFrame]:
+        """
+        並發讀取所有檔案
+        
+        Args:
+            validated_configs: 已驗證的檔案配置
+            
+        Returns:
+            載入的資料字典
+        """
+        # 創建載入任務
+        tasks = []
+        file_names = []
+        
+        for file_type, config in validated_configs.items():
+            task = self._load_single_file(file_type, config)
+            tasks.append(task)
+            file_names.append(file_type)
+        
+        # 並發執行
+        self.logger.info(f"Loading {len(tasks)} files concurrently...")
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # 整理結果
+        loaded_data = {}
+        for file_type, result in zip(file_names, results):
+            if isinstance(result, Exception):
+                self.logger.error(f"Failed to load {file_type}: {str(result)}")
+                raise result
+            else:
+                loaded_data[file_type] = result
+                self.logger.info(
+                    f"Successfully loaded {file_type}: {result.shape}"
+                )
+        
+        return loaded_data
+    
+    async def _load_single_file(
+        self,
+        file_type: str,
+        config: Dict[str, Any]
+    ) -> pd.DataFrame:
+        """
+        載入單個檔案
+        
+        Args:
+            file_type: 檔案類型 (accounting_workpaper 或 ops_validation)
+            config: 檔案配置
+            
+        Returns:
+            pd.DataFrame: 載入的資料
+        """
+        try:
+            file_path = config['path']
+            params = config.get('params', {})
+            
+            # 創建數據源
+            source = DataSourceFactory.create_from_file(file_path, **params)
+            
+            # 添加到連接池
+            self.pool.add_source(file_type, source)
+            
+            # 讀取資料
+            df = await source.read(**params)
+            
+            self.logger.debug(
+                f"Successfully loaded {file_type} from {file_path}: {df.shape}"
+            )
+            
+            return df
+            
+        except Exception as e:
+            self.logger.error(
+                f"Error loading {file_type} from {config.get('path')}: {str(e)}"
+            )
+            raise
+    
+    def _validate_required_columns(self, loaded_data: Dict[str, pd.DataFrame]):
+        """
+        驗證必要欄位存在性
+        
+        Args:
+            loaded_data: 載入的資料字典
+            
+        Raises:
+            ValueError: 如果缺少必要欄位
+        """
+        # 驗證會計底稿欄位
+        if 'accounting_workpaper' in loaded_data:
+            df_acc = loaded_data['accounting_workpaper']
+            missing_cols = [
+                col for col in self.required_columns.get('accounting', [])
+                if col not in df_acc.columns
+            ]
+            if missing_cols:
+                raise ValueError(
+                    f"Accounting workpaper missing required columns: {missing_cols}"
+                )
+        
+        # 驗證 OPS 底稿欄位
+        if 'ops_validation' in loaded_data:
+            df_ops = loaded_data['ops_validation']
+            missing_cols = [
+                col for col in self.required_columns.get('ops', [])
+                if col not in df_ops.columns
+            ]
+            if missing_cols:
+                raise ValueError(
+                    f"OPS validation file missing required columns: {missing_cols}"
+                )
+        
+        self.logger.info("All required columns validated successfully")
+    
+    def _standardize_data(
+        self,
+        loaded_data: Dict[str, pd.DataFrame],
+        target_date: int
+    ) -> Dict[str, pd.DataFrame]:
+        """
+        標準化資料格式
+        
+        主要處理:
+        1. PO Line 統一轉換為 string 類型
+        2. 清理空白字符
+        3. 處理 NaN 值
+        
+        Args:
+            loaded_data: 原始載入的資料
+            
+        Returns:
+            標準化後的資料字典
+        """
+        standardized = {}
+        
+        # 標準化會計底稿
+        if 'accounting_workpaper' in loaded_data:
+            df_acc = loaded_data['accounting_workpaper'].copy()
+            
+            # PO Line 標準化
+            if 'PO Line' in df_acc.columns:
+                df_acc['PO Line'] = (
+                    df_acc['PO Line']
+                    .astype(str)
+                    .str.strip()
+                    .str.replace(r'\.0$', '', regex=True)  # 移除 .0
+                )
+            
+            # memo 欄位清理
+            if 'memo' in df_acc.columns:
+                df_acc['memo'] = (
+                    df_acc['memo']
+                    .fillna('')
+                    .astype(str)
+                    .str.strip()
+                )
+            
+            standardized['accounting_workpaper'] = df_acc
+            self.logger.debug("Standardized accounting workpaper")
+        
+        # 標準化 OPS 底稿
+        if 'ops_validation' in loaded_data:
+            df_ops = loaded_data['ops_validation'].copy()
+            
+            # 設置欄位名稱
+            locker_columns = config_manager.get_list('SPX', 'locker_columns')
+            df_ops.columns = locker_columns
+            
+            # 過濾和轉換
+            df_ops = df_ops.loc[~df_ops['驗收月份'].isna(), :].reset_index(drop=True)
+            df_ops['validated_month'] = pd.to_datetime(
+                df_ops['驗收月份'], errors='coerce'
+            ).dt.strftime('%Y%m').astype('Int64')
+            
+            # 移除無效日期的記錄
+            df_ops = df_ops.dropna(subset=['validated_month']).reset_index(drop=True)
+            # 篩選小於目標月份的數據
+            df_ops_filtered = df_ops.loc[df_ops['validated_month'] < target_date, :]
+            
+            # 清理其他文字欄位
+            text_columns = df_ops.select_dtypes(include=['object']).columns
+            for col in text_columns:
+                df_ops[col] = df_ops[col].fillna('').astype(str).str.strip()
+            
+            standardized['ops_validation'] = df_ops
+            self.logger.debug("Standardized OPS validation data")
+        
+        return standardized
+    
+    def _store_to_context(
+        self,
+        context: ProcessingContext,
+        processed_data: Dict[str, pd.DataFrame]
+    ):
+        """
+        將處理好的資料儲存到 ProcessingContext
+        
+        Args:
+            context: 處理上下文
+            processed_data: 已處理的資料字典
+        """
+        # 儲存會計底稿
+        if 'accounting_workpaper' in processed_data:
+            context.add_auxiliary_data(
+                'accounting_workpaper',
+                processed_data['accounting_workpaper']
+            )
+            self.logger.info(
+                f"Added accounting workpaper: "
+                f"{processed_data['accounting_workpaper'].shape}"
+            )
+        
+        # 儲存 OPS 底稿
+        if 'ops_validation' in processed_data:
+            context.add_auxiliary_data(
+                'ops_validation',
+                processed_data['ops_validation']
+            )
+            self.logger.info(
+                f"Added OPS validation data: "
+                f"{processed_data['ops_validation'].shape}"
+            )
+        
+        # 將會計底稿設為主數據（供後續步驟使用）
+        if 'accounting_workpaper' in processed_data:
+            context.update_data(processed_data['accounting_workpaper'])
+    
+    def _validate_file_configs(self) -> Dict[str, Dict[str, Any]]:
+        """
+        驗證檔案配置
+        
+        Returns:
+            驗證通過的檔案配置字典
+            
+        Raises:
+            FileNotFoundError: 如果必要檔案不存在
+        """
+        validated = {}
+        
+        # 必要檔案列表
+        required_files = ['accounting_workpaper', 'ops_validation']
+        
+        for file_type, config in self.file_configs.items():
+            file_path = config.get('path')
+            
+            if not file_path:
+                if file_type in required_files:
+                    raise ValueError(f"No path provided for required file: {file_type}")
+                continue
+            
+            path = Path(file_path)
+            
+            if not path.exists():
+                if file_type in required_files:
+                    raise FileNotFoundError(
+                        f"Required file not found: {file_type} at {file_path}"
+                    )
+                else:
+                    self.logger.warning(f"Optional file not found: {file_path}")
+                    continue
+            
+            validated[file_type] = config
+            self.logger.debug(f"Validated file: {file_type} at {file_path}")
+        
+        # 檢查是否所有必要檔案都存在
+        missing_files = [
+            f for f in required_files if f not in validated
+        ]
+        if missing_files:
+            raise FileNotFoundError(
+                f"Missing required files: {', '.join(missing_files)}"
+            )
+        
+        return validated
+    
+    async def _cleanup_resources(self):
+        """清理數據源資源"""
+        try:
+            await self.pool.close_all()
+            self.logger.debug("All data sources closed")
+        except Exception as e:
+            self.logger.error(f"Error during resource cleanup: {str(e)}")
+    
+    async def validate_input(self, context: ProcessingContext) -> bool:
+        """
+        驗證輸入配置
+        
+        Args:
+            context: 處理上下文
+            
+        Returns:
+            bool: 驗證是否通過
+        """
+        # 檢查是否提供了檔案配置
+        if not self.file_configs:
+            self.logger.error("No file configs provided")
+            context.add_error("No file configs provided")
+            return False
+        
+        # 檢查必要檔案配置
+        required_files = ['accounting_workpaper', 'ops_validation']
+        for file_type in required_files:
+            if file_type not in self.file_configs:
+                self.logger.error(f"Missing required file config: {file_type}")
+                context.add_error(f"Missing required file config: {file_type}")
+                return False
+        
+        # 檢查檔案是否存在
+        for file_type in required_files:
+            file_path = self.file_configs[file_type].get('path')
+            if not file_path or not Path(file_path).exists():
+                self.logger.error(f"File not found: {file_type} at {file_path}")
+                context.add_error(f"File not found: {file_type} at {file_path}")
+                return False
+        
+        return True
+    
+    async def rollback(self, context: ProcessingContext, error: Exception):
+        """
+        回滾操作 - 清理已載入的資源
+        
+        Args:
+            context: 處理上下文
+            error: 觸發回滾的錯誤
+        """
+        self.logger.warning(
+            f"Rolling back accounting/OPS data loading due to error: {str(error)}"
+        )
+        
+        # 清理 Context 中的資料
+        if 'accounting_workpaper' in context.auxiliary_data:
+            del context.auxiliary_data['accounting_workpaper']
+        if 'ops_validation' in context.auxiliary_data:
+            del context.auxiliary_data['ops_validation']
+        
+        # 清理資源
+        await self._cleanup_resources()
