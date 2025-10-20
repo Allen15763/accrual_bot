@@ -96,7 +96,7 @@ from accrual_bot.core.pipeline.steps.spx_integration import DataReformattingStep
 # 替代原始: _save_output()
 # =============================================================================
 from accrual_bot.core.pipeline.steps.spx_exporting import SPXExportStep
-
+from accrual_bot.core.pipeline.steps.spx_evaluation_2 import DepositStatusUpdateStep
 # =============================================================================
 # 載入步驟使用範例
 # =============================================================================
@@ -283,6 +283,17 @@ def create_spx_po_complete_pipeline(file_paths: Dict[str, str]) -> Pipeline:
                 .add_step(StatusStage1Step(name="Evaluate_Status_Stage1", required=True))
                 .add_step(SPXERMLogicStep(name="Apply_ERM_Logic", required=True, retry_count=0))
                 .add_step(ValidationDataProcessingStep(name="Process_Validation", required=False))
+
+                .add_step(DepositStatusUpdateStep(
+                    name="Update_Deposit_Status",
+                    description_column="Item Description",
+                    po_column="PO#",
+                    date_column="Expected Received Month_轉換格式",
+                    status_column="整單訂金與最大ERM核對",
+                    deposit_keyword="訂金",
+                    completed_status="該PO含訂金且ERM(最大)小於等於當期",
+                    required=True
+                ))
 
                 # ========== 階段4: 後處理 ==========
                 .add_step(DataReformattingStep(name="Reformat_Data", required=True))
