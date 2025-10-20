@@ -612,13 +612,13 @@ if __name__ == "__main__":
     # ))
 
     # Start from specific point
-    # result = asyncio.run(resume_from_step(
-    #     checkpoint_name="SPX_202509_after_Filter_SPX_Products",    # checkpoint資料夾路徑名稱
-    #     start_from_step="Add_Columns",
-    #     # checkpoint_name="SPX_202509_after_Process_Dates",    # checkpoint資料夾路徑名稱
-    #     # start_from_step="Integrate_Closing_List",
-    #     file_paths=file_paths  # 可選,如果 checkpoint 中沒有
-    # ))
+    result = asyncio.run(resume_from_step(
+        checkpoint_name="SPX_202509_after_Filter_SPX_Products",    # checkpoint資料夾路徑名稱
+        start_from_step="Add_Columns",
+        # checkpoint_name="SPX_202509_after_Process_Dates",    # checkpoint資料夾路徑名稱
+        # start_from_step="Integrate_Closing_List",
+        file_paths=file_paths  # 可選,如果 checkpoint 中沒有
+    ))
 
     # 從特定步驟開始，跟resume_from_step類似
     # result = asyncio.run(quick_test_step(
@@ -632,83 +632,5 @@ if __name__ == "__main__":
     #     processing_date=202509,
     #     save_checkpoints=True
     # ))
-
-    from accrual_bot.core.pipeline import Pipeline, PipelineBuilder
-    from accrual_bot.core.pipeline.steps.spx_loading import (
-        AccountingOPSDataLoadingStep
-    )
-    from accrual_bot.core.pipeline.steps.spx_ppe_qty_validation import AccountingOPSValidationStep
-    from accrual_bot.core.pipeline.steps.spx_exporting import AccountingOPSExportingStep
-    # 建立 Pipeline
-    builder = PipelineBuilder("SPX_test_Complete", "SPX")
-    pipeline = (builder.add_step(
-        # 步驟 1：讀取會計和 OPS 底稿
-        AccountingOPSDataLoadingStep(
-            name="LoadAccountingOPS",
-            file_paths={
-                'accounting_workpaper': {
-                    'path': r'C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202509\202508_PO_FN.xlsx',
-                    'params': {
-                        'sheet_name': 0,
-                        'usecols': ['PO#', 'PO Line', 'Item Description', 'memo'],  
-                        'header': 0,        
-                        'dtype': str        
-                    }
-                },
-                'ops_validation': {
-                    'path': r'C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202509\SPX智取櫃及繳費機驗收明細(For FN)_2509.xlsx',
-                    'params': {
-                        'sheet_name': '智取櫃驗收明細',
-                        'usecols': 'A:AE',
-                        'header': 1
-                    }
-                }
-            },
-            required_columns={
-                'accounting': ['PO Line', 'memo'],
-                'ops': ['A', 'B', 'C']
-            }
-        ),
-        
-    ).add_step(
-        # 步驟 2：比對驗證
-        AccountingOPSValidationStep(
-            name="ValidateAccountingOPS",
-            amount_columns=[
-                'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
-                'I', 'J', 'K', 'DA', 'XA', 'XB', 'XC', 'XD', 'XE', 'XF',
-                '超出櫃體安裝費', '超出櫃體運費', '裝運費'
-            ],
-            locker_pattern=r'SPX\s+locker\s+([A-Z]{1,2}|控制主[櫃機]|[^\s]+?)(?:\s*第[一二]期款項|\s*訂金|\s*\d+%款項|\s*#)'
-        )
-    ).add_step(
-        # 步驟 3： 輸出
-        AccountingOPSExportingStep(
-            name="ExportResults",
-            output_dir="output",
-            filename_template="{entity}_{type}_{date}_{timestamp}.xlsx",
-            sheet_names={
-                'accounting_workpaper': 'acc_raw',
-                'ops_validation': 'ops_raw',
-                'validation_comparison': 'result'
-            }
-        )
-    ))
-    pipeline = pipeline.build()
-    
-    # 執行; 這邊的預參數會被當成輸出路徑參數
-    context = ProcessingContext(
-        data=pd.DataFrame(),
-        entity_type='SPX',
-        processing_date=202509,
-        processing_type='memo validate'
-    )
-    # result = await pipeline.execute(context)
-    result = asyncio.run(pipeline.execute(context))
-
-    # 取得資料
-    accounting_df = context.get_auxiliary_data('accounting_workpaper')
-    ops_df = context.get_auxiliary_data('ops_validation')
-    df_comparison = context.get_auxiliary_data('validation_comparison')
     
     print(1)
