@@ -638,6 +638,7 @@ if __name__ == "__main__":
         AccountingOPSDataLoadingStep
     )
     from accrual_bot.core.pipeline.steps.spx_ppe_qty_validation import AccountingOPSValidationStep
+    from accrual_bot.core.pipeline.steps.spx_exporting import AccountingOPSExportingStep
     # 建立 Pipeline
     builder = PipelineBuilder("SPX_test_Complete", "SPX")
     pipeline = (builder.add_step(
@@ -669,8 +670,6 @@ if __name__ == "__main__":
             }
         ),
         
-        # 步驟 2：比對資料（需要另外設計）
-        # AccountingOPSComparisonStep(...)
     ).add_step(
         # 步驟 2：比對驗證
         AccountingOPSValidationStep(
@@ -682,10 +681,22 @@ if __name__ == "__main__":
             ],
             locker_pattern=r'SPX\s+locker\s+([A-Z]{1,2}|控制主[櫃機]|[^\s]+?)(?:\s*第[一二]期款項|\s*訂金|\s*\d+%款項|\s*#)'
         )
+    ).add_step(
+        # 步驟 3： 輸出
+        AccountingOPSExportingStep(
+            name="ExportResults",
+            output_dir="output",
+            filename_template="{entity}_{type}_{date}_{timestamp}.xlsx",
+            sheet_names={
+                'accounting_workpaper': 'acc_raw',
+                'ops_validation': 'ops_raw',
+                'validation_comparison': 'result'
+            }
+        )
     ))
     pipeline = pipeline.build()
     
-    # 執行
+    # 執行; 這邊的預參數會被當成輸出路徑參數
     context = ProcessingContext(
         data=pd.DataFrame(),
         entity_type='SPX',
@@ -699,9 +710,5 @@ if __name__ == "__main__":
     accounting_df = context.get_auxiliary_data('accounting_workpaper')
     ops_df = context.get_auxiliary_data('ops_validation')
     df_comparison = context.get_auxiliary_data('validation_comparison')
-    with pd.ExcelWriter('output/reuslt.xlsx') as writer:
-        accounting_df.to_excel(writer, sheet_name='acc_raw', index=False)
-        ops_df.to_excel(writer, sheet_name='ops_raw', index=False)
-        df_comparison.to_excel(writer, sheet_name='result', index=False)
     
     print(1)

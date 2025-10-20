@@ -315,6 +315,8 @@ class AccountingOPSValidationStep(PipelineStep):
         df_accounting['locker_type'] = (df_accounting['Item Description']
                                         .apply(extract_locker_info)
                                         .str.replace('主機', '主櫃')
+                                        .str.replace('控制主櫃', 'DA')
+                                        .str.replace('安裝運費', '裝運費')  # PO摘要寫"安裝運費"，驗收底稿寫"裝運費"
                                         )
         
         # 統計提取結果
@@ -572,4 +574,3 @@ class AccountingOPSValidationStep(PipelineStep):
             del context.auxiliary_data['validation_mismatches']
         
         context.remove_variable('validation_report')
-        
