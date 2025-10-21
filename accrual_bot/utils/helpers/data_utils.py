@@ -627,3 +627,129 @@ def give_account_by_keyword(df, column_name, rules=None, export_keyword=False):
         df['Matched_Keyword'] = results.str[1]
 
     return df
+
+def extract_clean_description(desc):
+    """
+    根據不同的規則，從 Item Description 中擷取乾淨的字串
+    """
+    # Check if input is a Series
+    if isinstance(desc, pd.Series):
+        return desc.apply(lambda x: extract_clean_description(x))
+
+    desc = desc.strip()
+
+    # --- 特殊情況處理 (硬編碼) ---
+    # 這些情況無法單純用擷取完成，需要翻譯或補充資訊
+    # if 'EDL SOC winding roller' in desc:
+    #     return 'SOC新增EDL捲繞滾筒輸送機及供給線'
+    # if 'Large Material Measuring Equipment' in desc:
+    #     return '南北倉大材量測設備拉電工程'
+    # if '員林莒光 辦公室裝修工程' in desc:
+    #     # 預期結果包含的地址資訊不存在於來源字串中，這裡根據您的範例給出固定結果
+    #     return '辦公室裝修工程-員林莒光(彰化縣員林市莒光路332號1樓)'
+
+    # --- 規則一：門市裝修工程 (有地址和期數) ---
+    # e.g., ...門市裝修工程-北投建民 (...)SPX...decoration 第一期款項#...
+    # 使用 regex 捕獲 (描述+地址) 和 (期數)
+    pattern1 = r'(門市裝修工程-.*?\(.*?\))\s*SPX\s*store decoration\s*(.*?)\s*#'
+    match1 = re.search(pattern1, desc, re.IGNORECASE)
+    if match1:
+        description_part = match1.group(1).strip()
+        payment_term = match1.group(2).strip()
+        return f"{description_part}_{payment_term}"
+
+    # --- 規則二：有地址但沒有期數的工程項目 ---
+    # e.g., ...冷氣裝修工程Air-con equipment(...) #...
+    # e.g., ...門市招牌安裝工程signboard installation(...) #...
+    # 捕獲 (工程名稱) 和 (地址)
+    pattern2 = r'SVP_?(?:SPX)?\s*(.*?)(?:\(|（)([^)）]+)(?:\)|）)'
+    match2 = re.search(pattern2, desc)
+    if match2:
+        project_name = match2.group(1).strip()
+        address = match2.group(2).strip()
+        # 移除工程名稱中夾雜的英文
+        project_name = re.sub(r'[a-zA-Z\s-]+$', '', project_name).strip()
+        return f"{project_name}({address})"
+
+    # --- 通用規則 (適用於剩餘情況) ---
+    # 建立一個臨時變數來進行一系列的清理
+    core_content = desc
+
+    # 1. 移除結尾的 #... 標籤
+    core_content = re.sub(r'\s*#.*$', '', core_content).strip()
+
+    # 2. 移除結尾的英文描述
+    # 例如 "payment machine..." 或 "_SPX N-SOC..."
+    core_content = re.sub(r'\s*payment machine.*$', '', core_content, flags=re.IGNORECASE)
+    core_content = re.sub(r'_SPX N-SOC.*$', '', core_content, flags=re.IGNORECASE)
+
+    # 3. 移除前面的日期和公司前綴
+    core_content = re.sub(r'^(\d{4}/\d{2}/\d{2})\s*-\s*(\d{4}/\d{2}/\d{2})', '', core_content)
+    core_content = re.sub(r'^\d{4}/\d{2}\s*_?SVP_?(?:SPX)?\s*', '', core_content)
+
+    # 4. 對於 IT 等沒有 SVP 的特殊項目，單獨移除日期
+    core_content = re.sub(r'^\d{4}/\d{2}\s*', '', core_content)
+
+    # 5. 清理多餘的空白，並加上 SPX_ 前綴
+    core_content = re.sub(r'\s+', ' ', core_content).strip()
+
+    # 如果內容已經是 SPX 開頭，就不要再加 SPX_
+    if core_content.upper().startswith('SPX '):
+        # 將 'SPX ' 替換為 'SPX_'
+        core_content = re.sub(r'^SPX\s', 'SPX_', core_content, flags=re.IGNORECASE)
+        return core_content
+    else:
+        return f"{core_content}"
+
+def clean_pr_data(df: pd.DataFrame) -> pd.DataFrame:
+    """清理PR資料"""
+    # 欄位名稱標準化
+    df.columns = [(col.lower()
+                      .replace(' ', '_')
+                      .replace('#', '_number')
+                      .replace('(', '')
+                      .replace(')', '')) for col in df.columns]
+    
+    # 處理日期欄位
+    date_columns = ['pr_create_date', 'submission_date', 'last_action_date', 'pr_approved_date']
+    for col in date_columns:
+        if col in df.columns:
+            df[col] = pd.to_datetime(df[col], errors='coerce')
+    
+    # 處理數值欄位
+    numeric_columns = ['total_amount', 'total_amount_usd', 'unit_price', 
+                       'entry_quantity', 'entry_amount', 'entry_amount_usd']
+    for col in numeric_columns:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+    
+    return df
+
+def clean_po_data(df: pd.DataFrame) -> pd.DataFrame:
+    """清理PO資料"""
+    # 欄位名稱標準化
+    df.columns = [(col.lower()
+                      .replace(' ', '_')
+                      .replace('#', '_number')
+                      .replace('(', '')
+                      .replace(')', '')) for col in df.columns]
+    
+    # 處理日期欄位
+    date_columns = ['po_create_date', 'submission_date', 'last_action_date', 
+                    'po_approved_date', 'notified_finance_date', 'expected_payment_date', 
+                    'actual_receive_date']
+    for col in date_columns:
+        if col in df.columns:
+            df[col] = pd.to_datetime(df[col], errors='coerce')
+    
+    # 處理數值欄位
+    numeric_columns = ['po_total_amount', 'po_total_amount_usd', 'total_invoice_amount',
+                       'unit_price', 'entry_quantity', 'received_quantity', 
+                       'billed_quantity', 'prepay_quantity', 'entry_amount', 
+                       'entry_amount_usd', 'entry_invoiced_amount', 
+                       'entry_billed_amount', 'entry_prepay_amount']
+    for col in numeric_columns:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+    
+    return df

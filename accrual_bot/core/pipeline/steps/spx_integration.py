@@ -19,7 +19,9 @@ from accrual_bot.core.pipeline.steps.common import (
     create_error_metadata
 )
 from accrual_bot import GoogleSheetsImporter
-from accrual_bot.utils.helpers.data_utils import (classify_description, give_account_by_keyword)
+from accrual_bot.utils.helpers.data_utils import (classify_description, 
+                                                  give_account_by_keyword,
+                                                  clean_po_data)
 
 
 class ColumnAdditionStep(PipelineStep):
@@ -618,6 +620,22 @@ class ValidationDataProcessingStep(PipelineStep):
             df = self._apply_validation_data(df, locker_non_discount, locker_discount, 
                                              discount_rate, kiosk_data)
             
+            if len(locker_non_discount) != 0:
+                context.add_auxiliary_data('locker_non_discount', pd.DataFrame(locker_non_discount).T)
+            else:
+                context.add_auxiliary_data('locker_non_discount', pd.DataFrame())
+            if len(locker_discount) != 0:
+                context.add_auxiliary_data('locker_discount', pd.DataFrame(locker_discount).T)
+            else:
+                context.add_auxiliary_data('locker_discount', pd.DataFrame())
+            if len(kiosk_data) != 0:
+                context.add_auxiliary_data('kiosk_data', 
+                                           pd.DataFrame(kiosk_data.values(), 
+                                                        index=kiosk_data.keys(), 
+                                                        columns=['當期驗收個數']))
+            else:
+                context.add_auxiliary_data('kiosk_data', pd.DataFrame())
+            
             context.update_data(df)
             
             validation_count = (df['本期驗收數量/金額'] != 0).sum() if '本期驗收數量/金額' in df.columns else 0
@@ -1146,6 +1164,12 @@ class DataReformattingStep(PipelineStep):
             
             # 添加分期標記
             df = self._add_installment_flag(df)
+
+            # 重新命名欄位名稱、資料型態
+            df = self._rename_columns_dtype(df)
+
+            # 確保review AP等欄位在最後
+            df = self._rearrange_columns(df)
             
             # 將含有暫時性計算欄位的結果存為附件
             if isinstance(df, pd.DataFrame) and not df.empty:
@@ -1227,7 +1251,8 @@ class DataReformattingStep(PipelineStep):
     
     def _remove_temp_columns(self, df: pd.DataFrame) -> pd.DataFrame:
         """移除臨時計算列"""
-        temp_columns = ['檔案日期', 'Expected Received Month_轉換格式', 'YMs of Item Description']
+        temp_columns = ['檔案日期', 'Expected Received Month_轉換格式', 'YMs of Item Description',
+                        'expected_received_month_轉換格式', 'yms_of_item_description']
         
         for col in temp_columns:
             if col in df.columns:
@@ -1297,15 +1322,28 @@ class DataReformattingStep(PipelineStep):
             validation_col = df.pop('本期驗收數量/金額')
             df.insert(memo_index, '本期驗收數量/金額', validation_col)
         
+        if 'Question from Reviewer' in df.columns and 'Check by AP' in df.columns:
+            # Get all columns except the two you want to move
+            cols = [col for col in df.columns if col not in ['Question from Reviewer', 'Check by AP']]
+            # Add the two columns at the end
+            cols = cols + ['Question from Reviewer', 'Check by AP']
+            # Reorder the dataframe
+            df = df[cols]
+        
+        if len([col for col in df.columns if col in ['question_from_reviewer', 'check_by_ap']]) == 2:
+            cols = [col for col in df.columns if col not in ['question_from_reviewer', 'check_by_ap']]
+            cols = cols + ['question_from_reviewer', 'check_by_ap']
+            df = df[cols]
+
         return df
     
     def _add_classification(self, df: pd.DataFrame) -> pd.DataFrame:
         """添加分類"""
         try:
-            df['CATEGORY'] = df['Item Description'].apply(classify_description)
+            df['category_from_desc'] = df['Item Description'].apply(classify_description)
         except Exception as e:
             self.logger.warning(f"Failed to add classification: {str(e)}")
-            df['CATEGORY'] = pd.NA
+            df['category_from_desc'] = pd.NA
         
         return df
     
@@ -1335,6 +1373,11 @@ class DataReformattingStep(PipelineStep):
         df['裝修一般/分期'] = np.select(conditions, choices, default=pd.NA)
         
         return df
+    
+    def _rename_columns_dtype(self, df):
+        df_copy = df.copy()
+        df_copy = df_copy.rename(columns={'Product code': 'product_code_c'})
+        return clean_po_data(df_copy)
     
     async def validate_input(self, context: ProcessingContext) -> bool:
         """驗證輸入"""

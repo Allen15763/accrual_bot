@@ -64,7 +64,15 @@ class SPXExportStep(PipelineStep):
                 counter += 1
             
             # 導出 Excel
-            df_export.to_excel(output_path, index=False)
+            # df_export.to_excel(output_path, index=False)
+            with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
+                df_export.to_excel(writer, sheet_name='PO', index=False)
+                context.get_auxiliary_data('locker_non_discount').to_excel(writer, 
+                                                                           sheet_name='locker_non_discount')
+                context.get_auxiliary_data('locker_discount').to_excel(writer, 
+                                                                       sheet_name='locker_discount')
+                context.get_auxiliary_data('kiosk_data').to_excel(writer, 
+                                                                  sheet_name='kiosk_data')
             
             self.logger.info(f"Data exported to: {output_path}")
             duration = time.time() - start_time
