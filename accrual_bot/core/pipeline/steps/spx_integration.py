@@ -1164,7 +1164,8 @@ class DataReformattingStep(PipelineStep):
             
             # 添加分期標記
             df = self._add_installment_flag(df)
-
+            df = self._installment_over_ppe_limit(df)
+            
             # 重新命名欄位名稱、資料型態
             df = self._rename_columns_dtype(df)
 
@@ -1373,6 +1374,29 @@ class DataReformattingStep(PipelineStep):
         df['裝修一般/分期'] = np.select(conditions, choices, default=pd.NA)
         
         return df
+    
+    def _installment_over_ppe_limit(self, df: pd.DataFrame, 
+                                    limit: int = int(config_manager.get('SPX', 'ppe_limit'))
+                                    ) -> pd.DataFrame:
+        mask = df['裝修一般/分期'].notna()
+        target_po_number = df.loc[mask, 'PO#'].unique()
+        
+        # 沒有裝修單的話，跳出
+        if len(target_po_number) == 0:
+            return df
+        
+        data = (df.loc[df['PO#'].isin(target_po_number)].groupby('PO#')['Entry Amount'].sum())
+
+        # 是否超出PPE額度
+        is_under_limit = data.loc[lambda x: x < limit].empty
+        if is_under_limit:
+            po_number = data.loc[lambda x: x < limit].index
+            df.loc[df['PO#'].isin(po_number), '裝修一般/分期'] = (df.
+                                                            loc[df['PO#'].isin(po_number), '裝修一般/分期']
+                                                            .astype(str) + f'_小於{limit}')
+            return df
+        else:
+            return df
     
     def _rename_columns_dtype(self, df):
         df_copy = df.copy()
