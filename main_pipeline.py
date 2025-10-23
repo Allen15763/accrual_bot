@@ -288,7 +288,8 @@ async def execute_with_checkpoint(
     file_paths: Dict[str, str],
     processing_date: int,
     checkpoint_dir: str = "./checkpoints",
-    save_checkpoints: bool = True
+    save_checkpoints: bool = True,
+    processing_type: str = 'PO'
 ) -> Dict[str, Any]:
     """
     執行完整 pipeline 並自動儲存 checkpoint
@@ -313,7 +314,49 @@ async def execute_with_checkpoint(
         data=pd.DataFrame(),
         entity_type="SPX",
         processing_date=processing_date,
-        processing_type="PO"
+        processing_type=processing_type
+    )
+    
+    # 執行
+    executor = PipelineWithCheckpoint(pipeline, checkpoint_manager)
+    result = await executor.execute_with_checkpoint(
+        context=context,
+        save_after_each_step=save_checkpoints
+    )
+    
+    return result
+
+async def execute_pr_with_checkpoint(
+    file_paths: Dict[str, str],
+    processing_date: int,
+    checkpoint_dir: str = "./checkpoints",
+    save_checkpoints: bool = True,
+    processing_type: str = 'PR'
+) -> Dict[str, Any]:
+    """
+    執行完整 pipeline 並自動儲存 checkpoint
+    
+    Args:
+        file_paths: 文件路徑字典
+        processing_date: 處理日期
+        checkpoint_dir: checkpoint 儲存目錄
+        save_checkpoints: 是否儲存 checkpoint
+        
+    Returns:
+        Dict: 執行結果
+    """
+    from accrual_bot.core.pipeline.steps.spx_steps import create_spx_pr_complete_pipeline  # 替換成實際路徑
+    
+    # 創建 pipeline 和 checkpoint manager
+    pipeline = create_spx_pr_complete_pipeline(file_paths)
+    checkpoint_manager = CheckpointManager(checkpoint_dir)
+    
+    # 創建上下文
+    context = ProcessingContext(
+        data=pd.DataFrame(),
+        entity_type="SPX",
+        processing_date=processing_date,
+        processing_type=processing_type
     )
     
     # 執行
@@ -612,13 +655,13 @@ if __name__ == "__main__":
     # ))
 
     # Start from specific point
-    result = asyncio.run(resume_from_step(
-        checkpoint_name="SPX_202509_after_Filter_SPX_Products",    # checkpoint資料夾路徑名稱
-        start_from_step="Add_Columns",
-        # checkpoint_name="SPX_202509_after_Process_Dates",    # checkpoint資料夾路徑名稱
-        # start_from_step="Integrate_Closing_List",
-        file_paths=file_paths  # 可選,如果 checkpoint 中沒有
-    ))
+    # result = asyncio.run(resume_from_step(
+    #     checkpoint_name="SPX_202509_after_Filter_SPX_Products",    # checkpoint資料夾路徑名稱
+    #     start_from_step="Add_Columns",
+    #     # checkpoint_name="SPX_202509_after_Process_Dates",    # checkpoint資料夾路徑名稱
+    #     # start_from_step="Integrate_Closing_List",
+    #     file_paths=file_paths  # 可選,如果 checkpoint 中沒有
+    # ))
 
     # 從特定步驟開始，跟resume_from_step類似
     # result = asyncio.run(quick_test_step(
@@ -632,5 +675,32 @@ if __name__ == "__main__":
     #     processing_date=202509,
     #     save_checkpoints=True
     # ))
+
+    # Run PR
+    file_paths_pr = {
+        'raw_pr': {
+            'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202509\202509_purchase_request.xlsx",
+            'params': {'encoding': 'utf-8', 
+                       'sep': ',', 
+                       'dtype': str, 
+                       'keep_default_na': False, 
+                       'na_values': ['']
+                       }
+        },
+        'previous_pr': {
+            'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202509\202508_PR_FN.xlsx",
+            'params': {'dtype': str, }
+        },
+        'procurement_pr': {
+            'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202509\202509_PR_PQ.xlsx",
+            'params': {'dtype': str, }
+        },
+
+    }
+    result = asyncio.run(execute_pr_with_checkpoint(
+        file_paths=file_paths_pr,
+        processing_date=202509,
+        save_checkpoints=False
+    ))
     
     print(1)
