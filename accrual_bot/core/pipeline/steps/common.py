@@ -602,6 +602,10 @@ class PreviousWorkpaperIntegrationStep(PipelineStep):
             if previous_wp_pr is not None and not previous_wp_pr.empty:
                 df = self._process_previous_pr(df, previous_wp_pr)
                 self.logger.info("Previous PR workpaper integrated")
+
+            # 路徑參數傳入raw_pr才執行，把remark...PR跟Noted...PR欄位複製到沒...PR的欄位
+            if 'raw_pr' in context.get_variable('file_paths').keys():
+                df = self._copy_pr_result_non_pr_cols(df)
             
             context.update_data(df)
             duration = time.time() - start_time
@@ -689,6 +693,14 @@ class PreviousWorkpaperIntegrationStep(PipelineStep):
         
         return df
     
+    def _copy_pr_result_non_pr_cols(self, df, col_remark_fn: str = 'Remarked by 上月 FN'):
+        df_copy = df.copy()
+
+        if col_remark_fn in df_copy.columns:
+            df_copy[col_remark_fn] = df_copy[col_remark_fn + ' PR']
+
+        return df_copy
+    
     async def validate_input(self, context: ProcessingContext) -> bool:
         """驗證輸入"""
         if context.data is None or context.data.empty:
@@ -743,6 +755,10 @@ class ProcurementIntegrationStep(PipelineStep):
                 df = self._process_procurement_pr(df, procurement_pr)
                 self.logger.info("Procurement PR integrated")
             
+            # 路徑參數傳入raw_pr才執行，把remark...PR跟Noted...PR欄位複製到沒...PR的欄位
+            if 'raw_pr' in context.get_variable('file_paths').keys():
+                df = self._copy_pr_result_non_pr_cols(df)
+
             context.update_data(df)
             duration = time.time() - start_time
             
@@ -858,6 +874,18 @@ class ProcurementIntegrationStep(PipelineStep):
             df['Noted by Procurement PR'] = df['PR Line'].map(pr_noted_mapping)
         
         return df
+    
+    def _copy_pr_result_non_pr_cols(self, df,
+                                    col_remark_procurement: str = 'Remarked by Procurement',
+                                    col_note_procurement: str = 'Noted by Procurement'):
+        df_copy = df.copy()
+        if col_remark_procurement in df_copy.columns:
+            df_copy[col_remark_procurement] = df_copy[col_remark_procurement + ' PR']
+
+        if col_note_procurement in df_copy.columns:
+            df_copy[col_note_procurement] = df_copy[col_note_procurement + ' PR']
+
+        return df_copy
     
     async def validate_input(self, context: ProcessingContext) -> bool:
         """驗證輸入"""
