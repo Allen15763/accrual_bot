@@ -634,7 +634,7 @@ class SPXERMLogicStep(PipelineStep):
     
     功能：
     1. 設置檔案日期
-    2. 判斷 11 種 PO 狀態（已入帳、已完成、Check收貨等）
+    2. 判斷 11 種 PO/PR 狀態（已入帳、已完成、Check收貨等）
     3. 根據狀態設置是否估計入帳
     4. 設置會計相關欄位（Account code, Product code, Dep.等）
     5. 計算預估金額（Accr. Amount）
@@ -651,7 +651,7 @@ class SPXERMLogicStep(PipelineStep):
     - Processing date
     
     輸出：
-    - DataFrame with PO狀態, 是否估計入帳, and accounting fields
+    - DataFrame with PO/PR狀態, 是否估計入帳, and accounting fields
     """
     
     def __init__(self, name: str = "SPX_ERM_Logic", **kwargs):
@@ -687,16 +687,17 @@ class SPXERMLogicStep(PipelineStep):
             df = self._set_file_date(df, processing_date)
             
             # ========== 階段 2: 構建判斷條件 ==========
-            conditions = self._build_conditions(df, processing_date)
+            status_column: str = self._get_status_column(df, context)
+            conditions = self._build_conditions(df, processing_date, status_column)
             
             # ========== 階段 3: 應用 11 個狀態條件 ==========
-            df = self._apply_status_conditions(df, conditions)
+            df = self._apply_status_conditions(df, conditions, status_column)
             
             # ========== 階段 4: 處理格式錯誤 ==========
-            df = self._handle_format_errors(df, conditions)
+            df = self._handle_format_errors(df, conditions, status_column)
             
             # ========== 階段 5: 設置是否估計入帳 ==========
-            df = self._set_accrual_flag(df)
+            df = self._set_accrual_flag(df, status_column)
             
             # ========== 階段 6: 設置會計欄位 ==========
             df = self._set_accounting_fields(df, ref_account, ref_liability)
@@ -708,7 +709,7 @@ class SPXERMLogicStep(PipelineStep):
             context.update_data(df)
             
             # 生成統計資訊
-            stats = self._generate_statistics(df)
+            stats = self._generate_statistics(df, status_column)
             
             self.logger.info(
                 f"ERM 邏輯完成 - "
@@ -746,16 +747,28 @@ class SPXERMLogicStep(PipelineStep):
         self.logger.debug(f"已設置檔案日期：{processing_date}")
         return df
     
+    def _get_status_column(self, df: pd.DataFrame, context: ProcessingContext) -> str:
+        """動態判斷狀態欄位"""
+        if 'PO狀態' in df.columns:
+            return 'PO狀態'
+        elif 'PR狀態' in df.columns:
+            return 'PR狀態'
+        else:
+            # 根據 context 創建欄位
+            processing_type = context.metadata.processing_type
+            return f"{processing_type}狀態"
+    
     # ========== 階段 2: 構建條件 ==========
     
-    def _build_conditions(self, df: pd.DataFrame, file_date: int) -> ERMConditions:
+    def _build_conditions(self, df: pd.DataFrame, file_date: int,
+                          status_column: str) -> ERMConditions:
         """
         構建所有判斷條件
         
         將條件邏輯集中在此處，提高可讀性和維護性
         """
         # 基礎狀態條件
-        no_status = (df['PO狀態'].isna()) | (df['PO狀態'] == 'nan')
+        no_status = (df[status_column].isna()) | (df[status_column] == 'nan')
         
         # 日期範圍條件
         ym_start = df['YMs of Item Description'].str[:6].astype('Int32')
@@ -825,7 +838,8 @@ class SPXERMLogicStep(PipelineStep):
     # ========== 階段 3: 應用狀態條件 ==========
     
     def _apply_status_conditions(self, df: pd.DataFrame, 
-                                 cond: ERMConditions) -> pd.DataFrame:
+                                 cond: ERMConditions,
+                                 status_column: str) -> pd.DataFrame:
         """
         應用 11 個狀態判斷條件
         
@@ -834,10 +848,10 @@ class SPXERMLogicStep(PipelineStep):
         
         # === 條件 1: 已入帳（前期FN明確標註）===
         condition_1 = df['Remarked by 上月 FN'].str.contains('(?i)已入帳', na=False)
-        df.loc[condition_1, 'PO狀態'] = '已入帳'
+        df.loc[condition_1, status_column] = '已入帳'
         self._log_condition_result("已入帳（前期FN明確標註）", condition_1.sum())
         # 🔴 新增：更新 no_status
-        cond.no_status = (df['PO狀態'].isna()) | (df['PO狀態'] == 'nan')
+        cond.no_status = (df[status_column].isna()) | (df[status_column] == 'nan')
         
         # === 條件 2: 已入帳（有 GL DATE 且符合其他條件）===
         condition_2 = (
@@ -850,11 +864,11 @@ class SPXERMLogicStep(PipelineStep):
             (cond.procurement_completed_or_rent | cond.fn_completed_or_posted) &
             (~cond.is_fa)
         )
-        df.loc[condition_2, 'PO狀態'] = '已入帳'
+        df.loc[condition_2, status_column] = '已入帳'
         self._log_condition_result("已入帳（GL DATE）", condition_2.sum())
 
         # 🔴 新增：更新 no_status
-        cond.no_status = (df['PO狀態'].isna()) | (df['PO狀態'] == 'nan')
+        cond.no_status = (df[status_column].isna()) | (df[status_column] == 'nan')
         
         # === 條件 3: 已完成 ===
         condition_3 = (
@@ -866,11 +880,11 @@ class SPXERMLogicStep(PipelineStep):
             cond.quantity_matched &
             cond.not_billed
         )
-        df.loc[condition_3, 'PO狀態'] = '已完成'
+        df.loc[condition_3, status_column] = '已完成'
         self._log_condition_result("已完成", condition_3.sum())
 
         # 🔴 新增：更新 no_status
-        cond.no_status = (df['PO狀態'].isna()) | (df['PO狀態'] == 'nan')
+        cond.no_status = (df[status_column].isna()) | (df[status_column] == 'nan')
         
         # === 條件 4: 全付完，未關單 ===
         # ERM小於等於結帳月 and ERM在摘要期間內 and Entry Qty等於Received Qty and Entry Amount - Entry Billed Amount = 0--> 理論上要估計
@@ -883,11 +897,11 @@ class SPXERMLogicStep(PipelineStep):
             (df['Entry Billed Amount'].astype('Float64') != 0) &
             cond.fully_billed
         )
-        df.loc[condition_4, 'PO狀態'] = '全付完，未關單?'
+        df.loc[condition_4, status_column] = '全付完，未關單?'
         self._log_condition_result("全付完，未關單", condition_4.sum())
 
         # 🔴 新增：更新 no_status
-        cond.no_status = (df['PO狀態'].isna()) | (df['PO狀態'] == 'nan')
+        cond.no_status = (df[status_column].isna()) | (df[status_column] == 'nan')
         
         # === 條件 5: 已完成但有未付款部分 ===
         condition_5 = (
@@ -899,11 +913,11 @@ class SPXERMLogicStep(PipelineStep):
             (df['Entry Billed Amount'].astype('Float64') != 0) &
             cond.has_unpaid_amount
         )
-        df.loc[condition_5, 'PO狀態'] = '已完成'
+        df.loc[condition_5, status_column] = '已完成'
         self._log_condition_result("已完成（有未付款）", condition_5.sum())
 
         # 🔴 新增：更新 no_status
-        cond.no_status = (df['PO狀態'].isna()) | (df['PO狀態'] == 'nan')
+        cond.no_status = (df[status_column].isna()) | (df[status_column] == 'nan')
         
         # === 條件 6: Check收貨 ===
         # ERM小於等於結帳月 and ERM在摘要期間內 and Entry Qty不等於Received Qty --> 理論上要估計
@@ -914,11 +928,11 @@ class SPXERMLogicStep(PipelineStep):
             cond.erm_before_or_equal_file_date &
             (~cond.quantity_matched)
         )
-        df.loc[condition_6, 'PO狀態'] = 'Check收貨'
+        df.loc[condition_6, status_column] = 'Check收貨'
         self._log_condition_result("Check收貨", condition_6.sum())
 
         # 🔴 新增：更新 no_status
-        cond.no_status = (df['PO狀態'].isna()) | (df['PO狀態'] == 'nan')
+        cond.no_status = (df[status_column].isna()) | (df[status_column] == 'nan')
         
         # === 條件 7: 未完成 ===
         condition_7 = (
@@ -927,11 +941,11 @@ class SPXERMLogicStep(PipelineStep):
             cond.in_date_range &
             cond.erm_after_file_date
         )
-        df.loc[condition_7, 'PO狀態'] = '未完成'
+        df.loc[condition_7, status_column] = '未完成'
         self._log_condition_result("未完成", condition_7.sum())
 
         # 🔴 新增：更新 no_status
-        cond.no_status = (df['PO狀態'].isna()) | (df['PO狀態'] == 'nan')
+        cond.no_status = (df[status_column].isna()) | (df[status_column] == 'nan')
         
         # === 條件 8: 範圍錯誤_租金 ===
         condition_8 = (
@@ -940,11 +954,11 @@ class SPXERMLogicStep(PipelineStep):
             cond.out_of_date_range &
             (df['Item Description'].str.contains('(?i)租金', na=False))
         )
-        df.loc[condition_8, 'PO狀態'] = 'error(Description Period is out of ERM)_租金'
+        df.loc[condition_8, status_column] = 'error(Description Period is out of ERM)_租金'
         self._log_condition_result("範圍錯誤_租金", condition_8.sum())
 
         # 🔴 新增：更新 no_status
-        cond.no_status = (df['PO狀態'].isna()) | (df['PO狀態'] == 'nan')
+        cond.no_status = (df[status_column].isna()) | (df[status_column] == 'nan')
         
         # === 條件 9: 範圍錯誤_薪資 ===
         condition_9 = (
@@ -953,11 +967,11 @@ class SPXERMLogicStep(PipelineStep):
             cond.out_of_date_range &
             (df['Item Description'].str.contains('(?i)派遣|Salary|Agency Fee', na=False))
         )
-        df.loc[condition_9, 'PO狀態'] = 'error(Description Period is out of ERM)_薪資'
+        df.loc[condition_9, status_column] = 'error(Description Period is out of ERM)_薪資'
         self._log_condition_result("範圍錯誤_薪資", condition_9.sum())
 
         # 🔴 新增：更新 no_status
-        cond.no_status = (df['PO狀態'].isna()) | (df['PO狀態'] == 'nan')
+        cond.no_status = (df[status_column].isna()) | (df[status_column] == 'nan')
         
         # === 條件 10: 範圍錯誤（一般）===
         condition_10 = (
@@ -965,11 +979,11 @@ class SPXERMLogicStep(PipelineStep):
             cond.no_status &
             cond.out_of_date_range
         )
-        df.loc[condition_10, 'PO狀態'] = 'error(Description Period is out of ERM)'
+        df.loc[condition_10, status_column] = 'error(Description Period is out of ERM)'
         self._log_condition_result("範圍錯誤（一般）", condition_10.sum())
 
         # 🔴 新增：更新 no_status
-        cond.no_status = (df['PO狀態'].isna()) | (df['PO狀態'] == 'nan')
+        cond.no_status = (df[status_column].isna()) | (df[status_column] == 'nan')
         
         # === 條件 11: 部分完成ERM ===
         condition_11 = (
@@ -979,7 +993,7 @@ class SPXERMLogicStep(PipelineStep):
             (df['Received Quantity'].astype('Float64') != 0) &
             (~cond.quantity_matched)
         )
-        df.loc[condition_11, 'PO狀態'] = '部分完成ERM'
+        df.loc[condition_11, status_column] = '部分完成ERM'
         self._log_condition_result("部分完成ERM", condition_11.sum())
         
         return df
@@ -992,10 +1006,11 @@ class SPXERMLogicStep(PipelineStep):
     # ========== 階段 4: 處理格式錯誤 ==========
     
     def _handle_format_errors(self, df: pd.DataFrame, 
-                              cond: ERMConditions) -> pd.DataFrame:
+                              cond: ERMConditions,
+                              status_column: str) -> pd.DataFrame:
         """處理格式錯誤的記錄"""
         mask_format_error = cond.no_status & cond.format_error
-        df.loc[mask_format_error, 'PO狀態'] = '格式錯誤，退單'
+        df.loc[mask_format_error, status_column] = '格式錯誤，退單'
         
         error_count = mask_format_error.sum()
         if error_count > 0:
@@ -1005,13 +1020,13 @@ class SPXERMLogicStep(PipelineStep):
     
     # ========== 階段 5: 設置是否估計入帳 ==========
     
-    def _set_accrual_flag(self, df: pd.DataFrame) -> pd.DataFrame:
+    def _set_accrual_flag(self, df: pd.DataFrame, status_column: str) -> pd.DataFrame:
         """
-        根據 PO狀態 設置是否估計入帳
+        根據 PO/PR狀態 設置是否估計入帳
         
         SPX 邏輯：只有「已完成」狀態需要估列入帳
         """
-        mask_completed = df['PO狀態'].str.contains('已完成', na=False)
+        mask_completed = df[status_column].str.contains('已完成', na=False)
         
         df.loc[mask_completed, '是否估計入帳'] = 'Y'
         df.loc[~mask_completed, '是否估計入帳'] = 'N'
@@ -1186,7 +1201,7 @@ class SPXERMLogicStep(PipelineStep):
     
     # ========== 輔助方法 ==========
     
-    def _generate_statistics(self, df: pd.DataFrame) -> Dict[str, Any]:
+    def _generate_statistics(self, df: pd.DataFrame, status_column: str) -> Dict[str, Any]:
         """生成統計資訊"""
         stats = {
             'total_count': len(df),
@@ -1194,8 +1209,8 @@ class SPXERMLogicStep(PipelineStep):
             'status_distribution': {}
         }
         
-        if 'PO狀態' in df.columns:
-            status_counts = df['PO狀態'].value_counts().to_dict()
+        if status_column in df.columns:
+            status_counts = df[status_column].value_counts().to_dict()
             stats['status_distribution'] = {
                 str(k): int(v) for k, v in status_counts.items()
             }

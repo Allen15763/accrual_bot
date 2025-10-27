@@ -414,7 +414,8 @@ async def resume_from_step(
     checkpoint_name: str,
     start_from_step: str,
     file_paths: Optional[Dict[str, str]] = None,
-    checkpoint_dir: str = "./checkpoints"
+    checkpoint_dir: str = "./checkpoints",
+    save_checkpoints: bool = True
 ) -> Dict[str, Any]:
     """
     從 checkpoint 恢復並從指定步驟開始執行
@@ -447,7 +448,7 @@ async def resume_from_step(
     executor = PipelineWithCheckpoint(pipeline, checkpoint_manager)
     result = await executor.execute_with_checkpoint(
         context=context,
-        save_after_each_step=True,
+        save_after_each_step=save_checkpoints,
         start_from_step=start_from_step
     )
     
@@ -660,7 +661,8 @@ if __name__ == "__main__":
     #     start_from_step="Add_Columns",
     #     # checkpoint_name="SPX_202509_after_Process_Dates",    # checkpoint資料夾路徑名稱
     #     # start_from_step="Integrate_Closing_List",
-    #     file_paths=file_paths  # 可選,如果 checkpoint 中沒有
+    #     file_paths=file_paths,  # 可選,如果 checkpoint 中沒有
+    #     save_checkpoints=False
     # ))
 
     # 從特定步驟開始，跟resume_from_step類似

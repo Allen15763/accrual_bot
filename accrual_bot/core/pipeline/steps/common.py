@@ -928,12 +928,18 @@ class DateLogicStep(PipelineStep):
                 mask_profit_sharing = safe_string_operation(
                     df['Item Description'], 'contains', '分潤合作', na=False
                 )
+
+                def get_status_column() -> str:
+                    if context.get_variable('file_paths').get('raw_po'):
+                        return 'PO狀態'
+                    else:
+                        return 'PR狀態'
                 
                 mask_no_status = (
-                    df['PO狀態'].isna() | (df['PO狀態'] == 'nan')
+                    df[get_status_column()].isna() | (df[get_status_column()] == 'nan')
                 )
                 
-                df.loc[mask_profit_sharing & mask_no_status, 'PO狀態'] = '分潤'
+                df.loc[mask_profit_sharing & mask_no_status, get_status_column()] = '分潤'
                 
             # 處理已入帳
             if 'PO Entry full invoiced status' in df.columns and context.metadata.entity_type != 'SPX':

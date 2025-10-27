@@ -14,9 +14,11 @@ from accrual_bot.core.pipeline import PipelineBuilder, Pipeline
 
 from accrual_bot.core.pipeline.steps.common import (ProductFilterStep,
                                                     PreviousWorkpaperIntegrationStep,
-                                                    ProcurementIntegrationStep)
-from accrual_bot.core.pipeline.steps.spx_integration import ColumnAdditionStep
+                                                    ProcurementIntegrationStep,
+                                                    DateLogicStep)
+from accrual_bot.core.pipeline.steps.spx_integration import ColumnAdditionStep, ClosingListIntegrationStep
 from accrual_bot.core.pipeline.steps.spx_loading import SPXPRDataLoadingStep
+from accrual_bot.core.pipeline.steps.spx_evaluation import StatusStage1Step, SPXERMLogicStep
 
 
 class SPXDepositCheckStep(PipelineStep):
@@ -723,7 +725,7 @@ def create_spx_pr_complete_pipeline(file_paths: Dict[str, str]) -> Pipeline:
                 #  ========== 階段 1: 數據載入 ==========
                 .add_step(
                     SPXPRDataLoadingStep(
-                        name="Load_All_Data",
+                        name="PR_Load_All_Data",
                         file_paths=file_paths,
                         required=True,
                         retry_count=2,  # 載入失敗重試2次
@@ -734,17 +736,22 @@ def create_spx_pr_complete_pipeline(file_paths: Dict[str, str]) -> Pipeline:
                 # ========== 階段 2: 數據準備與整合 ==========
                 .add_step(
                     ProductFilterStep(
-                        name="Filter_Products",
+                        name="PR_Filter_Products",
                         product_pattern='(?i)LG_SPX',
                         required=True
                     )
                 )
-                .add_step(ColumnAdditionStep(name="Add_Columns", required=True))
-                .add_step(PreviousWorkpaperIntegrationStep(name="Integrate_Previous_WP", required=True))
-                .add_step(ProcurementIntegrationStep(name="Integrate_Procurement", required=True))
+                .add_step(ColumnAdditionStep(name="PR_Add_Columns", required=True))
+                .add_step(PreviousWorkpaperIntegrationStep(name="PR_Integrate_Previous_WP", required=True))
+                .add_step(ProcurementIntegrationStep(name="PR_Integrate_Procurement", required=True))
                 
                 # # ========== 階段3: 業務邏輯 ==========
-
+                .add_step(DateLogicStep(name="PR_Process_Dates", required=True))
+                .add_step(ClosingListIntegrationStep(name="PR_Integrate_Closing_List", required=True))
+                .add_step(StatusStage1Step(name="PR_Evaluate_Status_Stage1", required=True))
+                .add_step(SPXERMLogicStep(name="PR_Apply_ERM_Logic", required=True, retry_count=0))
+                
+                
                 # # ========== 階段4: 後處理 ==========
                 )
     

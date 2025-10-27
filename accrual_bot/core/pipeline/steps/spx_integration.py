@@ -65,6 +65,9 @@ class ColumnAdditionStep(PipelineStep):
             # 更新月份變數
             context.set_variable('processing_month', m)
             
+            # 偵測輸入參數，含有PR的原始檔路徑時，修改欄位名稱為PR
+            if 'raw_pr' in context.get_variable('file_paths').keys():
+                df = df.rename(columns={'PO狀態': 'PR狀態'})
             context.update_data(df)
             
             new_columns = set(df.columns) - original_columns
@@ -1127,7 +1130,7 @@ class ValidationDataProcessingStep(PipelineStep):
             Dataframe
         """
         df_copy = df.copy()
-        df_copy[raw_col] = df_copy[updated_col]
+        df_copy[raw_col] = df_copy[updated_col].astype('string')
 
         def convert_qty(x):
             try:
@@ -1144,6 +1147,8 @@ class ValidationDataProcessingStep(PipelineStep):
         df_copy[updated_col] = np.where(is_raw_col_not_na & is_updated_col_zero,
                                         df_copy[raw_col],
                                         df_copy[updated_col])
+        # To avoid from output error for parquet due to mix dtype in a series.
+        df_copy[updated_col] = df_copy[updated_col].astype('string')
         return df_copy
     
     async def validate_input(self, context: ProcessingContext) -> bool:
