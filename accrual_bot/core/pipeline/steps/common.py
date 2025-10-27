@@ -647,31 +647,41 @@ class PreviousWorkpaperIntegrationStep(PipelineStep):
             previous_wp_renamed = previous_wp.rename(
                 columns={
                     'Remarked by FN': 'Remarked by FN_l',
-                    'Remarked by Procurement': 'Remark by PR Team_l'
+                    'Remarked by Procurement': 'Remark by PR Team_l',
+                    # 標準化後欄位名稱，for new previous
+                    'remarked_by_fn': 'Remarked by FN_l',
+                    'remarked_by_procurement': 'Remark by PR Team_l'
                 }
             )
 
             # 獲取前期FN備註
             if 'PO Line' in df.columns:
-                fn_mapping = create_mapping_dict(previous_wp_renamed, 'PO Line', 'Remarked by FN_l')
+                fn_mapping = create_mapping_dict(previous_wp_renamed.rename(columns={'po_line': 'PO Line'}), 
+                                                 'PO Line', 'Remarked by FN_l')
                 df['Remarked by 上月 FN'] = df['PO Line'].map(fn_mapping)
                 
                 # 獲取前期採購備註
                 procurement_mapping = create_mapping_dict(
-                    previous_wp_renamed, 'PO Line', 'Remark by PR Team_l'
+                    previous_wp_renamed.rename(columns={'po_line': 'PO Line'}), 
+                    'PO Line', 'Remark by PR Team_l'
                 )
                 df['Remarked by 上月 Procurement'] = \
                     df['PO Line'].map(procurement_mapping)
             
             # 處理 memo 欄位
             if 'memo' in previous_wp.columns and 'PO Line' in df.columns:
-                memo_mapping = dict(zip(previous_wp['PO Line'], previous_wp['memo']))
+                if 'PO Line' in previous_wp.columns:
+                    memo_mapping = dict(zip(previous_wp['PO Line'], previous_wp['memo']))
+                else:
+                    memo_mapping = dict(zip(previous_wp['po_line'], previous_wp['memo']))
                 df['memo'] = df['PO Line'].map(memo_mapping)
             
             # 處理前期 FN 備註
             if 'Remarked by FN' in previous_wp.columns:
                 fn_mapping = dict(zip(previous_wp['PO Line'], previous_wp['Remarked by FN']))
-                df['Remarked by 上月 FN'] = df['PO Line'].map(fn_mapping)
+            if 'remarked_by_fn' in previous_wp.columns:
+                fn_mapping = dict(zip(previous_wp['po_line'], previous_wp['remarked_by_fn']))
+            df['Remarked by 上月 FN'] = df['PO Line'].map(fn_mapping)
             return df
     
         except Exception as e:
@@ -681,9 +691,11 @@ class PreviousWorkpaperIntegrationStep(PipelineStep):
     def _process_previous_pr(self, df: pd.DataFrame, previous_wp_pr: pd.DataFrame) -> pd.DataFrame:
         """處理前期 PR 底稿"""
         # 重命名前期 PR 底稿中的列
-        if 'Remarked by FN' in previous_wp_pr.columns:
+        if 'Remarked by FN' in previous_wp_pr.columns or 'remarked_by_fn' in previous_wp_pr.columns:
             previous_wp_pr = previous_wp_pr.rename(
-                columns={'Remarked by FN': 'Remarked by FN_l'}
+                columns={'Remarked by FN': 'Remarked by FN_l',
+                         'remarked_by_fn': 'Remarked by FN_l',
+                         'pr_line': 'PR Line'}  # 標準化後欄位名稱，for new previous
             )
         
         # 獲取前期 PR FN 備註
@@ -798,7 +810,12 @@ class ProcurementIntegrationStep(PipelineStep):
             procurement_wp_renamed = procurement.rename(
                 columns={
                     'Remarked by Procurement': 'Remark by PR Team',
-                    'Noted by Procurement': 'Noted by PR'
+                    'Noted by Procurement': 'Noted by PR',
+                    # 標準化後欄位名稱，for new procurement
+                    'remarked_by_procurement': 'Remark by PR Team',
+                    'noted_by_procurement': 'Noted by PR',
+                    'po_line': 'PO Line',
+                    'pr_line': 'PR Line'
                 }
             )
             
@@ -843,6 +860,9 @@ class ProcurementIntegrationStep(PipelineStep):
             if 'Remarked by Procurement' in procurement.columns and 'PO Line' in df.columns:
                 procurement_mapping = dict(zip(procurement['PO Line'], procurement['Remarked by Procurement']))
                 df['Remarked by Procurement'] = df['PO Line'].map(procurement_mapping)
+            if 'remarked_by_procurement' in procurement.columns and 'PO Line' in df.columns:
+                procurement_mapping = dict(zip(procurement['po_line'], procurement['remarked_by_procurement']))
+                df['Remarked by Procurement'] = df['PO Line'].map(procurement_mapping)
             
             # 移除 SPT 模組給的狀態（SPX 有自己的狀態邏輯）
             if 'PO狀態' in df.columns:
@@ -860,7 +880,11 @@ class ProcurementIntegrationStep(PipelineStep):
         procurement_pr = procurement_pr.rename(
             columns={
                 'Remarked by Procurement': 'Remark by PR Team',
-                'Noted by Procurement': 'Noted by PR'
+                'Noted by Procurement': 'Noted by PR',
+                # 標準化後欄位名稱，for new procurement
+                'remarked_by_procurement': 'Remark by PR Team',
+                'noted_by_procurement': 'Noted by PR',
+                'pr_line': 'PR Line'
             }
         )
         
