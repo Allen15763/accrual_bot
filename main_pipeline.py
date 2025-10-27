@@ -655,13 +655,13 @@ if __name__ == "__main__":
     # ))
 
     # Start from specific point
-    # result = asyncio.run(resume_from_step(
-    #     checkpoint_name="SPX_202509_after_Filter_SPX_Products",    # checkpoint資料夾路徑名稱
-    #     start_from_step="Add_Columns",
-    #     # checkpoint_name="SPX_202509_after_Process_Dates",    # checkpoint資料夾路徑名稱
-    #     # start_from_step="Integrate_Closing_List",
-    #     file_paths=file_paths  # 可選,如果 checkpoint 中沒有
-    # ))
+    result = asyncio.run(resume_from_step(
+        checkpoint_name="SPX_202509_after_Filter_SPX_Products",    # checkpoint資料夾路徑名稱
+        start_from_step="Add_Columns",
+        # checkpoint_name="SPX_202509_after_Process_Dates",    # checkpoint資料夾路徑名稱
+        # start_from_step="Integrate_Closing_List",
+        file_paths=file_paths  # 可選,如果 checkpoint 中沒有
+    ))
 
     # 從特定步驟開始，跟resume_from_step類似
     # result = asyncio.run(quick_test_step(
@@ -688,11 +688,11 @@ if __name__ == "__main__":
                        }
         },
         'previous_pr': {
-            'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202509\202508_PR_FN.xlsx",
+            'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202509\202508_PR_FN_改欄名.xlsx",
             'params': {'dtype': str, }
         },
         'procurement_pr': {
-            'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202509\202509_PR_PQ.xlsx",
+            'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202509\202509_PR_PQ_改欄名.xlsx",
             'params': {'dtype': str, }
         },
 

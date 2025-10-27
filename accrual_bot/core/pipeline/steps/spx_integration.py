@@ -937,6 +937,9 @@ class ValidationDataProcessingStep(PipelineStep):
         
         # 修改相關欄位
         df = self._modify_relevant_columns(df)
+
+        # update memo column
+        df = self._update_cumulative_qty_for_ppe(df)
         
         return df
     
@@ -1108,6 +1111,40 @@ class ValidationDataProcessingStep(PipelineStep):
         df.loc[need_to_accrual, 'Liability'] = '200414'
         
         return df
+    
+    def _update_cumulative_qty_for_ppe(
+            self, df: pd.DataFrame,
+            raw_col: str = 'Noted by FN',
+            updated_col: str = 'memo') -> pd.DataFrame:
+        """更新會計摘要
+
+        Args:
+            df: 元資料
+            raw_col: 保留(複製)從前期底稿撈回來的memo欄位資訊. Defaults to 'Noted by FN'.
+            updated_col: 更新qty資訊保留其他字串訊息. Defaults to 'memo'.
+
+        Returns:
+            Dataframe
+        """
+        df_copy = df.copy()
+        df_copy[raw_col] = df_copy[updated_col]
+
+        def convert_qty(x):
+            try:
+                return float(x)
+            except Exception as err:
+                return 0
+            
+        temp_qty = df_copy[updated_col].map(convert_qty)
+        df_copy[updated_col] = df_copy['本期驗收數量/金額'].add(temp_qty, fill_value=0)
+        
+        is_raw_col_not_na = df_copy[raw_col].notna()
+        is_updated_col_zero = df_copy[updated_col] == 0
+        # 從原始memo欄位判斷不是null的值且加總後仍等於零，使用原始資訊
+        df_copy[updated_col] = np.where(is_raw_col_not_na & is_updated_col_zero,
+                                        df_copy[raw_col],
+                                        df_copy[updated_col])
+        return df_copy
     
     async def validate_input(self, context: ProcessingContext) -> bool:
         """驗證輸入"""
