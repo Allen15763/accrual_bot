@@ -16,9 +16,12 @@ from accrual_bot.core.pipeline.steps.common import (ProductFilterStep,
                                                     PreviousWorkpaperIntegrationStep,
                                                     ProcurementIntegrationStep,
                                                     DateLogicStep)
-from accrual_bot.core.pipeline.steps.spx_integration import ColumnAdditionStep, ClosingListIntegrationStep
+from accrual_bot.core.pipeline.steps.spx_integration import (ColumnAdditionStep, 
+                                                             ClosingListIntegrationStep, 
+                                                             PRDataReformattingStep)
 from accrual_bot.core.pipeline.steps.spx_loading import SPXPRDataLoadingStep
-from accrual_bot.core.pipeline.steps.spx_evaluation import StatusStage1Step, SPXERMLogicStep
+from accrual_bot.core.pipeline.steps.spx_evaluation import StatusStage1Step
+from accrual_bot.core.pipeline.steps.spx_pr_evaluation import SPXPRERMLogicStep
 
 
 class SPXDepositCheckStep(PipelineStep):
@@ -749,10 +752,10 @@ def create_spx_pr_complete_pipeline(file_paths: Dict[str, str]) -> Pipeline:
                 .add_step(DateLogicStep(name="PR_Process_Dates", required=True))
                 .add_step(ClosingListIntegrationStep(name="PR_Integrate_Closing_List", required=True))
                 .add_step(StatusStage1Step(name="PR_Evaluate_Status_Stage1", required=True))
-                .add_step(SPXERMLogicStep(name="PR_Apply_ERM_Logic", required=True, retry_count=0))
-                
+                .add_step(SPXPRERMLogicStep(name="PR_Apply_ERM_Logic", required=True, retry_count=0))
                 
                 # # ========== 階段4: 後處理 ==========
+                .add_step(PRDataReformattingStep(name="PR_Reformat_Data", required=True))
                 )
     
     return pipeline.build()

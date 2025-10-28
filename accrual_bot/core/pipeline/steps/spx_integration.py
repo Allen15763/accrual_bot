@@ -1454,6 +1454,189 @@ class DataReformattingStep(PipelineStep):
         return True
     
 
+class PRDataReformattingStep(DataReformattingStep):
+    """
+    數據格式化和重組步驟
+    
+    功能:
+    1. 格式化數值列
+    2. 格式化日期列
+    3. 清理 nan 值
+    4. 重新排列欄位順序
+    5. 添加分類和關鍵字匹配
+    
+    輸入: DataFrame
+    輸出: Formatted DataFrame ready for export
+    """
+    
+    def __init__(self, name: str = "DataReformatting", **kwargs):
+        super().__init__(name, **kwargs)
+    
+    async def execute(self, context: ProcessingContext) -> StepResult:
+        """執行數據格式化"""
+        start_time = time.time()
+        try:
+            df = context.data.copy()
+            
+            self.logger.info("Reformatting data...")
+            
+            # 格式化數值列
+            df = self._format_numeric_columns(df)
+            
+            # 格式化日期列
+            df = self._reformat_dates(df)
+            
+            # 清理 nan 值
+            df = self._clean_nan_values(df)
+            
+            # 重新排列欄位
+            df = self._rearrange_columns(df)
+            
+            # 添加分類
+            df = self._add_classification(df)
+            
+            # 添加關鍵字匹配
+            df = self._add_keyword_matching(df)
+            
+            # 重新命名欄位名稱、資料型態
+            df = self._rename_columns_dtype(df)
+
+            # 確保review AP等欄位在最後
+            df = self._rearrange_columns(df)
+            
+            # 將含有暫時性計算欄位的結果存為附件
+            if isinstance(df, pd.DataFrame) and not df.empty:
+                data_name = 'result_with_temp_cols'
+                data_copy = df.copy()
+                context.add_auxiliary_data(data_name, data_copy)
+                self.logger.info(
+                    f"Added auxiliary data: {data_name} {data_copy.shape} shape)"
+                )
+
+            # 移除臨時欄位
+            df = self._remove_temp_columns(df)
+            
+            context.update_data(df)
+            
+            self.logger.info("Data reformatting completed")
+            duration = time.time() - start_time
+            
+            return StepResult(
+                step_name=self.name,
+                status=StepStatus.SUCCESS,
+                data=df,
+                message="Data reformatted successfully",
+                duration=duration,
+                metadata={
+                    'total_columns': len(df.columns),
+                    'total_rows': len(df)
+                }
+            )
+            
+        except Exception as e:
+            self.logger.error(f"Data reformatting failed: {str(e)}", exc_info=True)
+            context.add_error(f"Data reformatting failed: {str(e)}")
+            duration = time.time() - start_time
+            return StepResult(
+                step_name=self.name,
+                status=StepStatus.FAILED,
+                error=e,
+                duration=duration,
+                message=str(e)
+            )
+    
+    def _clean_nan_values(self, df: pd.DataFrame) -> pd.DataFrame:
+        """清理 nan 值"""
+        columns_to_clean = [
+            '是否估計入帳', 'PR Product Code Check', 'PR狀態',
+            'Accr. Amount', '是否為FA', 'Region_c', 'Dep.'
+        ]
+        
+        for col in columns_to_clean:
+            if col in df.columns:
+                df[col] = df[col].replace('nan', pd.NA)
+                df[col] = df[col].replace('<NA>', pd.NA)
+        
+        # 特殊處理 Accr. Amount
+        if 'Accr. Amount' in df.columns:
+            try:
+                df['Accr. Amount'] = (
+                    df['Accr. Amount'].astype('string').str.replace(',', '')
+                    .replace('nan', '0')
+                    .replace('<NA>', '0')
+                    .astype('Float64')
+                )
+                df['Accr. Amount'] = df['Accr. Amount'].apply(lambda x: x if x != 0 else None)
+            except Exception as e:
+                self.logger.warning(f"Failed to clean Accr. Amount: {str(e)}")
+        
+        return df
+    
+    def _rearrange_columns(self, df: pd.DataFrame) -> pd.DataFrame:
+        """重新排列欄位順序"""
+        # 重新排列上月備註欄位位置
+        if 'Remarked by FN' in df.columns and 'Remarked by 上月 FN' in df.columns:
+            fn_index = df.columns.get_loc('Remarked by FN') + 1
+            last_month_col = df.pop('Remarked by 上月 FN')
+            df.insert(fn_index, 'Remarked by 上月 FN', last_month_col)
+        
+        if 'Remarked by 上月 FN' in df.columns and 'Remarked by 上月 FN PR' in df.columns:
+            fn_pr_index = df.columns.get_loc('Remarked by 上月 FN') + 1
+            last_month_pr_col = df.pop('Remarked by 上月 FN PR')
+            df.insert(fn_pr_index, 'Remarked by 上月 FN PR', last_month_pr_col)
+        
+        # 重新排列 PR 狀態欄位位置
+        if 'PR狀態' in df.columns and '是否估計入帳' in df.columns:
+            accrual_index = df.columns.get_loc('是否估計入帳')
+            po_status_col = df.pop('PR狀態')
+            df.insert(accrual_index, 'PR狀態', po_status_col)
+        
+        # 重新排列 PR 欄位位置
+        if 'Noted by Procurement' in df.columns:
+            noted_index = df.columns.get_loc('Noted by Procurement') + 1
+            
+            for col_name in ['Remarked by Procurement PR', 'Noted by Procurement PR']:
+                if col_name in df.columns:
+                    col = df.pop(col_name)
+                    df.insert(noted_index, col_name, col)
+                    noted_index += 1
+        
+        if 'Question from Reviewer' in df.columns and 'Check by AP' in df.columns:
+            # Get all columns except the two you want to move
+            cols = [col for col in df.columns if col not in ['Question from Reviewer', 'Check by AP']]
+            # Add the two columns at the end
+            cols = cols + ['Question from Reviewer', 'Check by AP']
+            # Reorder the dataframe
+            df = df[cols]
+        
+        if len([col for col in df.columns if col in ['question_from_reviewer', 'check_by_ap']]) == 2:
+            cols = [col for col in df.columns if col not in ['question_from_reviewer', 'check_by_ap']]
+            cols = cols + ['question_from_reviewer', 'check_by_ap']
+            df = df[cols]
+
+        return df
+    
+    def _remove_temp_columns(self, df: pd.DataFrame) -> pd.DataFrame:
+        """移除臨時計算列"""
+        temp_columns = ['檔案日期', 'Expected Received Month_轉換格式', 'YMs of Item Description',
+                        'expected_received_month_轉換格式', 'yms_of_item_description',
+                        'remarked_by_procurement_pr', 'noted_by_procurement_pr', '']
+        
+        for col in temp_columns:
+            if col in df.columns:
+                df.drop(columns=[col], inplace=True)
+        
+        return df
+    
+    async def validate_input(self, context: ProcessingContext) -> bool:
+        """驗證輸入"""
+        if context.data is None or context.data.empty:
+            self.logger.error("No data for reformatting")
+            return False
+        
+        return True
+    
+
 class PPEDataCleaningStep(PipelineStep):
     """
     PPE 數據清理與標準化步驟

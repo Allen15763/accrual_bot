@@ -577,7 +577,7 @@ if __name__ == "__main__":
                        }
         },
         'previous': {
-            'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202509\202508_PO_FN.xlsx",
+            'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202509\202508_PO_FN.xlsx",  # ..._改小寫，也行
             'params': {'sheet_name': 0, 'header': 0, 'dtype': str, }
         },
         'procurement_po': {
@@ -652,7 +652,7 @@ if __name__ == "__main__":
     # result = asyncio.run(execute_with_checkpoint(
     #     file_paths=file_paths,
     #     processing_date=202509,
-    #     save_checkpoints=True
+    #     save_checkpoints=False
     # ))
 
     # Start from specific point
