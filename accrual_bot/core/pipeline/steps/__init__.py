@@ -47,6 +47,12 @@ from .spx_steps import (
     SPXPPEProcessingStep
 )
 
+# SPX PR 專用步驟
+from .spx_pr_evaluation import (
+    PRERMConditions,
+    SPXPRERMLogicStep
+)
+
 __all__ = [
     # Common
     'DataCleaningStep',
@@ -80,5 +86,9 @@ __all__ = [
     'SPXRentProcessingStep',
     'SPXAssetValidationStep',
     'SPXComplexStatusStep',
-    'SPXPPEProcessingStep'
+    'SPXPPEProcessingStep',
+    
+    # SPX PR Logic
+    'PRERMConditions',
+    'SPXPRERMLogicStep'
 ]
