@@ -513,3 +513,299 @@ class AccountingOPSExportingStep(PipelineStep):
         
         # 清理資源
         await self._cleanup_resources()
+
+
+class SPXPRExportStep(PipelineStep):
+    """
+    SPX PR 導出步驟
+    
+    功能：將處理完成的 PR 數據導出到 Excel
+    
+    與 SPXExportStep 的差異：
+    - 只輸出主數據（context.data），不處理輔助數據
+    - 檔案名稱格式：{entity_type}_PR_{processing_date}_processed_{timestamp}.xlsx
+    - 單一 sheet 輸出（sheet名稱：'PR'）
+    - 更簡化的邏輯，專注於 PR 數據
+    
+    使用範例：
+        step = SPXPRExportStep(
+            name="ExportPRData",
+            output_dir="output",
+            sheet_name="PR"
+        )
+    """
+    
+    def __init__(
+        self,
+        name: str = "SPXPRExport",
+        output_dir: str = "output",
+        sheet_name: str = "PR",
+        include_index: bool = False,
+        **kwargs
+    ):
+        """
+        初始化 PR 導出步驟
+        
+        Args:
+            name: 步驟名稱
+            output_dir: 輸出目錄路徑
+            sheet_name: Excel sheet 名稱
+            include_index: 是否包含 DataFrame 的 index
+            **kwargs: 其他 PipelineStep 參數
+        """
+        super().__init__(
+            name,
+            description="Export SPX PR processed data to Excel",
+            **kwargs
+        )
+        
+        self.output_dir = Path(output_dir)
+        self.sheet_name = sheet_name
+        self.include_index = include_index
+    
+    async def execute(self, context: ProcessingContext) -> StepResult:
+        """執行 PR 數據導出"""
+        start_time = time.time()
+        start_datetime = datetime.now()
+        
+        try:
+            self.logger.info("=" * 70)
+            self.logger.info("📤 開始導出 SPX PR 處理結果")
+            self.logger.info("=" * 70)
+            
+            # 階段 1: 獲取數據
+            df = context.data.copy()
+            
+            if df.empty:
+                raise ValueError("主數據為空，無法導出")
+            
+            # 階段 2: 清理數據
+            df_export = self._clean_data(df)
+            
+            # 階段 3: 生成輸出路徑
+            output_path = self._generate_output_path(context)
+            
+            # 階段 4: 確保輸出目錄存在
+            self._ensure_output_directory()
+            
+            # 階段 5: 寫入 Excel
+            self._write_to_excel(output_path, df_export)
+            
+            # 計算執行時間
+            duration = time.time() - start_time
+            end_datetime = datetime.now()
+            
+            # 構建 metadata
+            metadata = (
+                StepMetadataBuilder()
+                .set_row_counts(len(df_export), len(df_export))
+                .set_process_counts(processed=len(df_export))
+                .set_time_info(start_datetime, end_datetime)
+                .add_custom('output_path', str(output_path))
+                .add_custom('file_size_bytes', output_path.stat().st_size)
+                .add_custom('columns_exported', len(df_export.columns))
+                .add_custom('sheet_name', self.sheet_name)
+                .build()
+            )
+            
+            self.logger.info("=" * 70)
+            self.logger.info("✅ PR 數據導出完成")
+            self.logger.info(f"📁 輸出路徑：{output_path}")
+            self.logger.info(f"📊 導出記錄：{len(df_export):,} 筆")
+            self.logger.info(f"📋 欄位數量：{len(df_export.columns)} 個")
+            self.logger.info(f"⏱️  執行時間：{duration:.2f} 秒")
+            self.logger.info("=" * 70)
+            
+            # 儲存輸出路徑到 context（供後續使用或參考）
+            context.set_variable('pr_export_output_path', str(output_path))
+            
+            return StepResult(
+                step_name=self.name,
+                status=StepStatus.SUCCESS,
+                message=f"成功導出 {len(df_export):,} 筆 PR 數據到 {output_path.name}",
+                duration=duration,
+                metadata=metadata
+            )
+            
+        except Exception as e:
+            duration = time.time() - start_time
+            
+            self.logger.error(f"❌ PR 數據導出失敗：{str(e)}", exc_info=True)
+            context.add_error(f"PR 導出失敗：{str(e)}")
+            
+            error_metadata = create_error_metadata(
+                e, context, self.name,
+                output_dir=str(self.output_dir),
+                stage='pr_export'
+            )
+            
+            return StepResult(
+                step_name=self.name,
+                status=StepStatus.FAILED,
+                error=e,
+                message=f"導出失敗：{str(e)}",
+                duration=duration,
+                metadata=error_metadata
+            )
+    
+    def _clean_data(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        清理數據，準備導出
+        
+        清理操作：
+        1. 替換 <NA> 為 pandas NA
+        2. 移除完全空白的行（可選）
+        
+        Args:
+            df: 原始數據
+            
+        Returns:
+            pd.DataFrame: 清理後的數據
+        """
+        self.logger.debug("清理導出數據...")
+        
+        # 替換 <NA> 值
+        df_clean = df.replace('<NA>', pd.NA)
+        
+        # 記錄清理結果
+        self.logger.debug(f"  ✓ 數據清理完成：{len(df_clean)} 行")
+        
+        return df_clean
+    
+    def _generate_output_path(self, context: ProcessingContext) -> Path:
+        """
+        生成輸出檔案路徑
+        
+        檔案命名格式：{entity_type}_PR_{processing_date}_processed_{timestamp}.xlsx
+        
+        Args:
+            context: 處理上下文
+            
+        Returns:
+            Path: 輸出檔案路徑
+        """
+        # 準備檔案名稱組件
+        entity_type = context.metadata.entity_type
+        processing_date = context.metadata.processing_date
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        
+        # 生成檔案名稱
+        filename = f"{entity_type}_PR_{processing_date}_processed_{timestamp}.xlsx"
+        
+        # 生成完整路徑
+        output_path = self.output_dir / filename
+        
+        # 確保檔案名稱唯一（避免覆蓋）
+        counter = 1
+        original_path = output_path
+        while output_path.exists():
+            stem = original_path.stem
+            suffix = original_path.suffix
+            filename = f"{stem}_{counter}{suffix}"
+            output_path = self.output_dir / filename
+            counter += 1
+            
+            if counter > 100:  # 安全限制
+                raise RuntimeError("無法生成唯一的檔案名稱（已嘗試 100 次）")
+        
+        self.logger.debug(f"生成輸出路徑：{output_path}")
+        return output_path
+    
+    def _ensure_output_directory(self):
+        """確保輸出目錄存在"""
+        if not self.output_dir.exists():
+            self.output_dir.mkdir(parents=True, exist_ok=True)
+            self.logger.debug(f"創建輸出目錄：{self.output_dir}")
+    
+    def _write_to_excel(self, output_path: Path, df: pd.DataFrame):
+        """
+        寫入 Excel 檔案
+        
+        使用 pd.ExcelWriter 確保數據正確寫入
+        
+        Args:
+            output_path: 輸出檔案路徑
+            df: 要寫入的數據
+        """
+        self.logger.debug(f"寫入 Excel：{output_path}")
+        
+        try:
+            with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
+                df.to_excel(
+                    writer,
+                    sheet_name=self.sheet_name,
+                    index=self.include_index
+                )
+            
+            self.logger.debug(
+                f"  ✓ 成功寫入 sheet '{self.sheet_name}'："
+                f"{len(df)} 行，{len(df.columns)} 列"
+            )
+            
+        except Exception as e:
+            self.logger.error(f"寫入 Excel 失敗：{str(e)}")
+            raise
+    
+    async def validate_input(self, context: ProcessingContext) -> bool:
+        """
+        驗證輸入數據
+        
+        檢查項目：
+        1. 主數據不為空
+        2. 處理類型為 PR
+        3. 輸出目錄路徑有效
+        
+        Args:
+            context: 處理上下文
+            
+        Returns:
+            bool: 驗證是否通過
+        """
+        # 檢查主數據
+        if context.data is None or context.data.empty:
+            self.logger.error("❌ 主數據為空，無法導出")
+            context.add_error("主數據為空，無法導出")
+            return False
+        
+        # 檢查處理類型（可選，取決於是否需要強制 PR）
+        if context.metadata.processing_type != "PR":
+            self.logger.warning(
+                f"⚠️  處理類型不是 PR（當前：{context.metadata.processing_type}），"
+                "但仍繼續導出"
+            )
+        
+        # 檢查輸出目錄路徑是否有效
+        try:
+            # 嘗試創建目錄（如果不存在）
+            if not self.output_dir.exists():
+                self.output_dir.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            self.logger.error(f"❌ 無效的輸出目錄：{str(e)}")
+            context.add_error(f"無效的輸出目錄：{str(e)}")
+            return False
+        
+        self.logger.debug("✅ 輸入驗證通過")
+        return True
+    
+    async def rollback(self, context: ProcessingContext, error: Exception):
+        """
+        回滾操作
+        
+        如果導出過程中產生部分檔案，嘗試刪除
+        
+        Args:
+            context: 處理上下文
+            error: 觸發回滾的錯誤
+        """
+        self.logger.warning(f"⚠️  回滾 PR 導出：{str(error)}")
+        
+        # 檢查是否有部分寫入的檔案
+        output_path_str = context.get_variable('pr_export_output_path')
+        if output_path_str:
+            output_path = Path(output_path_str)
+            if output_path.exists():
+                try:
+                    output_path.unlink()
+                    self.logger.info(f"✓ 已刪除部分輸出檔案：{output_path}")
+                except Exception as e:
+                    self.logger.error(f"❌ 無法刪除部分輸出檔案：{str(e)}")

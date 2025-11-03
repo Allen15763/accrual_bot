@@ -560,6 +560,43 @@ async def example_usage():
     print("\n情境 5: 清理舊 checkpoints")
     checkpoint_manager.delete_checkpoint("SPX_202509_after_Load_All_Data")
 
+    
+async def run_pr_full_pipeline():
+    
+    file_paths_pr = {
+        'raw_pr': {
+            'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202510\202510_purchase_request.xlsx",
+            'params': {'encoding': 'utf-8', 
+                       'sep': ',', 
+                       'dtype': str, 
+                       'keep_default_na': False, 
+                       'na_values': ['']
+                       }
+        },
+        'previous_pr': {
+            'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202510\202509_PR_FN.xlsx",  # xxx_改欄名，暫不需要
+            'params': {'dtype': str, }
+        },
+        'procurement_pr': {
+            'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202510\202510_PR_PQ.xlsx",
+            'params': {'dtype': str, }
+        },
+
+    }
+    
+    result = await execute_pr_with_checkpoint(
+        file_paths=file_paths_pr,
+        processing_date=202510,
+        save_checkpoints=False
+    )
+
+    timestamp = pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')
+    # result.get('context').data.to_excel(f'./output/SPX_PR_202510_processed_{timestamp}.xlsx', index=False)
+    # result.get('context').get_auxiliary_data('result_with_temp_cols')
+    
+    print(f"導出狀態: {result['success']}")
+    print(f"輸出路徑: {result['context'].get_variable('pr_export_output_path')}")
+
 
 if __name__ == "__main__":
     import warnings
@@ -589,7 +626,7 @@ if __name__ == "__main__":
             'params': {}
         },
         'previous_pr': {
-            'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202510\202509_PR_FN.xlsx",
+            'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202510\202509_PR_FN_V2.xlsx",
             'params': {'dtype': str, }
         },
         'procurement_pr': {
@@ -597,7 +634,7 @@ if __name__ == "__main__":
             'params': {'dtype': str, }
         },
         'ops_validation': {
-            'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202510\SPX智取櫃及繳費機驗收明細_FN下載v1.xlsx",
+            'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202510\SPX智取櫃及繳費機驗收明細(For FN)_2510.xlsx",
             'params': {
                 'sheet_name': '智取櫃驗收明細',
                 'header': 1,  # 第二行作為表頭
@@ -638,32 +675,5 @@ if __name__ == "__main__":
     # ))
 
     # Run PR
-    file_paths_pr = {
-        'raw_pr': {
-            'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202510\202510_purchase_request.xlsx",
-            'params': {'encoding': 'utf-8', 
-                       'sep': ',', 
-                       'dtype': str, 
-                       'keep_default_na': False, 
-                       'na_values': ['']
-                       }
-        },
-        'previous_pr': {
-            'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202510\202509_PR_FN.xlsx",  # xxx_改欄名，暫不需要
-            'params': {'dtype': str, }
-        },
-        'procurement_pr': {
-            'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202510\202510_PR_PQ.xlsx",
-            'params': {'dtype': str, }
-        },
-
-    }
-    # result = asyncio.run(execute_pr_with_checkpoint(
-    #     file_paths=file_paths_pr,
-    #     processing_date=202510,
-    #     save_checkpoints=False
-    # ))
-    # timestamp = pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')
-    # result.get('context').data.to_excel(f'./output/SPX_PR_202510_processed_{timestamp}.xlsx', index=False)
-    
+    asyncio.run(run_pr_full_pipeline())
     print(1)

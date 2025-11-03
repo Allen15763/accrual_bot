@@ -145,7 +145,7 @@ def run_accounting_ops_validation(
     result = asyncio.run(pipeline.execute(context))
     
     # 檢查執行結果
-    if result.get('success') != 'success':
+    if not result.get('success'):
         error_msg = f"Pipeline 執行失敗: {result.get('errors')}"
         logger.error(error_msg)
         raise Exception(error_msg)
@@ -312,9 +312,9 @@ if __name__ == "__main__":
     print("-" * 60)
     
     context, data = run_accounting_ops_validation(
-        accounting_file=r'C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202509\202508_PO_FN.xlsx',
-        ops_file=r'C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202509\SPX智取櫃及繳費機驗收明細(For FN)_2509.xlsx',
-        processing_date=202509,
+        accounting_file=r'C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202510\202509_PO_FN_改memo.xlsx',
+        ops_file=r'C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202510\SPX智取櫃及繳費機驗收明細(For FN)_2510.xlsx',
+        processing_date=202510,
         output_dir="output",
         sheet_names={
             'accounting_workpaper': '會計底稿',

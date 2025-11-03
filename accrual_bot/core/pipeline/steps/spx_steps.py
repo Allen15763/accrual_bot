@@ -22,6 +22,7 @@ from accrual_bot.core.pipeline.steps.spx_integration import (ColumnAdditionStep,
 from accrual_bot.core.pipeline.steps.spx_loading import SPXPRDataLoadingStep
 from accrual_bot.core.pipeline.steps.spx_evaluation import StatusStage1Step
 from accrual_bot.core.pipeline.steps.spx_pr_evaluation import SPXPRERMLogicStep
+from accrual_bot.core.pipeline.steps.spx_exporting import SPXPRExportStep
 
 
 class SPXDepositCheckStep(PipelineStep):
@@ -756,6 +757,17 @@ def create_spx_pr_complete_pipeline(file_paths: Dict[str, str]) -> Pipeline:
                 
                 # # ========== 階段4: 後處理 ==========
                 .add_step(PRDataReformattingStep(name="PR_Reformat_Data", required=True))
+                # ========== 階段 5: 導出結果 ========== (新增！)
+                .add_step(
+                    SPXPRExportStep(
+                        name="PR_Export_Results",
+                        output_dir="output",              # 輸出目錄
+                        sheet_name="PR",                  # Sheet 名稱
+                        include_index=False,              # 不包含索引
+                        required=True,                    # 必需步驟
+                        retry_count=0                     # 失敗重試0次
+                    )
                 )
-    
+                )
+
     return pipeline.build()

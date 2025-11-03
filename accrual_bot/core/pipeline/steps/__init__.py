@@ -52,6 +52,7 @@ from .spx_pr_evaluation import (
     PRERMConditions,
     SPXPRERMLogicStep
 )
+from .spx_exporting import SPXPRExportStep
 
 __all__ = [
     # Common
@@ -90,5 +91,6 @@ __all__ = [
     
     # SPX PR Logic
     'PRERMConditions',
-    'SPXPRERMLogicStep'
+    'SPXPRERMLogicStep',
+    'SPXPRExportStep'
 ]
