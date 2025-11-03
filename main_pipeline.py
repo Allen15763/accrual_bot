@@ -568,7 +568,7 @@ if __name__ == "__main__":
 
     file_paths = {
         'raw_po': {
-            'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202509\202509_purchase_order.csv",
+            'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202510\202510_purchase_order.csv",
             'params': {'encoding': 'utf-8', 
                        'sep': ',', 
                        'dtype': str, 
@@ -577,27 +577,27 @@ if __name__ == "__main__":
                        }
         },
         'previous': {
-            'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202509\202508_PO_FN.xlsx",  # ..._改小寫，也行
+            'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202510\202509_PO_FN.xlsx",  # ..._改小寫，也行
             'params': {'sheet_name': 0, 'header': 0, 'dtype': str, }
         },
         'procurement_po': {
-            'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202509\202509_PO_PQ.xlsx",
+            'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202510\202510_PO_PQ.xlsx",
             'params': {'dtype': str, }
         },
         'ap_invoice': {
-            'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202509\202509_AP_Invoice_Match_Monitoring_Ext.xlsx",
+            'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202510\202510_AP_Invoice_Match_Monitoring_Ext.xlsx",
             'params': {}
         },
         'previous_pr': {
-            'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202509\202508_PR_FN.xlsx",
+            'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202510\202509_PR_FN.xlsx",
             'params': {'dtype': str, }
         },
         'procurement_pr': {
-            'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202509\202509_PR_PQ.xlsx",
+            'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202510\202510_PR_PQ.xlsx",
             'params': {'dtype': str, }
         },
         'ops_validation': {
-            'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202509\SPX智取櫃及繳費機驗收明細(For FN)_2509.xlsx",
+            'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202510\SPX智取櫃及繳費機驗收明細_FN下載v1.xlsx",
             'params': {
                 'sheet_name': '智取櫃驗收明細',
                 'header': 1,  # 第二行作為表頭
@@ -606,54 +606,13 @@ if __name__ == "__main__":
             }
         }
     }
-
-    # file_paths = {
-    #     'raw_po': {
-    #         'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202508\SPX未結For 機器人\202508_purchase_order.csv",
-    #         'params': {'encoding': 'utf-8', 
-    #                    'sep': ',', 
-    #                    'dtype': str, 
-    #                    'keep_default_na': False, 
-    #                    'na_values': ['']
-    #                    }
-    #     },
-    #     'previous': {
-    #         'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202508\SPX未結For 機器人\202507_PO_FN.xlsx",
-    #         'params': {'sheet_name': 0, 'header': 0, 'dtype': str, }
-    #     },
-    #     'procurement_po': {
-    #         'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202508\SPX未結For 機器人\202508_PO_PQ.xlsx",
-    #         'params': {'dtype': str, }
-    #     },
-    #     'ap_invoice': {
-    #         'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202508\SPX未結For 機器人\AP_Invoice_Match_Monitoring_Ext (NEW).xlsx",
-    #         'params': {}
-    #     },
-    #     'previous_pr': {
-    #         'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202508\SPX未結For 機器人\202507_PR_FN.xlsx",
-    #         'params': {'dtype': str, }
-    #     },
-    #     'procurement_pr': {
-    #         'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202508\SPX未結For 機器人\202508_PR_PQ.xlsx",
-    #         'params': {'dtype': str, }
-    #     },
-    #     'ops_validation': {
-    #         'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202508\SPX未結For 機器人\SPX智取櫃及繳費機驗收明細(For FN)_2508_修復.xlsx",
-    #         'params': {
-    #             'sheet_name': '智取櫃驗收明細',
-    #             'header': 1,  # 第二行作為表頭
-    #             'usecols': 'A:AE',
-    #             # 'dtype': str, 
-    #         }
-    #     }
-    # }
     
     # Run all steps
-    # result = asyncio.run(execute_with_checkpoint(
-    #     file_paths=file_paths,
-    #     processing_date=202509,
-    #     save_checkpoints=False
-    # ))
+    result = asyncio.run(execute_with_checkpoint(
+        file_paths=file_paths,
+        processing_date=202510,
+        save_checkpoints=True
+    ))
 
     # Start from specific point
     # result = asyncio.run(resume_from_step(
@@ -681,7 +640,7 @@ if __name__ == "__main__":
     # Run PR
     file_paths_pr = {
         'raw_pr': {
-            'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202509\202509_purchase_request.xlsx",
+            'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202510\202510_purchase_request.xlsx",
             'params': {'encoding': 'utf-8', 
                        'sep': ',', 
                        'dtype': str, 
@@ -690,19 +649,21 @@ if __name__ == "__main__":
                        }
         },
         'previous_pr': {
-            'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202509\202508_PR_FN.xlsx",  # xxx_改欄名，暫不需要
+            'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202510\202509_PR_FN.xlsx",  # xxx_改欄名，暫不需要
             'params': {'dtype': str, }
         },
         'procurement_pr': {
-            'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202509\202509_PR_PQ.xlsx",
+            'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202510\202510_PR_PQ.xlsx",
             'params': {'dtype': str, }
         },
 
     }
-    result = asyncio.run(execute_pr_with_checkpoint(
-        file_paths=file_paths_pr,
-        processing_date=202509,
-        save_checkpoints=False
-    ))
+    # result = asyncio.run(execute_pr_with_checkpoint(
+    #     file_paths=file_paths_pr,
+    #     processing_date=202510,
+    #     save_checkpoints=False
+    # ))
+    # timestamp = pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')
+    # result.get('context').data.to_excel(f'./output/SPX_PR_202510_processed_{timestamp}.xlsx', index=False)
     
     print(1)
