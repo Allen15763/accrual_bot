@@ -848,10 +848,3 @@ class SPXPRERMLogicStep(PipelineStep):
         self.logger.warning(f"⚠️  回滾 PR ERM 邏輯：{str(error)}")
         # 如有需要，可在此處添加清理邏輯
 
-
-# ========== 導出到模組 ==========
-
-__all__ = [
-    'PRERMConditions',
-    'SPXPRERMLogicStep'
-]
