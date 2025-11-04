@@ -1225,6 +1225,8 @@ class DataReformattingStep(PipelineStep):
 
             # 移除臨時欄位
             df = self._remove_temp_columns(df)
+            # reformat ERM
+            df = self._reformat_erm(df)
             
             context.update_data(df)
             
@@ -1445,6 +1447,15 @@ class DataReformattingStep(PipelineStep):
         df_copy = df_copy.rename(columns={'Product code': 'product_code_c'})
         return clean_po_data(df_copy)
     
+    def _reformat_erm(self, df):
+        df['expected_receive_month'] = (
+            pd.to_datetime(df['expected_receive_month'], 
+                           format='%b-%y',
+                           errors='coerce')
+            .dt.strftime('%Y/%m')
+        )
+        return df
+    
     async def validate_input(self, context: ProcessingContext) -> bool:
         """驗證輸入"""
         if context.data is None or context.data.empty:
@@ -1515,6 +1526,8 @@ class PRDataReformattingStep(DataReformattingStep):
 
             # 移除臨時欄位
             df = self._remove_temp_columns(df)
+            # reformat ERM
+            df = self._reformat_erm(df)
             
             context.update_data(df)
             
