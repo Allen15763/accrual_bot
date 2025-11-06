@@ -71,9 +71,10 @@ class CheckpointManager:
         # 生成 checkpoint 名稱
         entity_type = context.metadata.entity_type or "unknown"
         processing_date = context.metadata.processing_date or "unknown"
+        processing_type = context.metadata.processing_type or "unknown"
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         
-        checkpoint_name = f"{entity_type}_{processing_date}_after_{step_name}"
+        checkpoint_name = f"{entity_type}_{processing_type}_{processing_date}_after_{step_name}"
         checkpoint_path = self.checkpoint_dir / checkpoint_name
         checkpoint_path.mkdir(parents=True, exist_ok=True)
         
@@ -646,7 +647,7 @@ async def run_spt_po_full_pipeline():
 
     result: dict = await execute_pipeline_with_checkpoint(
         file_paths=file_paths,
-        processing_date=202510,
+        processing_date=202509,
         pipeline_func=create_spt_po_complete_pipeline,
         entity='SPT',
         save_checkpoints=True,
@@ -666,12 +667,9 @@ if __name__ == "__main__":
     # Start from specific point
     # from accrual_bot.core.pipeline.build_pipelines import create_spx_po_complete_pipeline  # 替換成實際路徑
     # result = asyncio.run(resume_from_step(
-    #     checkpoint_name="SPX_202509_after_Filter_SPX_Products",    # checkpoint資料夾路徑名稱
+    #     checkpoint_name="SPX_PO_202510_after_Filter_SPX_Products",    # checkpoint資料夾路徑名稱
     #     start_from_step="Add_Columns",
     #     pipeline_func=create_spx_po_complete_pipeline,
-    #     # checkpoint_name="SPX_202509_after_Process_Dates",    # checkpoint資料夾路徑名稱
-    #     # start_from_step="Integrate_Closing_List",
-    #     file_paths=file_paths,  # 可選,如果 checkpoint 中沒有
     #     save_checkpoints=False
     # ))
 
@@ -689,17 +687,14 @@ if __name__ == "__main__":
     # result = asyncio.run(run_spx_pr_full_pipeline())
 
     # Run SPT
-    result = asyncio.run(run_spt_po_full_pipeline())
+    # result = asyncio.run(run_spt_po_full_pipeline())
 
-    # from accrual_bot.core.pipeline.build_pipelines import create_spt_po_complete_pipeline  # 替換成實際路徑
-    # result = asyncio.run(resume_from_step(
-    #     checkpoint_name="SPR_202510_SPT_PO_Filter_Products",    # checkpoint資料夾路徑名稱
-    #     start_from_step="SPT_PO_Add_Columns",
-    #     pipeline_func=create_spt_po_complete_pipeline,
-    #     # checkpoint_name="SPX_202509_after_Process_Dates",    # checkpoint資料夾路徑名稱
-    #     # start_from_step="Integrate_Closing_List",
-    #     file_paths=file_paths,  # 可選,如果 checkpoint 中沒有
-    #     save_checkpoints=False
-    # ))
+    from accrual_bot.core.pipeline.build_pipelines import create_spt_po_complete_pipeline  # 替換成實際路徑
+    result = asyncio.run(resume_from_step(
+        checkpoint_name="SPT_PO_202509_after_Filter_Products",    # checkpoint資料夾路徑名稱
+        start_from_step="Add_Columns",                            # 下一步的名稱(在pipeline物件中的)
+        pipeline_func=create_spt_po_complete_pipeline,
+        save_checkpoints=False
+    ))
 
     print(1)

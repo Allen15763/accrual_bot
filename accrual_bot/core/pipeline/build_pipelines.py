@@ -28,7 +28,7 @@ def create_spt_po_complete_pipeline(file_paths: Dict[str, str]) -> Pipeline:
     """
     
     # 創建 Pipeline Builder
-    builder = PipelineBuilder("SPX_PO_Complete", "SPX")
+    builder = PipelineBuilder("SPT_PO_Complete", "SPT")
     
     # 配置 Pipeline
     pipeline = (builder
@@ -37,7 +37,7 @@ def create_spt_po_complete_pipeline(file_paths: Dict[str, str]) -> Pipeline:
                 #  ========== 階段 1: 數據載入 ==========
                 .add_step(
                     steps.SPTDataLoadingStep(
-                        name="SPT_PO_Load_All_Data",
+                        name="Load_All_Data",
                         file_paths=file_paths,
                         required=True,
                         retry_count=1,  # 載入失敗重試1次
@@ -48,16 +48,16 @@ def create_spt_po_complete_pipeline(file_paths: Dict[str, str]) -> Pipeline:
                 # ========== 階段 2: 數據準備與整合 ==========
                 .add_step(
                     steps.ProductFilterStep(
-                        name="SPT_PO_Filter_Products",
+                        name="Filter_Products",
                         product_pattern='(?i)SPX',
                         exclude=True,
                         required=True
                     )
                 )
-                .add_step(steps.ColumnAdditionStep(name="SPT_PO_Add_Columns", required=True))
-                .add_step(steps.APInvoiceIntegrationStep(name="SPT_PO_Integrate_AP_Invoice", required=True))
-                .add_step(steps.PreviousWorkpaperIntegrationStep(name="SPT_PO_Integrate_Previous_WP", required=True))
-                .add_step(steps.ProcurementIntegrationStep(name="SPT_PO_Integrate_Procurement", required=True))
+                .add_step(steps.ColumnAdditionStep(name="Add_Columns", required=True))
+                .add_step(steps.APInvoiceIntegrationStep(name="Integrate_AP_Invoice", required=True))
+                .add_step(steps.PreviousWorkpaperIntegrationStep(name="Integrate_Previous_WP", required=True))
+                .add_step(steps.ProcurementIntegrationStep(name="Integrate_Procurement", required=True))
                 
                 # ========== 階段3: 業務邏輯 ==========
 
@@ -179,7 +179,7 @@ def create_spx_pr_complete_pipeline(file_paths: Dict[str, str]) -> Pipeline:
                 #  ========== 階段 1: 數據載入 ==========
                 .add_step(
                     steps.SPXPRDataLoadingStep(
-                        name="PR_Load_All_Data",
+                        name="Load_All_Data",
                         file_paths=file_paths,
                         required=True,
                         retry_count=2,  # 載入失敗重試2次
@@ -190,27 +190,27 @@ def create_spx_pr_complete_pipeline(file_paths: Dict[str, str]) -> Pipeline:
                 # ========== 階段 2: 數據準備與整合 ==========
                 .add_step(
                     steps.ProductFilterStep(
-                        name="PR_Filter_Products",
+                        name="Filter_Products",
                         product_pattern='(?i)LG_SPX',
                         required=True
                     )
                 )
-                .add_step(steps.ColumnAdditionStep(name="PR_Add_Columns", required=True))
-                .add_step(steps.PreviousWorkpaperIntegrationStep(name="PR_Integrate_Previous_WP", required=True))
-                .add_step(steps.ProcurementIntegrationStep(name="PR_Integrate_Procurement", required=True))
+                .add_step(steps.ColumnAdditionStep(name="Add_Columns", required=True))
+                .add_step(steps.PreviousWorkpaperIntegrationStep(name="Integrate_Previous_WP", required=True))
+                .add_step(steps.ProcurementIntegrationStep(name="Integrate_Procurement", required=True))
                 
                 # # ========== 階段3: 業務邏輯 ==========
-                .add_step(steps.DateLogicStep(name="PR_Process_Dates", required=True))
-                .add_step(steps.ClosingListIntegrationStep(name="PR_Integrate_Closing_List", required=True))
-                .add_step(steps.StatusStage1Step(name="PR_Evaluate_Status_Stage1", required=True))
-                .add_step(steps.SPXPRERMLogicStep(name="PR_Apply_ERM_Logic", required=True, retry_count=0))
+                .add_step(steps.DateLogicStep(name="Process_Dates", required=True))
+                .add_step(steps.ClosingListIntegrationStep(name="Integrate_Closing_List", required=True))
+                .add_step(steps.StatusStage1Step(name="Evaluate_Status_Stage1", required=True))
+                .add_step(steps.SPXPRERMLogicStep(name="Apply_ERM_Logic", required=True, retry_count=0))
                 
                 # # ========== 階段4: 後處理 ==========
-                .add_step(steps.PRDataReformattingStep(name="PR_Reformat_Data", required=True))
+                .add_step(steps.PRDataReformattingStep(name="Reformat_Data", required=True))
                 # ========== 階段 5: 導出結果 ========== (新增！)
                 .add_step(
                     steps.SPXPRExportStep(
-                        name="PR_Export_Results",
+                        name="Export_Results",
                         output_dir="output",              # 輸出目錄
                         sheet_name="PR",                  # Sheet 名稱
                         include_index=False,              # 不包含索引
