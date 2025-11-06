@@ -60,10 +60,12 @@ def create_spt_po_complete_pipeline(file_paths: Dict[str, str]) -> Pipeline:
                 .add_step(steps.ProcurementIntegrationStep(name="Integrate_Procurement", required=True))
                 
                 # ========== 階段3: 業務邏輯 ==========
-
+                .add_step(steps.CommissionDataUpdateStep(name="Update_Commission_Data", required=True))
+                .add_step(steps.DateLogicStep(name="Process_Dates", required=True))
+                .add_step(steps.SPTERMLogicStep(name="Apply_ERM_Logic", required=True, retry_count=0))
 
                 # ========== 階段4: 後處理 ==========
-
+                .add_step(steps.DataReformattingStep(name="Reformat_Data", required=True))
 
                 )
     
