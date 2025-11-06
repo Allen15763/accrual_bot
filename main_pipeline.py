@@ -283,10 +283,11 @@ class PipelineWithCheckpoint:
 # =============================================================================
 # 便捷函數
 # =============================================================================
-
-async def execute_with_checkpoint(
+async def execute_pipeline_with_checkpoint(
     file_paths: Dict[str, str],
     processing_date: int,
+    pipeline_func,
+    entity: str,
     checkpoint_dir: str = "./checkpoints",
     save_checkpoints: bool = True,
     processing_type: str = 'PO'
@@ -297,22 +298,26 @@ async def execute_with_checkpoint(
     Args:
         file_paths: 文件路徑字典
         processing_date: 處理日期
+        pipeline_func: create_xxx_pipeline的function
+        entity: 業務實體名稱
         checkpoint_dir: checkpoint 儲存目錄
         save_checkpoints: 是否儲存 checkpoint
         
     Returns:
         Dict: 執行結果
-    """
-    from accrual_bot.core.pipeline.steps.spx_po_steps import create_spx_po_complete_pipeline  # 替換成實際路徑
-    
+    """    
     # 創建 pipeline 和 checkpoint manager
-    pipeline = create_spx_po_complete_pipeline(file_paths)
+    if processing_type == "PPE":
+        pipeline = pipeline_func(file_paths, processing_date)
+    else:
+        pipeline = pipeline_func(file_paths)
+
     checkpoint_manager = CheckpointManager(checkpoint_dir)
     
     # 創建上下文
     context = ProcessingContext(
         data=pd.DataFrame(),
-        entity_type="SPX",
+        entity_type=entity,
         processing_date=processing_date,
         processing_type=processing_type
     )
@@ -325,94 +330,11 @@ async def execute_with_checkpoint(
     )
     
     return result
-
-async def execute_pr_with_checkpoint(
-    file_paths: Dict[str, str],
-    processing_date: int,
-    checkpoint_dir: str = "./checkpoints",
-    save_checkpoints: bool = True,
-    processing_type: str = 'PR'
-) -> Dict[str, Any]:
-    """
-    執行完整 pipeline 並自動儲存 checkpoint
-    
-    Args:
-        file_paths: 文件路徑字典
-        processing_date: 處理日期
-        checkpoint_dir: checkpoint 儲存目錄
-        save_checkpoints: 是否儲存 checkpoint
-        
-    Returns:
-        Dict: 執行結果
-    """
-    from accrual_bot.core.pipeline.steps.spx_steps import create_spx_pr_complete_pipeline  # 替換成實際路徑
-    
-    # 創建 pipeline 和 checkpoint manager
-    pipeline = create_spx_pr_complete_pipeline(file_paths)
-    checkpoint_manager = CheckpointManager(checkpoint_dir)
-    
-    # 創建上下文
-    context = ProcessingContext(
-        data=pd.DataFrame(),
-        entity_type="SPX",
-        processing_date=processing_date,
-        processing_type=processing_type
-    )
-    
-    # 執行
-    executor = PipelineWithCheckpoint(pipeline, checkpoint_manager)
-    result = await executor.execute_with_checkpoint(
-        context=context,
-        save_after_each_step=save_checkpoints
-    )
-    
-    return result
-
-async def execute_ppe_with_checkpoint(
-    file_paths: str,
-    processing_date: int,
-    checkpoint_dir: str = "./checkpoints",
-    save_checkpoints: bool = True
-) -> Dict[str, Any]:
-    """
-    執行完整 pipeline 並自動儲存 checkpoint
-    
-    Args:
-        file_paths: 文件路徑字串
-        processing_date: 處理日期
-        checkpoint_dir: checkpoint 儲存目錄
-        save_checkpoints: 是否儲存 checkpoint
-        
-    Returns:
-        Dict: 執行結果
-    """
-    from accrual_bot.core.pipeline.steps.spx_po_steps import create_ppe_pipeline  # 替換成實際路徑
-    
-    # 創建 pipeline 和 checkpoint manager
-    pipeline = create_ppe_pipeline(file_paths, processing_date)
-    checkpoint_manager = CheckpointManager(checkpoint_dir)
-    
-    # 創建上下文
-    context = ProcessingContext(
-        data=pd.DataFrame(),
-        entity_type="SPX",
-        processing_date=processing_date,
-        processing_type="PO"
-    )
-    
-    # 執行
-    executor = PipelineWithCheckpoint(pipeline, checkpoint_manager)
-    result = await executor.execute_with_checkpoint(
-        context=context,
-        save_after_each_step=save_checkpoints
-    )
-    
-    return result
-
 
 async def resume_from_step(
     checkpoint_name: str,
     start_from_step: str,
+    pipeline_func,
     file_paths: Optional[Dict[str, str]] = None,
     checkpoint_dir: str = "./checkpoints",
     save_checkpoints: bool = True
@@ -423,13 +345,13 @@ async def resume_from_step(
     Args:
         checkpoint_name: checkpoint 名稱
         start_from_step: 從哪個步驟開始
+        pipeline_func: create_xxx_pipeline的function
         file_paths: 文件路徑 (如果需要重建 pipeline)
         checkpoint_dir: checkpoint 目錄
         
     Returns:
         Dict: 執行結果
     """
-    from accrual_bot.core.pipeline.steps.spx_po_steps import create_spx_po_complete_pipeline  # 替換成實際路徑
     
     # 載入 checkpoint
     checkpoint_manager = CheckpointManager(checkpoint_dir)
@@ -442,7 +364,7 @@ async def resume_from_step(
         if not file_paths:
             raise ValueError("無法獲取文件路徑,請提供 file_paths 參數")
     
-    pipeline = create_spx_po_complete_pipeline(file_paths)
+    pipeline = pipeline_func(file_paths)
     
     # 執行
     executor = PipelineWithCheckpoint(pipeline, checkpoint_manager)
@@ -528,7 +450,7 @@ async def example_usage():
     
     # ========== 情境 1: 首次執行,自動儲存 checkpoint ==========
     print("情境 1: 首次執行")
-    result = await execute_with_checkpoint(
+    result = await execute_pipeline_with_checkpoint(
         file_paths=file_paths,
         processing_date=202509,
         save_checkpoints=True
@@ -561,7 +483,7 @@ async def example_usage():
     checkpoint_manager.delete_checkpoint("SPX_202509_after_Load_All_Data")
 
     
-async def run_pr_full_pipeline():
+async def run_spx_pr_full_pipeline():
     
     file_paths_pr = {
         'raw_pr': {
@@ -584,25 +506,29 @@ async def run_pr_full_pipeline():
 
     }
     
-    result = await execute_pr_with_checkpoint(
+    from accrual_bot.core.pipeline.build_pipelines import create_spx_pr_complete_pipeline
+
+    result = await execute_pipeline_with_checkpoint(
         file_paths=file_paths_pr,
         processing_date=202510,
+        pipeline_func=create_spx_pr_complete_pipeline,
+        entity='SPX',
+        processing_type="PR",
         save_checkpoints=False
     )
 
-    timestamp = pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')
+    # timestamp = pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')
     # result.get('context').data.to_excel(f'./output/SPX_PR_202510_processed_{timestamp}.xlsx', index=False)
     # result.get('context').get_auxiliary_data('result_with_temp_cols')
     
     print(f"導出狀態: {result['success']}")
     print(f"輸出路徑: {result['context'].get_variable('pr_export_output_path')}")
+    return result
 
 
-if __name__ == "__main__":
-    import warnings
-    warnings.filterwarnings('ignore')
-    # asyncio.run(example_usage())
-
+async def run_spx_po_full_pipeline():
+    from accrual_bot.core.pipeline.build_pipelines import create_spx_po_complete_pipeline
+    
     file_paths = {
         'raw_po': {
             'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202510\202510_purchase_order.csv",
@@ -644,17 +570,105 @@ if __name__ == "__main__":
         }
     }
     
-    # Run all steps
-    result = asyncio.run(execute_with_checkpoint(
+    result = await execute_pipeline_with_checkpoint(
         file_paths=file_paths,
         processing_date=202510,
-        save_checkpoints=True
-    ))
+        pipeline_func=create_spx_po_complete_pipeline,
+        entity='SPX',
+        processing_type="PO",
+        save_checkpoints=False
+    )
 
+    return result
+
+
+async def run_spx_ppe_full_pipeline():
+    from accrual_bot.core.pipeline.build_pipelines import create_ppe_pipeline
+
+    result = await execute_pipeline_with_checkpoint(
+        file_paths=r'G:\共用雲端硬碟\INT_TWN_SEA_FN_Shared_Resources\00_Temp_Internal_share\SPX\租金\SPX租金合約歸檔清單及匯款狀態_marge1.xlsx',
+        processing_date=202510,
+        pipeline_func=create_ppe_pipeline,
+        entity='SPX',
+        processing_type="PPE",
+        save_checkpoints=True
+    )
+
+    return result
+
+
+async def run_spt_po_full_pipeline():
+    from accrual_bot.core.pipeline.build_pipelines import create_spt_po_complete_pipeline
+    file_paths = {
+        'raw_po': {
+            'path': r"C:\SEA\Accrual\prpo_bot\resources\頂一下\202509\SPT\SPT 未結PRPO\機器人\202509_purchase_order_20250110_084523.xlsx",
+            'params': {'encoding': 'utf-8', 
+                       'sep': ',', 
+                       'dtype': str, 
+                       'keep_default_na': False, 
+                       'na_values': ['']
+                       }
+        },
+        'previous': {
+            'path': r"C:\SEA\Accrual\prpo_bot\resources\頂一下\202509\SPT\SPT 未結PRPO\機器人\PO_for前期載入.xlsx",
+            'params': {'sheet_name': 0, 'header': 0, 'dtype': str, }
+        },
+        'procurement_po': {
+            'path': r"C:\SEA\Accrual\prpo_bot\resources\頂一下\202509\SPT\SPT 未結PRPO\機器人\202509_PO_未結PO_202509 SPTTW.xlsx",
+            'params': {'dtype': str, }
+        },
+        'ap_invoice': {
+            # 'path': r"C:\SEA\Accrual\prpo_bot\resources\頂一下\202509\SPT\SPT 未結PRPO\機器人\202510_AP_Invoice_Match_Monitoring_Ext.xlsx",
+            'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202510\202510_AP_Invoice_Match_Monitoring_Ext.xlsx",
+            'params': {}
+        },
+        'previous_pr': {
+            'path': r"C:\SEA\Accrual\prpo_bot\resources\頂一下\202509\SPT\SPT 未結PRPO\機器人\PR_for前期載入_copy from 202505.xlsx",
+            'params': {'dtype': str, }
+        },
+        'procurement_pr': {
+            'path': r"C:\SEA\Accrual\prpo_bot\resources\頂一下\202509\SPT\SPT 未結PRPO\機器人\202509_PR_未結PO_202509 SPTTW.xlsx",
+            'params': {'dtype': str, }
+        },
+        'media_finished': {
+            'path': r"C:\SEA\Accrual\prpo_bot\resources\頂一下\202509\SPT\SPT 未結PRPO\Sea TV program coverage list-2025.xlsx",
+            'params': {'dtype': str, 'sheet_name': '2024-2025使用完畢'}
+        },
+        'media_left': {
+            'path': r"C:\SEA\Accrual\prpo_bot\resources\頂一下\202509\SPT\SPT 未結PRPO\Sea TV program coverage list-2025.xlsx",
+            'params': {'dtype': str, 'sheet_name': '2024-25新聞剩餘量'}
+        },
+        'media_summary': {
+            'path': r"C:\SEA\Accrual\prpo_bot\resources\頂一下\202509\SPT\SPT 未結PRPO\Sea TV program coverage list-2025.xlsx",
+            'params': {'dtype': str, 'sheet_name': '2024-2025新聞總表(已用記錄)'}
+        },
+    }
+
+    result: dict = await execute_pipeline_with_checkpoint(
+        file_paths=file_paths,
+        processing_date=202510,
+        pipeline_func=create_spt_po_complete_pipeline,
+        entity='SPT',
+        save_checkpoints=True,
+        processing_type='PO'
+    )
+    return result
+
+
+if __name__ == "__main__":
+    import warnings
+    warnings.filterwarnings('ignore')
+    # asyncio.run(example_usage())
+
+    # Run all steps
+    # result = asyncio.run(run_spx_po_full_pipeline())
+    
     # Start from specific point
+    # from accrual_bot.core.pipeline.build_pipelines import create_spx_po_complete_pipeline  # 替換成實際路徑
     # result = asyncio.run(resume_from_step(
     #     checkpoint_name="SPX_202509_after_Filter_SPX_Products",    # checkpoint資料夾路徑名稱
     #     start_from_step="Add_Columns",
+    #     pipeline_func=create_spx_po_complete_pipeline,
     #     # checkpoint_name="SPX_202509_after_Process_Dates",    # checkpoint資料夾路徑名稱
     #     # start_from_step="Integrate_Closing_List",
     #     file_paths=file_paths,  # 可選,如果 checkpoint 中沒有
@@ -668,12 +682,24 @@ if __name__ == "__main__":
     # ))
 
     # Run PPE steps
-    # result = asyncio.run(execute_ppe_with_checkpoint(
-    #     file_paths=r'G:\共用雲端硬碟\INT_TWN_SEA_FN_Shared_Resources\00_Temp_Internal_share\SPX\租金\SPX租金合約歸檔清單及匯款狀態_marge1.xlsx',
-    #     processing_date=202509,
-    #     save_checkpoints=True
-    # ))
+    # result = asyncio.run(run_spx_ppe_full_pipeline())
+    # result.get('context').data.to_excel(r'C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202510\For PPE\年限表_202510.xlsx', index=False)
 
     # Run PR
-    asyncio.run(run_pr_full_pipeline())
+    # result = asyncio.run(run_spx_pr_full_pipeline())
+
+    # Run SPT
+    result = asyncio.run(run_spt_po_full_pipeline())
+
+    # from accrual_bot.core.pipeline.build_pipelines import create_spt_po_complete_pipeline  # 替換成實際路徑
+    # result = asyncio.run(resume_from_step(
+    #     checkpoint_name="SPR_202510_SPT_PO_Filter_Products",    # checkpoint資料夾路徑名稱
+    #     start_from_step="SPT_PO_Add_Columns",
+    #     pipeline_func=create_spt_po_complete_pipeline,
+    #     # checkpoint_name="SPX_202509_after_Process_Dates",    # checkpoint資料夾路徑名稱
+    #     # start_from_step="Integrate_Closing_List",
+    #     file_paths=file_paths,  # 可選,如果 checkpoint 中沒有
+    #     save_checkpoints=False
+    # ))
+
     print(1)

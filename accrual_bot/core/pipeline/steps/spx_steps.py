@@ -4,25 +4,11 @@ SPX實體特定處理步驟
 """
 
 import re
-from typing import Dict
 import pandas as pd
 import numpy as np
 
 from ..base import PipelineStep, StepResult, StepStatus
 from ..context import ProcessingContext
-from accrual_bot.core.pipeline import PipelineBuilder, Pipeline
-
-from accrual_bot.core.pipeline.steps.common import (ProductFilterStep,
-                                                    PreviousWorkpaperIntegrationStep,
-                                                    ProcurementIntegrationStep,
-                                                    DateLogicStep)
-from accrual_bot.core.pipeline.steps.spx_integration import (ColumnAdditionStep, 
-                                                             ClosingListIntegrationStep, 
-                                                             PRDataReformattingStep)
-from accrual_bot.core.pipeline.steps.spx_loading import SPXPRDataLoadingStep
-from accrual_bot.core.pipeline.steps.spx_evaluation import StatusStage1Step
-from accrual_bot.core.pipeline.steps.spx_pr_evaluation import SPXPRERMLogicStep
-from accrual_bot.core.pipeline.steps.spx_exporting import SPXPRExportStep
 
 
 class SPXDepositCheckStep(PipelineStep):
@@ -701,73 +687,3 @@ class SPXPPEProcessingStep(PipelineStep):
     async def validate_input(self, context: ProcessingContext) -> bool:
         """驗證輸入"""
         return 'GL#' in context.data.columns
-
-
-def create_spx_pr_complete_pipeline(file_paths: Dict[str, str]) -> Pipeline:
-    """
-    創建完整的 SPX PR 處理 Pipeline
-    
-    這是將原始 SPXPRProcessor.process() 方法完全重構後的版本
-    
-    Args:
-        file_paths: 文件路徑字典，包含:
-            - raw_po: 原始 PR 文件
-            - previous_pr: 前期底稿 (PR)
-            - procurement_pr: 採購底稿 (PR)
-            
-    Returns:
-        Pipeline: 完整配置的 SPX PR Pipeline
-    """
-    
-    # 創建 Pipeline Builder
-    builder = PipelineBuilder("SPX_PR_Complete", "SPX")
-    
-    # 配置 Pipeline
-    pipeline = (builder
-                .with_description("Complete SPX PR processing pipeline - refactored from process()")
-                .with_stop_on_error(False)  # 不要遇錯即停，收集所有錯誤
-                #  ========== 階段 1: 數據載入 ==========
-                .add_step(
-                    SPXPRDataLoadingStep(
-                        name="PR_Load_All_Data",
-                        file_paths=file_paths,
-                        required=True,
-                        retry_count=2,  # 載入失敗重試2次
-                        timeout=300.0   # 5分鐘超時
-                    )
-                )
-        
-                # ========== 階段 2: 數據準備與整合 ==========
-                .add_step(
-                    ProductFilterStep(
-                        name="PR_Filter_Products",
-                        product_pattern='(?i)LG_SPX',
-                        required=True
-                    )
-                )
-                .add_step(ColumnAdditionStep(name="PR_Add_Columns", required=True))
-                .add_step(PreviousWorkpaperIntegrationStep(name="PR_Integrate_Previous_WP", required=True))
-                .add_step(ProcurementIntegrationStep(name="PR_Integrate_Procurement", required=True))
-                
-                # # ========== 階段3: 業務邏輯 ==========
-                .add_step(DateLogicStep(name="PR_Process_Dates", required=True))
-                .add_step(ClosingListIntegrationStep(name="PR_Integrate_Closing_List", required=True))
-                .add_step(StatusStage1Step(name="PR_Evaluate_Status_Stage1", required=True))
-                .add_step(SPXPRERMLogicStep(name="PR_Apply_ERM_Logic", required=True, retry_count=0))
-                
-                # # ========== 階段4: 後處理 ==========
-                .add_step(PRDataReformattingStep(name="PR_Reformat_Data", required=True))
-                # ========== 階段 5: 導出結果 ========== (新增！)
-                .add_step(
-                    SPXPRExportStep(
-                        name="PR_Export_Results",
-                        output_dir="output",              # 輸出目錄
-                        sheet_name="PR",                  # Sheet 名稱
-                        include_index=False,              # 不包含索引
-                        required=True,                    # 必需步驟
-                        retry_count=0                     # 失敗重試0次
-                    )
-                )
-                )
-
-    return pipeline.build()
