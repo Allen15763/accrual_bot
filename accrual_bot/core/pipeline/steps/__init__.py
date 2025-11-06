@@ -42,6 +42,7 @@ from .spt_steps import (
     SPTAccrualStep,
     SPTValidationStep
 )
+from .spt_loading import SPTDataLoadingStep
 
 # SPX特定步驟
 from .spx_steps import (
@@ -85,11 +86,6 @@ from .spx_pr_evaluation import (
 )
 from .spx_exporting import SPXPRExportStep
 
-# 基礎管道
-from .spx_po_steps import (create_spx_po_complete_pipeline,
-                          create_ppe_pipeline)
-from .spx_steps import create_spx_pr_complete_pipeline
-
 __all__ = [
     # Common
     'DataCleaningStep',
@@ -122,6 +118,7 @@ __all__ = [
     'SPTDepartmentStep',
     'SPTAccrualStep',
     'SPTValidationStep',
+    'SPTDataLoadingStep',
     
     # SPX
     'SPXDepositCheckStep',
@@ -157,9 +154,5 @@ __all__ = [
     'PRERMConditions',
     'SPXPRERMLogicStep',
     'SPXPRExportStep',
-
-    # Basic pipeline
-    'create_spx_po_complete_pipeline',
-    'create_ppe_pipeline',
-    'create_spx_pr_complete_pipeline'
+    
 ]

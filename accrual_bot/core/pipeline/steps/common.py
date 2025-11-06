@@ -450,7 +450,7 @@ class ProductFilterStep(PipelineStep):
     """
     產品代碼過濾步驟
     
-    功能: 過濾出包含 特定 產品代碼的記錄，預設"LG_SPX"
+    功能: 過濾出包含/排除 特定 產品代碼的記錄，預設"LG_SPX"
     
     輸入: DataFrame with 'Product Code' column
     輸出: Filtered DataFrame
@@ -459,12 +459,14 @@ class ProductFilterStep(PipelineStep):
     def __init__(self, 
                  name: str = "ProductFilter",
                  product_pattern: Optional[str] = None,
+                 exclude: bool = False,
                  **kwargs):
         super().__init__(name, description="Filter product codes", **kwargs)
         # 從配置讀取 pattern，或使用提供的值
         self.product_pattern = product_pattern or config_manager.get(
             'SPX', 'product_pattern', '(?i)LG_SPX'
         )
+        self.exclude = exclude
     
     async def execute(self, context: ProcessingContext) -> StepResult:
         """執行產品過濾"""
@@ -478,9 +480,10 @@ class ProductFilterStep(PipelineStep):
             self.logger.info(f"Filtering products with pattern: {self.product_pattern}")
             
             # 過濾
-            filtered_df = df.loc[
-                df['Product Code'].str.contains(self.product_pattern, na=False), :
-            ].reset_index(drop=True)
+            mask = df['Product Code'].str.contains(self.product_pattern, na=False)
+            if self.exclude:
+                mask = ~mask
+            filtered_df = df.loc[mask, :].reset_index(drop=True)
             
             context.update_data(filtered_df)
             
