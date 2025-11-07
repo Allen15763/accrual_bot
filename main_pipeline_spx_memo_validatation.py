@@ -206,7 +206,7 @@ def _get_default_amount_columns() -> List[str]:
 
 def _get_default_locker_pattern() -> str:
     """取得預設的 locker pattern"""
-    return r'SPX\s+locker\s+([A-Z]{1,2}|控制主[櫃機]|[^\s]+?)(?:\s*第[一二]期款項|\s*訂金|\s*\d+%款項|\s*#)'
+    return r'SPX\s+locker\s+([A-Z]{1,2}|控制主[櫃機]|[^\s]+?)(?:\s*第[一二三]期款項|\s*訂金|\s*\d+%款項|\s*#)'
 
 
 def _get_default_sheet_names() -> Dict[str, str]:
