@@ -1297,7 +1297,9 @@ class DataReformattingStep(PipelineStep):
     def _remove_temp_columns(self, df: pd.DataFrame) -> pd.DataFrame:
         """移除臨時計算列"""
         temp_columns = ['檔案日期', 'Expected Received Month_轉換格式', 'YMs of Item Description',
-                        'expected_received_month_轉換格式', 'yms_of_item_description']
+                        'expected_received_month_轉換格式', 'yms_of_item_description',
+                        'PR Product Code Check', 'pr_product_code_check',
+                        ]
         
         for col in temp_columns:
             if col in df.columns:
@@ -1633,7 +1635,9 @@ class PRDataReformattingStep(DataReformattingStep):
         """移除臨時計算列"""
         temp_columns = ['檔案日期', 'Expected Received Month_轉換格式', 'YMs of Item Description',
                         'expected_received_month_轉換格式', 'yms_of_item_description',
-                        'remarked_by_procurement_pr', 'noted_by_procurement_pr', 'remarked_by_上月_fn_pr']
+                        'remarked_by_procurement_pr', 'noted_by_procurement_pr', 'remarked_by_上月_fn_pr',
+                        'PR Product Code Check', 'pr_product_code_check',
+                        ]
         
         for col in temp_columns:
             if col in df.columns:

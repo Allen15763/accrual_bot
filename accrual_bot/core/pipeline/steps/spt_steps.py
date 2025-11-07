@@ -702,7 +702,10 @@ class SPTPostProcessingStep(BasePostProcessingStep):
             'Expected Received Month_轉換格式', 
             'YMs of Item Description',
             'expected_received_month_轉換格式', 
-            'yms_of_item_description'
+            'yms_of_item_description',
+
+            'PR Product Code Check',
+            'pr_product_code_check',
         ]
         
         for col in temp_columns:
