@@ -454,6 +454,7 @@ class SPTERMLogicStep(PipelineStep):
         """設置所有會計相關欄位"""
         
         need_accrual = df['是否估計入帳'] == 'Y'
+        product_isnull = df['Product code'].isna()
         
         # 1. Account code
         df.loc[need_accrual, 'Account code'] = df.loc[need_accrual, 'GL#']
@@ -461,8 +462,10 @@ class SPTERMLogicStep(PipelineStep):
         # 2. Account Name（通過 merge）
         df = self._set_account_name(df, ref_account, need_accrual)
         
-        # 3. Product code
-        df.loc[need_accrual, 'Product code'] = df.loc[need_accrual, 'Product Code']
+        # 3. Product code; 分潤有給product code的則以分潤的結果為主。
+        df.loc[(need_accrual & product_isnull), 'Product code'] = (
+            df.loc[(need_accrual & product_isnull), 'Product Code']
+        )
         
         # 4. Region_c（SPT 固定值）
         df.loc[need_accrual, 'Region_c'] = "TW"
