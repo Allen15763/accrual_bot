@@ -40,7 +40,8 @@ from .spt_steps import (
     SPTStatusStep,
     SPTDepartmentStep,
     SPTAccrualStep,
-    SPTValidationStep
+    SPTValidationStep,
+    SPTPostProcessingStep
 )
 from .spt_loading import SPTDataLoadingStep
 from .spt_evaluation_affiliate import CommissionDataUpdateStep
@@ -88,6 +89,14 @@ from .spx_pr_evaluation import (
 )
 from .spx_exporting import SPXPRExportStep
 
+# 通用後處理步驟
+from .post_processing import (
+    BasePostProcessingStep,
+    DataQualityCheckStep,
+    StatisticsGenerationStep,
+    create_post_processing_chain
+)
+
 __all__ = [
     # Common
     'DataCleaningStep',
@@ -120,8 +129,9 @@ __all__ = [
     'SPTDepartmentStep',
     'SPTAccrualStep',
     'SPTValidationStep',
+    'SPTPostProcessingStep',
+    
     'SPTDataLoadingStep',
-
     'CommissionDataUpdateStep',
     'SPTERMLogicStep',
     
@@ -160,4 +170,9 @@ __all__ = [
     'SPXPRERMLogicStep',
     'SPXPRExportStep',
     
+    # Post Processing
+    'BasePostProcessingStep',
+    'DataQualityCheckStep',
+    'StatisticsGenerationStep',
+    'create_post_processing_chain',
 ]

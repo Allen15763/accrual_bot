@@ -5,10 +5,15 @@ SPT實體特定處理步驟
 
 import pandas as pd
 import numpy as np
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Any
 
 from ..base import PipelineStep, StepResult, StepStatus
 from ..context import ProcessingContext
+from .post_processing import BasePostProcessingStep
+from accrual_bot.utils.helpers.data_utils import (
+    classify_description,
+    clean_po_data
+)
 
 
 class SPTStatusStep(PipelineStep):
@@ -437,3 +442,341 @@ class SPTValidationStep(PipelineStep):
     async def validate_input(self, context: ProcessingContext) -> bool:
         """驗證輸入"""
         return context.metadata.entity_type == "SPT"
+
+
+class SPTPostProcessingStep(BasePostProcessingStep):
+    """SPT PO 後處理步驟
+    SPT PO 數據格式化和重組步驟
+    
+    功能:
+    1. 格式化數值列
+    2. 格式化日期列
+    3. 清理 nan 值
+    4. 重新排列欄位順序
+    5. 添加分類
+    6. 重新命名欄位和資料型態
+    7. 移除臨時欄位
+    8. 格式化 ERM
+    
+    輸入: DataFrame
+    輸出: Formatted DataFrame ready for export
+    """
+    
+    def __init__(self, name: str = "SPT_Data_Reformatting", **kwargs):
+        super().__init__(
+            name, 
+            description="SPT PO data reformatting and reorganization",
+            **kwargs
+        )
+    
+    def _process_data(
+        self,
+        df: pd.DataFrame,
+        context: ProcessingContext
+    ) -> pd.DataFrame:
+        """執行數據格式化"""
+        
+        self.logger.info("開始 SPT 數據格式化...")
+        
+        # 1. 格式化數值列
+        df = self._format_numeric_columns(df)
+        self._add_note("完成數值列格式化")
+        
+        # 2. 格式化日期列
+        df = self._reformat_dates(df)
+        self._add_note("完成日期列格式化")
+        
+        # 3. 清理 nan 值
+        df = self._clean_nan_values(df)
+        self._add_note("完成 nan 值清理")
+        
+        # 4. 重新排列欄位
+        df = self._rearrange_columns(df)
+        self._add_note("完成欄位重新排列")
+        
+        # 5. 添加分類
+        df = self._add_classification(df)
+        self._add_note("完成分類添加")
+        
+        # 6. 重新命名欄位名稱、資料型態
+        df = self._rename_columns_dtype(df)
+        self._add_note("完成欄位重命名和型態轉換")
+        
+        # 7. 確保 review AP 等欄位在最後
+        df = self._rearrange_columns(df)
+        self._add_note("完成最終欄位排列")
+        
+        # 8. 將含有暫時性計算欄位的結果存為附件
+        self._save_temp_columns_data(df, context)
+        self._add_note("完成暫時性數據保存")
+        
+        # 9. 移除臨時欄位
+        df = self._remove_temp_columns(df)
+        self._add_note("完成臨時欄位移除")
+        
+        # 10. 格式化 ERM
+        df = self._reformat_erm(df)
+        self._add_note("完成 ERM 格式化")
+        
+        self.logger.info("SPT 數據格式化完成")
+        return df
+    
+    def _format_numeric_columns(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        格式化數值列
+        
+        將指定欄位轉換為適當的數值類型
+        """
+        # 整數列
+        int_columns = ['Line#', 'GL#']
+        for col in int_columns:
+            if col in df.columns:
+                try:
+                    df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype('Int64')
+                except Exception as e:
+                    self.logger.warning(f"Failed to format {col}: {str(e)}")
+        
+        # 浮點數列
+        float_columns = [
+            'Unit Price', 'Entry Amount', 'Entry Invoiced Amount',
+            'Entry Billed Amount', 'Entry Prepay Amount',
+            'PO Entry full invoiced status', 'Accr. Amount'
+        ]
+        for col in float_columns:
+            if col in df.columns:
+                try:
+                    df[col] = pd.to_numeric(df[col], errors='coerce').round(2)
+                except Exception as e:
+                    self.logger.warning(f"Failed to format {col}: {str(e)}")
+        
+        return df
+    
+    def _reformat_dates(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        格式化日期列
+        
+        將日期欄位統一轉換為 YYYY-MM-DD 格式
+        """
+        date_columns = ['Creation Date', 'Expected Received Month', 'Last Update Date']
+        
+        for col in date_columns:
+            if col in df.columns:
+                try:
+                    df[col] = pd.to_datetime(df[col], errors='coerce').dt.strftime('%Y-%m-%d')
+                except Exception as e:
+                    self.logger.warning(f"Failed to format date column {col}: {str(e)}")
+        
+        return df
+    
+    def _clean_nan_values(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        清理 nan 值
+        
+        將字符串 'nan' 和 '<NA>' 替換為真正的 NA
+        """
+        columns_to_clean = [
+            '是否估計入帳', 'PR Product Code Check', 'PO狀態',
+            'Accr. Amount', '是否為FA', 'Region_c', 'Dep.'
+        ]
+        
+        for col in columns_to_clean:
+            if col in df.columns:
+                df[col] = df[col].replace('nan', pd.NA)
+                df[col] = df[col].replace('<NA>', pd.NA)
+        
+        # 特殊處理 Accr. Amount
+        if 'Accr. Amount' in df.columns:
+            try:
+                df['Accr. Amount'] = (
+                    df['Accr. Amount'].astype('string').str.replace(',', '')
+                    .replace('nan', '0')
+                    .replace('<NA>', '0')
+                    .astype('Float64')
+                )
+                df['Accr. Amount'] = df['Accr. Amount'].apply(lambda x: x if x != 0 else None)
+            except Exception as e:
+                self.logger.warning(f"Failed to clean Accr. Amount: {str(e)}")
+        
+        return df
+    
+    def _rearrange_columns(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        重新排列欄位順序
+        
+        將重要欄位移到前面，review 欄位移到最後
+        """
+        # 重新排列上月備註欄位位置
+        if 'Remarked by FN' in df.columns and 'Remarked by 上月 FN' in df.columns:
+            fn_index = df.columns.get_loc('Remarked by FN') + 1
+            last_month_col = df.pop('Remarked by 上月 FN')
+            df.insert(fn_index, 'Remarked by 上月 FN', last_month_col)
+        
+        if 'Remarked by 上月 FN' in df.columns and 'Remarked by 上月 FN PR' in df.columns:
+            fn_pr_index = df.columns.get_loc('Remarked by 上月 FN') + 1
+            last_month_pr_col = df.pop('Remarked by 上月 FN PR')
+            df.insert(fn_pr_index, 'Remarked by 上月 FN PR', last_month_pr_col)
+        
+        # 重新排列 PO 狀態欄位位置
+        if 'PO狀態' in df.columns and '是否估計入帳' in df.columns:
+            accrual_index = df.columns.get_loc('是否估計入帳')
+            po_status_col = df.pop('PO狀態')
+            df.insert(accrual_index, 'PO狀態', po_status_col)
+        
+        # 重新排列 PR 欄位位置
+        if 'Noted by Procurement' in df.columns:
+            noted_index = df.columns.get_loc('Noted by Procurement') + 1
+            
+            for col_name in ['Remarked by Procurement PR', 'Noted by Procurement PR']:
+                if col_name in df.columns:
+                    col = df.pop(col_name)
+                    df.insert(noted_index, col_name, col)
+                    noted_index += 1
+        
+        # 把 Question from Reviewer 和 Check by AP 移到最後
+        if 'Question from Reviewer' in df.columns and 'Check by AP' in df.columns:
+            cols = [col for col in df.columns if col not in ['Question from Reviewer', 'Check by AP']]
+            cols = cols + ['Question from Reviewer', 'Check by AP']
+            df = df[cols]
+        
+        if len([col for col in df.columns if col in ['question_from_reviewer', 'check_by_ap']]) == 2:
+            cols = [col for col in df.columns if col not in ['question_from_reviewer', 'check_by_ap']]
+            cols = cols + ['question_from_reviewer', 'check_by_ap']
+            df = df[cols]
+        
+        return df
+    
+    def _add_classification(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        添加分類
+        
+        根據 Item Description 進行分類
+        """
+        try:
+            df['category_from_desc'] = df['Item Description'].apply(classify_description)
+        except Exception as e:
+            self.logger.warning(f"Failed to add classification: {str(e)}")
+            df['category_from_desc'] = pd.NA
+        
+        return df
+    
+    def _rename_columns_dtype(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        重新命名欄位名稱、資料型態
+        
+        使用 clean_po_data 進行統一的欄位重命名和型態轉換
+        """
+        try:
+            df = df.rename(columns={'Product code': 'product_code_c'})
+            df = clean_po_data(df)
+        except Exception as e:
+            self.logger.warning(f"Failed to rename columns and convert dtypes: {str(e)}")
+        
+        return df
+    
+    def _save_temp_columns_data(
+        self,
+        df: pd.DataFrame,
+        context: ProcessingContext
+    ) -> None:
+        """
+        將含有暫時性計算欄位的結果存為附件
+        
+        在移除臨時欄位之前保存完整數據
+        """
+        if isinstance(df, pd.DataFrame) and not df.empty:
+            data_name = 'result_with_temp_cols'
+            data_copy = df.copy()
+            context.add_auxiliary_data(data_name, data_copy)
+            self.logger.info(
+                f"Added auxiliary data: {data_name} (shape: {data_copy.shape})"
+            )
+    
+    def _remove_temp_columns(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        移除臨時計算列
+        
+        刪除以 _ 開頭或特定名稱的臨時欄位
+        """
+        temp_columns = [
+            '檔案日期', 
+            'Expected Received Month_轉換格式', 
+            'YMs of Item Description',
+            'expected_received_month_轉換格式', 
+            'yms_of_item_description'
+        ]
+        
+        for col in temp_columns:
+            if col in df.columns:
+                df = df.drop(columns=[col])
+        
+        return df
+    
+    def _reformat_erm(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        格式化 ERM (Expected Receive Month)
+        
+        將 ERM 從 'MMM-YY' 格式轉換為 'YYYY/MM' 格式
+        """
+        try:
+            if 'expected_receive_month' in df.columns:
+                df['expected_receive_month'] = (
+                    pd.to_datetime(
+                        df['expected_receive_month'],
+                        format='%b-%y',
+                        errors='coerce'
+                    )
+                    .dt.strftime('%Y/%m')
+                )
+        except Exception as e:
+            self.logger.warning(f"Failed to reformat ERM: {str(e)}")
+        
+        return df
+    
+    def _validate_result(
+        self,
+        df: pd.DataFrame,
+        context: ProcessingContext
+    ) -> Dict[str, Any]:
+        """
+        結果驗證
+        
+        檢查格式化後的數據是否符合要求
+        """
+        issues = []
+        
+        # 驗證 1: 檢查數值欄位
+        numeric_cols = ['Entry Amount', 'Accr. Amount']
+        for col in numeric_cols:
+            if col in df.columns:
+                if df[col].dtype not in ['float64', 'Float64', 'int64', 'Int64']:
+                    issues.append(f"欄位 '{col}' 的資料型態不是數值型: {df[col].dtype}")
+        
+        # 驗證 2: 檢查分類是否添加成功
+        if 'category_from_desc' not in df.columns:
+            issues.append("缺少 'category_from_desc' 欄位")
+        
+        # 驗證 3: 檢查臨時欄位是否已移除
+        temp_cols_found = [col for col in df.columns if col in [
+            '檔案日期', 
+            'Expected Received Month_轉換格式',
+            'expected_received_month_轉換格式'
+        ]]
+        if temp_cols_found:
+            issues.append(f"臨時欄位未完全移除: {temp_cols_found}")
+        
+        if issues:
+            return {
+                'is_valid': False,
+                'message': f"驗證發現 {len(issues)} 個問題",
+                'details': {'issues': issues}
+            }
+        
+        return {
+            'is_valid': True,
+            'message': '所有驗證通過',
+            'details': {
+                'total_rows': len(df),
+                'total_columns': len(df.columns)
+            }
+        }
+    

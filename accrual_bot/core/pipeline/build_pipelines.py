@@ -65,8 +65,13 @@ def create_spt_po_complete_pipeline(file_paths: Dict[str, str]) -> Pipeline:
                 .add_step(steps.SPTERMLogicStep(name="Apply_ERM_Logic", required=True, retry_count=0))
 
                 # ========== 階段4: 後處理 ==========
-                .add_step(steps.DataReformattingStep(name="Reformat_Data", required=True))
-
+                .add_step(steps.SPTPostProcessingStep(
+                    name="Post_Processing",
+                    enable_statistics=True,
+                    enable_validation=True,
+                    required=True
+                ))
+                
                 )
     
     return pipeline.build()
