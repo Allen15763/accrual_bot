@@ -1347,7 +1347,7 @@ class DataReformattingStep(PipelineStep):
         
         # 重新排列 PO 狀態欄位位置
         if 'PO狀態' in df.columns and '是否估計入帳' in df.columns:
-            accrual_index = df.columns.get_loc('是否估計入帳')
+            accrual_index = df.columns.get_loc('是否估計入帳') - 1
             po_status_col = df.pop('PO狀態')
             df.insert(accrual_index, 'PO狀態', po_status_col)
         
@@ -1600,7 +1600,7 @@ class PRDataReformattingStep(DataReformattingStep):
         
         # 重新排列 PR 狀態欄位位置
         if 'PR狀態' in df.columns and '是否估計入帳' in df.columns:
-            accrual_index = df.columns.get_loc('是否估計入帳')
+            accrual_index = df.columns.get_loc('是否估計入帳') - 1
             po_status_col = df.pop('PR狀態')
             df.insert(accrual_index, 'PR狀態', po_status_col)
         

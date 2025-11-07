@@ -616,9 +616,9 @@ class SPTPostProcessingStep(BasePostProcessingStep):
             last_month_pr_col = df.pop('Remarked by 上月 FN PR')
             df.insert(fn_pr_index, 'Remarked by 上月 FN PR', last_month_pr_col)
         
-        # 重新排列 PO 狀態欄位位置
+        # 重新排列 PO 狀態欄位位置(是否估計入帳前面)
         if 'PO狀態' in df.columns and '是否估計入帳' in df.columns:
-            accrual_index = df.columns.get_loc('是否估計入帳')
+            accrual_index = df.columns.get_loc('是否估計入帳') - 1
             po_status_col = df.pop('PO狀態')
             df.insert(accrual_index, 'PO狀態', po_status_col)
         

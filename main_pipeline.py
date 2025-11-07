@@ -667,7 +667,7 @@ if __name__ == "__main__":
     # Start from specific point
     # from accrual_bot.core.pipeline.build_pipelines import create_spx_po_complete_pipeline  # 替換成實際路徑
     # result = asyncio.run(resume_from_step(
-    #     checkpoint_name="SPX_PO_202510_after_Filter_SPX_Products",    # checkpoint資料夾路徑名稱
+    #     checkpoint_name="SPX_PO_202510_after_Filter_Products",    # checkpoint資料夾路徑名稱
     #     start_from_step="Add_Columns",
     #     pipeline_func=create_spx_po_complete_pipeline,
     #     save_checkpoints=False
