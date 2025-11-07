@@ -234,7 +234,7 @@ class CommissionDataUpdateStep(PipelineStep):
                 'GL#',
                 'Remarked by FN',
                 'Account code',
-                'Product code_c'
+                'Product code'
             ]
             
             missing_columns = [col for col in required_columns if col not in df.columns]
@@ -343,7 +343,7 @@ class CommissionDataUpdateStep(PipelineStep):
         df.loc[mask, 'Account code'] = config['gl_number']
         
         # 更新 Product code
-        df.loc[mask, 'Product code_c'] = config['product_code']
+        df.loc[mask, 'Product code'] = config['product_code']
     
     def _set_accrual_estimation(self, df: pd.DataFrame) -> int:
         """
