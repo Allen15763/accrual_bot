@@ -131,11 +131,21 @@ def create_spt_pr_complete_pipeline(file_paths: Dict[str, str]) -> Pipeline:
                                                          status_column="PR狀態", required=True))
                 .add_step(steps.PayrollDetectionStep(name="Detect_Payroll_Records", required=True))
                 .add_step(steps.DateLogicStep(name="Process_Dates", required=True))
+                .add_step(steps.SPXPRERMLogicStep(name="Apply_ERM_Logic", required=True, retry_count=0))
                 
                 # # ========== 階段4: 後處理 ==========
-
+                .add_step(steps.SPTPostProcessingStep(name="Reformat_Data", required=True))
                 # ========== 階段 5: 導出結果 ==========
-
+                .add_step(
+                    steps.SPXPRExportStep(
+                        name="Export_Results",
+                        output_dir="output",              # 輸出目錄
+                        sheet_name="PR",                  # Sheet 名稱
+                        include_index=False,              # 不包含索引
+                        required=True,                    # 必需步驟
+                        retry_count=0                     # 失敗重試0次
+                    )
+                )
                 )
 
     return pipeline.build()

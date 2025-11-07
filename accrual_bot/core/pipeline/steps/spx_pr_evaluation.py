@@ -535,7 +535,7 @@ class SPXPRERMLogicStep(PipelineStep):
         根據 PR狀態 設置是否估計入帳
         
         PR 邏輯：
-        - '已完成_待確認'：需要估列入帳（Y）
+        - '已完成'：需要估列入帳（Y）
         - '已入帳'：已經入帳，不需估列（N）
         - 其他狀態：不估列（N）
         
@@ -552,7 +552,7 @@ class SPXPRERMLogicStep(PipelineStep):
         df['是否估計入帳'] = 'N'
         
         # 需要估列的狀態
-        accrual_statuses = ['已完成_待確認']
+        accrual_statuses = ['已完成']
         mask_need_accrual = df[status_column].isin(accrual_statuses)
         
         df.loc[mask_need_accrual, '是否估計入帳'] = 'Y'

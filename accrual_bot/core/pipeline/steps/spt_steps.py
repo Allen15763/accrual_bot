@@ -445,8 +445,8 @@ class SPTValidationStep(PipelineStep):
 
 
 class SPTPostProcessingStep(BasePostProcessingStep):
-    """SPT PO 後處理步驟
-    SPT PO 數據格式化和重組步驟
+    """SPT PO/PR 後處理步驟
+    SPT PO/PR 數據格式化和重組步驟
     
     功能:
     1. 格式化數值列
@@ -465,7 +465,7 @@ class SPTPostProcessingStep(BasePostProcessingStep):
     def __init__(self, name: str = "SPT_Data_Reformatting", **kwargs):
         super().__init__(
             name, 
-            description="SPT PO data reformatting and reorganization",
+            description="SPT PO/PR data reformatting and reorganization",
             **kwargs
         )
     
@@ -574,8 +574,9 @@ class SPTPostProcessingStep(BasePostProcessingStep):
         
         將字符串 'nan' 和 '<NA>' 替換為真正的 NA
         """
+        status_column: str = [col for col in df.columns if '狀態' in col][0]
         columns_to_clean = [
-            '是否估計入帳', 'PR Product Code Check', 'PO狀態',
+            '是否估計入帳', 'PR Product Code Check', status_column,
             'Accr. Amount', '是否為FA', 'Region_c', 'Dep.'
         ]
         
@@ -616,11 +617,12 @@ class SPTPostProcessingStep(BasePostProcessingStep):
             last_month_pr_col = df.pop('Remarked by 上月 FN PR')
             df.insert(fn_pr_index, 'Remarked by 上月 FN PR', last_month_pr_col)
         
-        # 重新排列 PO 狀態欄位位置(是否估計入帳前面)
-        if 'PO狀態' in df.columns and '是否估計入帳' in df.columns:
+        # 重新排列 PO/PR 狀態欄位位置(是否估計入帳前面)
+        status_column: str = [col for col in df.columns if '狀態' in col][0]
+        if status_column in df.columns and '是否估計入帳' in df.columns:
             accrual_index = df.columns.get_loc('是否估計入帳') - 1
-            po_status_col = df.pop('PO狀態')
-            df.insert(accrual_index, 'PO狀態', po_status_col)
+            po_status_col = df.pop(status_column)
+            df.insert(accrual_index, status_column, po_status_col)
         
         # 重新排列 PR 欄位位置
         if 'Noted by Procurement' in df.columns:

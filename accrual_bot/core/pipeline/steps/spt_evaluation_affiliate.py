@@ -532,7 +532,9 @@ class PayrollDetectionStep(PipelineStep):
             
             # === 階段 3: 過濾已有標籤的記錄 ===
             # 只更新 Remarked by FN 為空的記錄
-            empty_remark_mask = df[self.remark_column].isna() | (df[self.remark_column] == '') | (df[self.remark_column] == 'nan')
+            empty_remark_mask = (df[self.remark_column].isna() | 
+                                 (df[self.remark_column] == '') | 
+                                 (df[self.remark_column] == 'nan'))
             update_mask = payroll_mask & empty_remark_mask
             update_count = update_mask.sum()
             skipped_count = payroll_count - update_count
