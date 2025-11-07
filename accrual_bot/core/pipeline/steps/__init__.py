@@ -43,8 +43,8 @@ from .spt_steps import (
     SPTValidationStep,
     SPTPostProcessingStep
 )
-from .spt_loading import SPTDataLoadingStep
-from .spt_evaluation_affiliate import CommissionDataUpdateStep
+from .spt_loading import SPTDataLoadingStep, SPTPRDataLoadingStep
+from .spt_evaluation_affiliate import CommissionDataUpdateStep, PayrollDetectionStep
 from .spt_evaluation_erm import SPTERMLogicStep
 
 # SPX特定步驟
@@ -132,7 +132,9 @@ __all__ = [
     'SPTPostProcessingStep',
     
     'SPTDataLoadingStep',
+    'SPTPRDataLoadingStep',
     'CommissionDataUpdateStep',
+    'PayrollDetectionStep',
     'SPTERMLogicStep',
     
     # SPX

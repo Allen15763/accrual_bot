@@ -846,7 +846,7 @@ class ProcurementIntegrationStep(PipelineStep):
                               if x['Remarked by Procurement'] is pd.NA else x['Remarked by Procurement'], axis=1))
             
             # 設置FN備註為採購備註
-            df['Remarked by FN'] = df['Remarked by Procurement']
+            # df['Remarked by FN'] = df['Remarked by Procurement']
             
             # 標記不在採購底稿中的PO
             if 'PO Line' in df.columns and 'PR Line' in df.columns:

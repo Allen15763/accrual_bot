@@ -22,6 +22,7 @@ def create_spt_po_complete_pipeline(file_paths: Dict[str, str]) -> Pipeline:
             - ap_invoice: AP Invoice
             - previous_pr: 前期底稿 (PR)
             - procurement_pr: 採購底稿 (PR)
+            - media系列
             
     Returns:
         Pipeline: 完整配置的 SPT PO Pipeline
@@ -61,6 +62,7 @@ def create_spt_po_complete_pipeline(file_paths: Dict[str, str]) -> Pipeline:
                 
                 # ========== 階段3: 業務邏輯 ==========
                 .add_step(steps.CommissionDataUpdateStep(name="Update_Commission_Data", required=True))
+                .add_step(steps.PayrollDetectionStep(name="Detect_Payroll_Records", required=True))
                 .add_step(steps.DateLogicStep(name="Process_Dates", required=True))
                 .add_step(steps.SPTERMLogicStep(name="Apply_ERM_Logic", required=True, retry_count=0))
 
@@ -77,7 +79,66 @@ def create_spt_po_complete_pipeline(file_paths: Dict[str, str]) -> Pipeline:
     return pipeline.build()
 
 def create_spt_pr_complete_pipeline(file_paths: Dict[str, str]) -> Pipeline:
-    pass
+    """
+    創建完整的 SPT PR 處理 Pipeline
+    
+    這是將原始 SPTPRProcessor.process() 方法完全重構後的版本
+    
+    Args:
+        file_paths: 文件路徑字典，包含:
+            - raw_po: 原始 PR 文件
+            - previous_pr: 前期底稿 (PR)
+            - procurement_pr: 採購底稿 (PR)
+            - media系列
+            
+    Returns:
+        Pipeline: 完整配置的 SPT PR Pipeline
+    """
+    
+    # 創建 Pipeline Builder
+    builder = PipelineBuilder("SPT_PR_Complete", "SPT")
+    
+    # 配置 Pipeline
+    pipeline = (builder
+                .with_description("Complete SPX PR processing pipeline - refactored from process()")
+                .with_stop_on_error(False)  # 不要遇錯即停，收集所有錯誤
+                #  ========== 階段 1: 數據載入 ==========
+                .add_step(
+                    steps.SPTPRDataLoadingStep(
+                        name="Load_All_Data",
+                        file_paths=file_paths,
+                        required=True,
+                        retry_count=2,  # 載入失敗重試2次
+                        timeout=300.0   # 5分鐘超時
+                    )
+                )
+        
+                # ========== 階段 2: 數據準備與整合 ==========
+                .add_step(
+                    steps.ProductFilterStep(
+                        name="Filter_Products",
+                        product_pattern='(?i)SPX',
+                        exclude=True,
+                        required=True
+                    )
+                )
+                .add_step(steps.ColumnAdditionStep(name="Add_Columns", required=True))
+                .add_step(steps.PreviousWorkpaperIntegrationStep(name="Integrate_Previous_WP", required=True))
+                .add_step(steps.ProcurementIntegrationStep(name="Integrate_Procurement", required=True))
+                
+                # # ========== 階段3: 業務邏輯 ==========
+                .add_step(steps.CommissionDataUpdateStep(name="Update_Commission_Data", 
+                                                         status_column="PR狀態", required=True))
+                .add_step(steps.PayrollDetectionStep(name="Detect_Payroll_Records", required=True))
+                .add_step(steps.DateLogicStep(name="Process_Dates", required=True))
+                
+                # # ========== 階段4: 後處理 ==========
+
+                # ========== 階段 5: 導出結果 ==========
+
+                )
+
+    return pipeline.build()
 
 
 # =============================================================================

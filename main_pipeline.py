@@ -655,6 +655,50 @@ async def run_spt_po_full_pipeline():
     )
     return result
 
+async def run_spt_pr_full_pipeline():
+    from accrual_bot.core.pipeline.build_pipelines import create_spt_pr_complete_pipeline
+    file_paths = {
+        'raw_pr': {
+            'path': r"C:\SEA\Accrual\prpo_bot\resources\頂一下\202509\SPT\SPT 未結PRPO\機器人\202509_purchase_request_20250110_084329.xlsx",
+            'params': {'encoding': 'utf-8', 
+                       'sep': ',', 
+                       'dtype': str, 
+                       'keep_default_na': False, 
+                       'na_values': ['']
+                       }
+        },
+        'previous_pr': {
+            'path': r"C:\SEA\Accrual\prpo_bot\resources\頂一下\202509\SPT\SPT 未結PRPO\機器人\PR_for前期載入_copy from 202505.xlsx",
+            'params': {'dtype': str, }
+        },
+        'procurement_pr': {
+            'path': r"C:\SEA\Accrual\prpo_bot\resources\頂一下\202509\SPT\SPT 未結PRPO\機器人\202509_PR_未結PO_202509 SPTTW.xlsx",
+            'params': {'dtype': str, }
+        },
+        'media_finished': {
+            'path': r"C:\SEA\Accrual\prpo_bot\resources\頂一下\202509\SPT\SPT 未結PRPO\Sea TV program coverage list-2025.xlsx",
+            'params': {'dtype': str, 'sheet_name': '2024-2025使用完畢'}
+        },
+        'media_left': {
+            'path': r"C:\SEA\Accrual\prpo_bot\resources\頂一下\202509\SPT\SPT 未結PRPO\Sea TV program coverage list-2025.xlsx",
+            'params': {'dtype': str, 'sheet_name': '2024-25新聞剩餘量'}
+        },
+        'media_summary': {
+            'path': r"C:\SEA\Accrual\prpo_bot\resources\頂一下\202509\SPT\SPT 未結PRPO\Sea TV program coverage list-2025.xlsx",
+            'params': {'dtype': str, 'sheet_name': '2024-2025新聞總表(已用記錄)'}
+        },
+    }
+
+    result: dict = await execute_pipeline_with_checkpoint(
+        file_paths=file_paths,
+        processing_date=202509,
+        pipeline_func=create_spt_pr_complete_pipeline,
+        entity='SPT',
+        save_checkpoints=False,
+        processing_type='PR'
+    )
+    return result
+
 
 if __name__ == "__main__":
     import warnings
@@ -696,5 +740,7 @@ if __name__ == "__main__":
         pipeline_func=create_spt_po_complete_pipeline,
         save_checkpoints=False
     ))
+
+    result = asyncio.run(run_spt_pr_full_pipeline())
 
     print(1)
