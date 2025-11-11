@@ -569,8 +569,10 @@ class SPXPRExportStep(PipelineStep):
         start_datetime = datetime.now()
         
         try:
+            entity_type = context.metadata.entity_type
+            processing_type = context.metadata.processing_type
             self.logger.info("=" * 70)
-            self.logger.info("📤 開始導出 SPX PR 處理結果")
+            self.logger.info(f"📤 開始導出 {entity_type} {processing_type} 處理結果")
             self.logger.info("=" * 70)
             
             # 階段 1: 獲取數據
@@ -609,7 +611,7 @@ class SPXPRExportStep(PipelineStep):
             )
             
             self.logger.info("=" * 70)
-            self.logger.info("✅ PR 數據導出完成")
+            self.logger.info(f"✅ {self.sheet_name} 數據導出完成")
             self.logger.info(f"📁 輸出路徑：{output_path}")
             self.logger.info(f"📊 導出記錄：{len(df_export):,} 筆")
             self.logger.info(f"📋 欄位數量：{len(df_export.columns)} 個")
@@ -617,12 +619,12 @@ class SPXPRExportStep(PipelineStep):
             self.logger.info("=" * 70)
             
             # 儲存輸出路徑到 context（供後續使用或參考）
-            context.set_variable('pr_export_output_path', str(output_path))
+            context.set_variable(f'{processing_type.lower()}_export_output_path', str(output_path))
             
             return StepResult(
                 step_name=self.name,
                 status=StepStatus.SUCCESS,
-                message=f"成功導出 {len(df_export):,} 筆 PR 數據到 {output_path.name}",
+                message=f"成功導出 {len(df_export):,} 筆 {processing_type} 數據到 {output_path.name}",
                 duration=duration,
                 metadata=metadata
             )
@@ -630,13 +632,13 @@ class SPXPRExportStep(PipelineStep):
         except Exception as e:
             duration = time.time() - start_time
             
-            self.logger.error(f"❌ PR 數據導出失敗：{str(e)}", exc_info=True)
-            context.add_error(f"PR 導出失敗：{str(e)}")
+            self.logger.error(f"❌ {processing_type} 數據導出失敗：{str(e)}", exc_info=True)
+            context.add_error(f"{processing_type} 導出失敗：{str(e)}")
             
             error_metadata = create_error_metadata(
                 e, context, self.name,
                 output_dir=str(self.output_dir),
-                stage='pr_export'
+                stage=f'{processing_type.lower()}_export'
             )
             
             return StepResult(
@@ -687,10 +689,11 @@ class SPXPRExportStep(PipelineStep):
         # 準備檔案名稱組件
         entity_type = context.metadata.entity_type
         processing_date = context.metadata.processing_date
+        processing_type = context.metadata.processing_type
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         
         # 生成檔案名稱
-        filename = f"{entity_type}_PR_{processing_date}_processed_{timestamp}.xlsx"
+        filename = f"{entity_type}_{processing_type}_{processing_date}_processed_{timestamp}.xlsx"
         
         # 生成完整路徑
         output_path = self.output_dir / filename
@@ -800,7 +803,8 @@ class SPXPRExportStep(PipelineStep):
         self.logger.warning(f"⚠️  回滾 PR 導出：{str(error)}")
         
         # 檢查是否有部分寫入的檔案
-        output_path_str = context.get_variable('pr_export_output_path')
+        processing_type = context.metadata.processing_type
+        output_path_str = context.get_variable(f'{processing_type.lower()}_export_output_path')
         if output_path_str:
             output_path = Path(output_path_str)
             if output_path.exists():

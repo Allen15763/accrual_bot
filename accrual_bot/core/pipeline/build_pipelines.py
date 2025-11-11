@@ -73,7 +73,16 @@ def create_spt_po_complete_pipeline(file_paths: Dict[str, str]) -> Pipeline:
                     enable_validation=True,
                     required=True
                 ))
-                
+                .add_step(
+                    steps.SPXPRExportStep(
+                        name="Export_Results",
+                        output_dir="output",              # 輸出目錄
+                        sheet_name="PO",                  # Sheet 名稱
+                        include_index=False,              # 不包含索引
+                        required=True,                    # 必需步驟
+                        retry_count=0                     # 失敗重試0次
+                    )
+                )
                 )
     
     return pipeline.build()
