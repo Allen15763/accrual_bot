@@ -144,7 +144,7 @@ class CommissionDataUpdateStep(PipelineStep):
                 )
                 self.logger.info(f"✅ 已更新 {ams_count:,} 筆 AMS 分潤")
             
-            # === 階段 4: 設置估計入帳 ===
+            # === 階段 4: 設置估計入帳; will be 0，此步驟僅標記remark，後續依據狀態更新估計 ===
             accrual_count = self._set_accrual_estimation(df)
             self.logger.info(f"💵 設置估計入帳: {accrual_count:,} 筆")
             

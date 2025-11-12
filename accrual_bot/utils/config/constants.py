@@ -54,7 +54,7 @@ STATUS_VALUES = {
     'FORMAT_ERROR': '格式錯誤',
     'NOT_IN_PROCUREMENT': 'Not In Procurement WP',
     'CHECK_RECEIPT': 'Check收貨',
-    'PAID_NOT_CLOSED': '全付完，未關單?',
+    'PAID_NOT_CLOSED': '已完成(fully_billed)',
     'ERROR_OUT_OF_ERM': 'error(Description Period is out of ERM)'
 }
 

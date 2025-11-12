@@ -280,7 +280,7 @@ class SPTERMLogicStep(PipelineStep):
         # 🔴 新增：更新 no_status
         cond.no_status = (df[status_column].isna()) | (df[status_column] == 'nan')
         
-        # === 條件 3: 已完成 ===
+        # === 條件 3: 已完成(not_billed) ===
         condition_3 = (
             (cond.procurement_completed_or_rent | cond.fn_completed_or_posted) &
             cond.pr_not_incomplete &
@@ -290,13 +290,13 @@ class SPTERMLogicStep(PipelineStep):
             cond.quantity_matched &
             cond.not_billed
         )
-        df.loc[condition_3, status_column] = '已完成'
-        self._log_condition_result("已完成", condition_3.sum())
+        df.loc[condition_3, status_column] = '已完成(not_billed)'
+        self._log_condition_result("已完成(not_billed)", condition_3.sum())
 
         # 🔴 新增：更新 no_status
         cond.no_status = (df[status_column].isna()) | (df[status_column] == 'nan')
         
-        # === 條件 4: 全付完，未關單 ===
+        # === 條件 4: 已完成(fully_billed) ===
         # ERM小於等於結帳月 and ERM在摘要期間內 and Entry Qty等於Received Qty and Entry Amount - Entry Billed Amount = 0--> 理論上要估計
         condition_4 = (
             (cond.procurement_completed_or_rent | cond.fn_completed_or_posted) &
@@ -307,13 +307,13 @@ class SPTERMLogicStep(PipelineStep):
             (df['Entry Billed Amount'].astype('Float64') != 0) &
             cond.fully_billed
         )
-        df.loc[condition_4, status_column] = '全付完，未關單?'
-        self._log_condition_result("全付完，未關單", condition_4.sum())
+        df.loc[condition_4, status_column] = '已完成(fully_billed)'
+        self._log_condition_result("已完成(fully_billed)", condition_4.sum())
 
         # 🔴 新增：更新 no_status
         cond.no_status = (df[status_column].isna()) | (df[status_column] == 'nan')
         
-        # === 條件 5: 已完成但有未付款部分 ===
+        # === 條件 5: 已完成(partially_billed) ===
         condition_5 = (
             (cond.procurement_completed_or_rent | cond.fn_completed_or_posted) &
             cond.no_status &
@@ -323,8 +323,8 @@ class SPTERMLogicStep(PipelineStep):
             (df['Entry Billed Amount'].astype('Float64') != 0) &
             cond.has_unpaid_amount
         )
-        df.loc[condition_5, status_column] = '已完成'
-        self._log_condition_result("已完成（有未付款）", condition_5.sum())
+        df.loc[condition_5, status_column] = '已完成(partially_billed)'
+        self._log_condition_result("已完成(partially_billed)", condition_5.sum())
 
         # 🔴 新增：更新 no_status
         cond.no_status = (df[status_column].isna()) | (df[status_column] == 'nan')

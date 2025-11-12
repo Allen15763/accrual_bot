@@ -27,7 +27,7 @@ class DepositStatusUpdateStep(PipelineStep):
     1. 篩選 Item Description 包含「訂金」的記錄
     2. 以 PO# 為 key 進行分組
     3. 找出每個 PO# 的最大 Expected Received Month_轉換格式
-    4. 若最大月份等於當月，則該 PO# 的所有記錄標記為「已完成」
+    4. 若最大月份等於當月，則該 PO# 的所有記錄標記為「已完成(deposit)」
     5. 其他記錄保持原狀態不變
     
     輸入要求:
@@ -45,7 +45,7 @@ class DepositStatusUpdateStep(PipelineStep):
                  date_column: str = "Expected Received Month_轉換格式",
                  status_column: str = "PO狀態",
                  deposit_keyword: str = "訂金",
-                 completed_status: str = "已完成",
+                 completed_status: str = "已完成(deposit)",
                  **kwargs):
         """
         初始化訂金狀態更新步驟
