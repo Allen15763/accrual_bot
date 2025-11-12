@@ -232,7 +232,7 @@ class Logger:
             log_dir.mkdir(parents=True, exist_ok=True)
             
             # 創建日誌檔案名稱（包含日期）
-            log_filename = f"PRPO_{datetime.now().strftime('%Y-%m-%d')}.log"
+            log_filename = f"Accrual_bot_{datetime.now().strftime('%Y-%m-%d')}.log"
             log_file_path = log_dir / log_filename
             
             # 使用輪轉檔案處理器（當文件達到 10MB 時自動輪轉，保留 5 個備份）

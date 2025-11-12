@@ -10,6 +10,7 @@ import logging
 import datetime
 from typing import Dict, List, Any, Optional, Union
 from pathlib import Path
+import tomllib
 
 
 def get_resource_path(relative_path: str) -> str:
@@ -339,6 +340,9 @@ class ConfigManager:
             self._config.read(config_path, encoding='utf-8')
             # 轉為字典方面使用; self._config_data
             self._convert_to_dict()
+
+            with open('./accrual_bot/config/stagging.toml', 'rb') as f:
+                self._config_toml = tomllib.load(f)
             
             # 記錄成功載入 - 改進的日誌記錄
             self._log_info(f"成功載入配置檔案: {config_path}")
