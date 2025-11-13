@@ -84,9 +84,10 @@ def load_config_from_toml(file_path: str = None,
             
             return data
         else:
-            # 原有邏輯（如果有其他處理）
             with open(file_path, "rb") as f:
                 data = tomllib.load(f)
+            if key:
+                return data.get(key, {})
             return data
     
     except FileNotFoundError:
