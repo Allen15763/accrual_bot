@@ -14,7 +14,7 @@ import sys
 import logging
 import threading
 from typing import Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from logging.handlers import RotatingFileHandler  # 文件大小轮转
 
@@ -232,7 +232,12 @@ class Logger:
             log_dir.mkdir(parents=True, exist_ok=True)
             
             # 創建日誌檔案名稱（包含日期）
-            log_filename = f"Accrual_bot_{datetime.now().strftime('%Y-%m-%d')}.log"
+            # Define a timezone with a fixed UTC offset (e.g., +8 hours)
+            tz_offset = timezone(timedelta(hours=8))
+            aware_datetime = datetime.now(tz_offset).strftime('%Y%m%d_%H%M%S')
+            log_filename = f"Accrual_bot_{aware_datetime}.log"
+
+            # log_filename = f"Accrual_bot_{datetime.now().strftime('%Y-%m-%d')}.log"
             log_file_path = log_dir / log_filename
             
             # 使用輪轉檔案處理器（當文件達到 10MB 時自動輪轉，保留 5 個備份）
