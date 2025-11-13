@@ -341,7 +341,40 @@ class ConfigManager:
             # 轉為字典方面使用; self._config_data
             self._convert_to_dict()
 
-            with open('./accrual_bot/config/stagging.toml', 'rb') as f:
+            def get_default_toml_path() -> str:
+                file_path = 'stagging.toml'
+                current_dir = Path(__file__).parent  # utils/config/
+
+                # 拆解每層路徑
+                parts = list(current_dir.parts)
+                # 要移除的連續層級
+                parts_to_remove = ['utils', 'config']
+                # 尋找要移除的層級的起始索引
+                try:
+                    # 找到 'utils' 的索引
+                    index = parts.index(parts_to_remove[0])
+                    
+                    # 確認 'utils' 的下一個就是 'helpers'
+                    if parts[index:index + len(parts_to_remove)] == parts_to_remove:
+                        # 從列表中移除這兩個元素
+                        del parts[index:index + len(parts_to_remove)]
+
+                        # 重新組合路徑
+                        # parts[0] 是磁碟機代號 (例如 'C:\\')
+                        # parts[1:] 是後面的所有部分
+                        new_path = Path(parts[0]).joinpath(*parts[1:])  # accrual_bot/accrual_bot/
+                        self._log_info(f"成功查找套件utils層並重組根目錄: {new_path}")
+
+                except ValueError as e:
+                    self._log_error(f"在路徑中找不到 'utils' 層級，無需變更。{e}")
+                    new_path = current_dir
+
+                # 構建配置文件的絕對路徑
+                config_dir = new_path / 'config'  # accrual_bot/accrual_bot/config/
+                file_path = config_dir / file_path
+                self._log_info(f"config manager載入的toml路徑: {file_path}")
+                return file_path
+            with open(get_default_toml_path(), 'rb') as f:
                 self._config_toml = tomllib.load(f)
             
             # 記錄成功載入 - 改進的日誌記錄

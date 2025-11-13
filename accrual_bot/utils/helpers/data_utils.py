@@ -1,7 +1,7 @@
 """
 數據處理相關工具函數
 """
-
+from pathlib import Path
 import re
 import pandas as pd
 import numpy as np
@@ -14,31 +14,88 @@ import tomllib
 from ..config.constants import REGEX_PATTERNS, DEFAULT_DATE_RANGE
 
 
-toml_path = r"C:\SEA\Accrual\prpo_bot\accrual_bot\accrual_bot\config\stagging.toml"
-def load_config_from_toml(file_path: str, key: str, output_format=None) -> Union[List, Dict]:
+toml_path = None
+def load_config_from_toml(file_path: str = None, 
+                          key: str = None, 
+                          output_format: str = None
+                          ) -> Union[List, Dict]:
     """
-    從指定的 TOML 檔案中載入規則。
-
+    從 TOML 配置文件載入數據
+    
     Args:
-        file_path (str): TOML 檔案的路徑。
+        file_path: 配置文件路徑（可選，默認使用 stagging.toml）
         key: TOML 檔案的抬頭
-
+        output_format: 輸出格式
     Returns:
         list: 一個包含 (account, regex_pattern) 元組的列表。
         OR
         raw: [dict]
     """
-    if output_format is not None:
-        with open(file_path, "rb") as f:
-            data = tomllib.load(f)
-        # 將字典轉換為原始程式碼所使用的 (key, value) 元組列表格式
-        config: List = list(data.get(key, {}).items())
-        return config
-    else:
-        with open(file_path, "rb") as f:
-            data = tomllib.load(f)
-        config: Dict = data.get(key, {})
-        return config
+    
+    # ========== 關鍵修復：使用絕對路徑 ==========
+    if file_path is None:
+        # 默認使用 stagging.toml
+        file_path = 'stagging.toml'
+    
+    # 如果傳入的是文件名而不是完整路徑
+    if not Path(file_path).is_absolute():
+        # 獲取當前模組所在目錄
+        current_dir = Path(__file__).parent  # utils/helpers/
+
+        parts = list(current_dir.parts)
+        # 要移除的連續層級
+        parts_to_remove = ['utils', 'helpers']
+        # 尋找要移除的層級的起始索引
+        try:
+            # 找到 'utils' 的索引
+            index = parts.index(parts_to_remove[0])
+            
+            # 確認 'utils' 的下一個就是 'helpers'
+            if parts[index:index + len(parts_to_remove)] == parts_to_remove:
+                # 從列表中移除這兩個元素
+                del parts[index:index + len(parts_to_remove)]
+
+                # 重新組合路徑
+                # parts[0] 是磁碟機代號 (例如 'C:\\')
+                # parts[1:] 是後面的所有部分
+                new_path = Path(parts[0]).joinpath(*parts[1:])  # accrual_bot/accrual_bot/
+
+        except ValueError:
+            print("在路徑中找不到 'utils' 層級，無需變更。")
+            new_path = current_dir
+
+        # 構建配置文件的絕對路徑
+        config_dir = new_path / 'config'  # accrual_bot/accrual_bot/config/
+        file_path = config_dir / file_path
+    
+    # ========== 讀取配置 ==========
+    try:
+        if output_format is not None:
+            with open(file_path, "rb") as f:
+                data = tomllib.load(f)
+            
+            # 處理 key 和 output_format
+            # 將字典轉換為原始程式碼所使用的 (key, value) 元組列表格式
+            if key:
+                data = data.get(key, {})
+            
+            if output_format == 'list':
+                return list(data.items())
+            
+            return data
+        else:
+            # 原有邏輯（如果有其他處理）
+            with open(file_path, "rb") as f:
+                data = tomllib.load(f)
+            return data
+    
+    except FileNotFoundError:
+        print(f"❌ 找不到配置文件: {file_path}")
+        print("   請確認文件已正確打包")
+        raise
+    except Exception as e:
+        print(f"❌ 讀取配置文件失敗: {e}")
+        raise
     
 ACCOUNT_RULES = load_config_from_toml(toml_path, "account_rules", output_format='list')
 CATEGORY_PATTERNS_BY_DESC = load_config_from_toml(toml_path, "category_patterns_by_desc")
