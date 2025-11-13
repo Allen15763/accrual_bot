@@ -61,6 +61,15 @@ from .templates import (
     PipelineTemplateManager
 )
 
+# checkpoint
+from .checkpoint import (
+    CheckpointManager,
+    PipelineWithCheckpoint,
+    execute_pipeline_with_checkpoint,
+    resume_from_step,
+    quick_test_step
+)
+
 # 步驟
 from .steps import *
 
@@ -108,5 +117,12 @@ __all__ = [
     'SimplePRTemplate',
     'SPXSpecialTemplate',
     'DataQualityCheckTemplate',
-    'PipelineTemplateManager'
+    'PipelineTemplateManager',
+
+    # checkpoint
+    'CheckpointManager',
+    'PipelineWithCheckpoint',
+    'execute_pipeline_with_checkpoint',
+    'resume_from_step',
+    'quick_test_step'
 ]
