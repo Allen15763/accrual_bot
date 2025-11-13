@@ -84,8 +84,8 @@ class DepositStatusUpdateStep(PipelineStep):
             
             self.logger.info("=" * 60)
             self.logger.info("🔄 開始執行訂金 PO 狀態更新...")
-            self.logger.info("📅 當前處理月份: {current_month}")
-            self.logger.info("📊 總記錄數: {input_count:,}")
+            self.logger.info(f"📅 當前處理月份: {current_month}")
+            self.logger.info(f"📊 總記錄數: {input_count:,}")
             self.logger.info("=" * 60)
             
             # === 階段 1: 數據驗證 ===
