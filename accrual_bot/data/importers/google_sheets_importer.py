@@ -68,18 +68,22 @@ class GoogleSheetsImporter(BaseDataImporter):
             
             self.logger.info("Google Sheets API服務初始化成功")
             
-        except Exception as e:
-            self.logger.error(f"初始化Google Sheets API服務失敗: {str(e)}", exc_info=True)
+        except FileNotFoundError as e:
+            self.logger.error(f"路徑錯誤導致初始化Google Sheets API服務失敗: {str(e)}", exc_info=True)
             try:
+                self.logger.info("嘗試從ZIP初始化")
                 self._initialize_service_from_zip()
             except Exception as err:
                 self.logger.error(f"從zip初始化Google Sheets API服務失敗: {str(err)}", exc_info=True)
                 raise
+        except Exception as err:
+            self.logger.error(f"初始化Google Sheets API服務失敗: {str(err)}", exc_info=True)
     
     def _initialize_service_from_zip(self) -> None:
         import zipfile
         import json
-        root_url = r'C:\SEA\Accrual\prpo_bot\prpo_bot_renew_v2\accrual_bot.zip'
+        # root_url = r'C:\SEA\Accrual\prpo_bot\prpo_bot_renew_v2\accrual_bot.zip' # default url for environment in exe
+        root_url = '/content/drive/MyDrive/accrual_bot.zip'                       # default url for environment in colab
         json_in_zip_path = 'accrual_bot/secret/credentials.json'                # ZIP 檔案內的相對路徑
         scopes = self.credentials_config.get('scopes', GOOGLE_SHEETS['DEFAULT_SCOPES'])             # 你的 API 範圍
 
