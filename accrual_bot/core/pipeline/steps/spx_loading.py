@@ -18,6 +18,7 @@ from accrual_bot.core.pipeline.steps.common import (
     create_error_metadata
 )
 from accrual_bot.utils.config import config_manager
+from accrual_bot.utils.helpers import get_ref_on_colab
 from accrual_bot.data.importers.google_sheets_importer import GoogleSheetsImporter
 
 
@@ -381,6 +382,9 @@ class SPXDataLoadingStep(PipelineStep):
             ref_data_path = config_manager._config_data.get('PATHS').get('ref_path_spt')
             
             count = 0
+
+            # if in colab, return dataframe, otherwise, return None
+            ref_ac = get_ref_on_colab(ref_data_path)
             
             # 載入科目映射/負債科目映射 (SPT 的參考數據)
             if Path(ref_data_path).exists():
