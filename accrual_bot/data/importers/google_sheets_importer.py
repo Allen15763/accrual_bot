@@ -83,7 +83,8 @@ class GoogleSheetsImporter(BaseDataImporter):
         import zipfile
         import json
         # root_url = r'C:\SEA\Accrual\prpo_bot\prpo_bot_renew_v2\accrual_bot.zip' # default url for environment in exe
-        root_url = '/content/drive/MyDrive/accrual_bot.zip'                       # default url for environment in colab
+        # default url for environment in colab
+        root_url = '/content/drive/Shareddrives/INT_TWN_SEA_FN_Shared_Resources/15_FBA/Allen/accrual_bot.zip'
         json_in_zip_path = 'accrual_bot/secret/credentials.json'                # ZIP 檔案內的相對路徑
         scopes = self.credentials_config.get('scopes', GOOGLE_SHEETS['DEFAULT_SCOPES'])             # 你的 API 範圍
 

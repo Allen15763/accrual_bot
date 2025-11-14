@@ -101,6 +101,7 @@ def load_config_from_toml(file_path: str = None,
 ACCOUNT_RULES = load_config_from_toml(toml_path, "account_rules", output_format='list')
 CATEGORY_PATTERNS_BY_DESC = load_config_from_toml(toml_path, "category_patterns_by_desc")
 DATE_PATTERNS = load_config_from_toml(toml_path, "date_patterns")
+COLAB_ZIP_PATH = load_config_from_toml(toml_path, "paths").get("colab_zip")
 
 
 def clean_nan_values(df: pd.DataFrame, columns: List[str]) -> pd.DataFrame:
@@ -811,3 +812,29 @@ def clean_po_data(df: pd.DataFrame) -> pd.DataFrame:
             df[col] = pd.to_numeric(df[col], errors='coerce')
     
     return df
+
+def get_ref_on_colab(ref_data_path):
+    """work for colab env
+    to get account ref in zip
+
+    Args:
+        ref_data_path: _description_
+    """
+    def is_colab():  
+        try:  
+            import google.colab  
+            return True  
+        except Exception:  
+            return False
+
+    if is_colab():
+        import zipfile
+        root_url = COLAB_ZIP_PATH
+        with zipfile.ZipFile(root_url, 'r') as zf:
+            if ref_data_path in zf.namelist():
+                # Open the Excel file from within the zip archive
+                with zf.open(ref_data_path) as excel_file:
+                    ref_ac = pd.read_excel(excel_file, dtype=str)
+        return ref_ac
+    else:
+        return None

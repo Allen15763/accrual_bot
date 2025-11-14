@@ -38,7 +38,8 @@ from .data_utils import (
     parallel_apply,
     memory_efficient_operation,
     classify_description,
-    give_account_by_keyword
+    give_account_by_keyword,
+    get_ref_on_colab
 )
 
 __all__ = [
@@ -77,5 +78,6 @@ __all__ = [
     'parallel_apply',
     'memory_efficient_operation',
     'classify_description',
-    'give_account_by_keyword'
+    'give_account_by_keyword',
+    'get_ref_on_colab'
 ]

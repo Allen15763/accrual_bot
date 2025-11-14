@@ -1,7 +1,8 @@
 [paths]
-ref_path_mob = "./accrual_bot/config/ref.xlsx"
-ref_path_spt = "./accrual_bot/config/ref_SPTTW.xlsx"
+ref_path_mob = "accrual_bot/config/ref.xlsx"
+ref_path_spt = "accrual_bot/config/ref_SPTTW.xlsx"
 log_path = "./logs"
+colab_zip = "/content/drive/Shareddrives/INT_TWN_SEA_FN_Shared_Resources/15_FBA/Allen/accrual_bot.zip"
 
 [general]
 pt_YM = '''(\d{4}\/(0[1-9]|1[0-2])(\s|$))'''
