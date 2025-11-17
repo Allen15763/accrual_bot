@@ -385,6 +385,13 @@ class SPXDataLoadingStep(PipelineStep):
 
             # if in colab, return dataframe, otherwise, return None
             ref_ac = get_ref_on_colab(ref_data_path)
+            if ref_ac is not None and isinstance(ref_ac, pd.DataFrame):
+                context.add_auxiliary_data('reference_account', ref_ac.iloc[:, 1:3].copy())
+                context.add_auxiliary_data('reference_liability', ref_ac.loc[:, ['Account', 'Liability']].copy())
+                count += 2
+                self.logger.info(f"Loaded account mapping from zip: {len(ref_ac)} records")
+                
+                return count
             
             # 載入科目映射/負債科目映射 (SPT 的參考數據)
             if Path(ref_data_path).exists():
