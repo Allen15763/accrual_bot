@@ -226,9 +226,9 @@ def create_spx_po_complete_pipeline(file_paths: Dict[str, str]) -> Pipeline:
                     description_column="Item Description",
                     po_column="PO#",
                     date_column="Expected Received Month_轉換格式",
-                    status_column="整單訂金與最大ERM核對",
+                    status_column="PO狀態",
                     deposit_keyword="訂金",
-                    completed_status="該PO含訂金且ERM(最大)小於等於當期",
+                    completed_status="未完成(deposit)",  # 該PO含訂金且ERM(最大)大於當期; 以尾款驗收決定入帳時點
                     required=True
                 ))
 

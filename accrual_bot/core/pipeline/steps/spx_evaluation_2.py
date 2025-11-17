@@ -27,7 +27,7 @@ class DepositStatusUpdateStep(PipelineStep):
     1. 篩選 Item Description 包含「訂金」的記錄
     2. 以 PO# 為 key 進行分組
     3. 找出每個 PO# 的最大 Expected Received Month_轉換格式
-    4. 若最大月份等於當月，則該 PO# 的所有記錄標記為「已完成(deposit)」
+    4. 若最大月份大於當月，則該 PO# 的所有記錄標記為「未完成(deposit)」
     5. 其他記錄保持原狀態不變
     
     輸入要求:
@@ -45,7 +45,7 @@ class DepositStatusUpdateStep(PipelineStep):
                  date_column: str = "Expected Received Month_轉換格式",
                  status_column: str = "PO狀態",
                  deposit_keyword: str = "訂金",
-                 completed_status: str = "已完成(deposit)",
+                 completed_status: str = "未完成(deposit)",
                  **kwargs):
         """
         初始化訂金狀態更新步驟
@@ -132,14 +132,13 @@ class DepositStatusUpdateStep(PipelineStep):
             # === 階段 4: 判斷並更新狀態 ===
             pos_to_complete = []
             for po_num, max_month in max_month_by_po.items():
-                if pd.notna(max_month) and max_month <= current_month:
+                if pd.notna(max_month) and max_month > current_month:
                     pos_to_complete.append(po_num)
             
             self.logger.info(f"✅ 需要標記為「{self.completed_status}」的 PO: {len(pos_to_complete):,} 個")
             
             # 更新狀態
             update_mask = (
-                deposit_mask & 
                 status_mask & 
                 df[self.po_column].isin(pos_to_complete)
             )
