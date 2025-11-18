@@ -1227,6 +1227,12 @@ class DataReformattingStep(PipelineStep):
             df = self._remove_temp_columns(df)
             # reformat ERM
             df = self._reformat_erm(df)
+
+            # 減少輸出欄位
+            processing_type = context.metadata.processing_type
+            entity = context.metadata.entity_type
+            if entity == 'SPX' and processing_type == 'PO':
+                df = self._remove_columns(df)
             
             context.update_data(df)
             
@@ -1457,6 +1463,11 @@ class DataReformattingStep(PipelineStep):
             .dt.strftime('%Y/%m')
         )
         return df
+    
+    def _remove_columns(self, df):
+        df_copy = df.copy()
+        cols = config_manager._config_toml.get("spx").get("output_columns_before_nlp")
+        return df_copy[cols]
     
     async def validate_input(self, context: ProcessingContext) -> bool:
         """驗證輸入"""

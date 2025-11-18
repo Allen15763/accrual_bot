@@ -131,6 +131,32 @@ contract_filing_list_sheet = "歸檔清單"
 contract_filing_list_range = "D,H,P"
 key_for_merging_origin_and_renew_contract = ["sp_code", "address"]
 
+output_columns_before_nlp = [
+    "po_link","po_number","po_submitter",
+    "po_submitter_email","region","department",
+    "po_supplier","description","currency",
+    "po_total_amount","po_total_amount_usd","pr_number",
+    "po_status","last_action_date","expected_receive_month",
+    "pia","category",
+    "product_code","rgn","gl_number",
+    "item_description","unit_price","entry_quantity",
+    "received_quantity","billed_quantity","prepay_quantity",
+    "entry_amount","po_entry_status","是否結案",
+    "結案是否有差異數量","check_with_entry_invoice","pr_line",
+    "po_line","remarked_by_procurement","noted_by_procurement",
+    "remarked_by_procurement_pr","noted_by_procurement_pr","remarked_by_上月_fn",
+    "remarked_by_上月_fn_pr","noted_by_fn","remarked_by_上月_procurement",
+    "po狀態","remarked_by_fn","是否估計入帳",
+    "是否為fa","是否為s&m","account_code",
+    "account_name","product_code_c","region_c",
+    "dep.","currency_c","accr._amount",
+    "liability","是否有預付",
+    "memo","本期驗收數量/金額","gl_date",
+    "match_type","category_from_desc",
+    "predicted_account","matched_keyword","裝修一般/分期",
+    "question_from_reviewer","check_by_ap",
+]
+
 [fa_accounts]
 mob = [199999, 530016, 610303]
 spt = [199999]
