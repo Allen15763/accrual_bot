@@ -308,14 +308,14 @@ class StatusStage1Step(PipelineStep):
 
             # 費用類按申請人篩選
             is_non_labeled = (df[tag_column].isna()) | (df[tag_column] == '') | (df[tag_column] == 'nan')
-            ops_rent: str = config_manager.get(entity_type, 'ops_for_rent')
+            ops_rent: str = config_manager._config_toml.get(entity_type.lower()).get('ops_for_rent')
             account_rent: str = config_manager.get(entity_type, 'account_rent')
             ops_intermediary: str = config_manager.get(entity_type, 'ops_for_intermediary')
             ops_other: str = config_manager.get(entity_type, 'ops_for_other')
             
             mask_erm_equals_current = df['Expected Received Month_轉換格式'] == date
             mask_account_rent = df['GL#'] == account_rent
-            mask_ops_rent = df['PR Requester'] == ops_rent
+            mask_ops_rent = df['PR Requester'].isin(ops_rent) 
             mask_descerm_equals_current = df['YMs of Item Description'].str[:6].astype('Int64') == date
             mask_desc_contains_intermediary = df['Item Description'].fillna('na').str.contains('(?i)intermediary')
             mask_ops_intermediary = df['PR Requester'] == ops_intermediary
@@ -459,14 +459,14 @@ class StatusStage1Step(PipelineStep):
 
             # 費用類按申請人篩選
             is_non_labeled = (df[tag_column].isna()) | (df[tag_column] == '') | (df[tag_column] == 'nan')
-            ops_rent: str = config_manager.get(entity_type, 'ops_for_rent')
+            ops_rent: str = config_manager._config_toml.get(entity_type.lower()).get('ops_for_rent')
             account_rent: str = config_manager.get(entity_type, 'account_rent')
             ops_intermediary: str = config_manager.get(entity_type, 'ops_for_intermediary')
             ops_other: str = config_manager.get(entity_type, 'ops_for_other')
             
             mask_erm_equals_current = df['Expected Received Month_轉換格式'] == date
             mask_account_rent = df['GL#'] == account_rent
-            mask_ops_rent = df['Requester'] == ops_rent
+            mask_ops_rent = df['Requester'].isin(ops_rent)
             mask_descerm_equals_current = df['YMs of Item Description'].str[:6].astype('Int64') == date
             mask_desc_contains_intermediary = df['Item Description'].fillna('na').str.contains('(?i)intermediary')
             mask_ops_intermediary = df['Requester'] == ops_intermediary

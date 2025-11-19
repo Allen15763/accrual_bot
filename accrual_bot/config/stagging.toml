@@ -106,7 +106,7 @@ bao_categories = ["Cost of Logistics and Warehouse - Water", "Cost of Logistics 
 deposit_keywords = '''(?i)押金|保證金|Deposit|找零金|定存'''
 deposit_keywords_label = "摘要內有押金/保證金/Deposit/找零金"
 utility_suppliers = "台灣電力|自來水|遠傳電信|中華電信|台灣大哥大|新世紀資通"
-ops_for_rent = "Angel Li (李佳宣)"
+ops_for_rent = ["Angel Li (李佳宣)", "Zoey Li (李涵郁)", "Mike Zhong (鍾明賢)", "Emily Hsu (許毓淩)"]
 ops_for_intermediary = "Kei Chen (陳謹婷)"
 ops_for_other = "Judy Hsu (許淳方)"
 account_rent = 520036
@@ -134,10 +134,10 @@ key_for_merging_origin_and_renew_contract = ["sp_code", "address"]
 output_columns_before_nlp = [
     "po_link","po_number","po_submitter",
     "po_submitter_email","region","department",
-    "po_supplier","description","currency",
+    "po_supplier", "pr_requester","description","currency",
     "po_total_amount","po_total_amount_usd","pr_number",
-    "po_status","last_action_date","expected_receive_month",
-    "pia","category",
+    "po_status", "total_invoice_amount","last_action_date",
+    "expected_receive_month", "pia","category",
     "product_code","rgn","gl_number",
     "item_description","unit_price","entry_quantity",
     "received_quantity","billed_quantity","prepay_quantity",
@@ -172,22 +172,26 @@ scopes = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
 
 # 會計科目與關鍵字的對應規則
 [account_rules]
+"199999" = '路由器\(Router\)'
 "520012" = '繳費機租賃費|印表機租金|Plastic pallet|事務機租賃|Water dispenser rental|事務機移機'
 "520013" = '\^Leased\^'  # 注意: TOML 中反斜線需要轉義，所以 \^ 變成 \\^
-"520014" = 'Cleaning fee|消毒|removal fee|SOC Daily necessities|保全服務費|防治|封鈔袋'
-"520016" = '文具用品|破壞袋|Office Stationery|stationery and consumables|生活用品|營運用品|paper|PDA Gungrip|PDA LCD Protector'
-"520017" = 'tape|膠帶|退貨組_|物流袋|膠膜'
-"520018" = '門市室內標示|intermediary fee|貼紙|政府審查規費Interior Decoration application fee'
-"520019" = 'PDA|滅火器工程|Office Hardware|門市小圓招|門市斜坡架|APP新安裝|監視器工程|Guardrail equipment|CCTV|門市貨架增設|門市寄件設備零件|門市智慧監控直立主機|門市智慧監控授權卡片|門市智慧監控硬碟'
+"520014" = 'Cleaning fee|消毒|removal fee|SOC Daily necessities|保全服務費|防治|封鈔袋|收補鈔服務費|weeding fee|垃圾清運|Rodent control|Disinfection|保全警衛服務費|清運費|rental mop|租賃手持拖把|租賃拖把|清理化糞池'
+"520016" = '文具用品|破壞袋|Office Stationery|stationery and consumables|生活用品|營運用品|paper|PDA Gungrip|PDA LCD Protector|除塵拖及地墊租賃|手工具採購|mop rental|Cleaning utensil rental|夾鏈袋|垃圾袋|門市事務機耗材費|傳輸線|護貝膜'
+"520017" = 'tape|膠帶|退貨組_|物流袋|膠膜|PE單片|carton'
+"520018" = '門市室內標示|intermediary fee|貼紙|政府審查規費Interior Decoration application fee|感熱紙捲|室內標示|SPX制服|合格安全鞋'
+"520019" = 'PDA|滅火器工程|Office Hardware|門市小圓招|門市斜坡架|APP新安裝|監視器工程|Guardrail equipment|CCTV|門市貨架增設|門市寄件設備零件|門市智慧監控直立主機|門市智慧監控授權卡片|門市智慧監控硬碟|Hardware accessories|備品採購|平板車|延長線|Type-C HUB|籠車|RFID Card|Receipt Printer|Barcode Scanner|Printer Cutter|U-Type adapter|固定式掃馬槍|物流箱+卡片夾'
 "520025" = '倉庫管理費'
-"520026" = '維護費|關轉工程|保養工程|維修|撤櫃|智取店撤除|APP 其他檢修|退租撤店工程|監視器改善工程|Repair|replacement|maintenance'
-"520028" = 'Bottled water'
+"520026" = '維護費|關轉工程|保養工程|維修|撤櫃|智取店撤除|APP 其他檢修|退租撤店工程|監視器改善工程|Repair|replacement|maintenance|更換飲水濾心|復裝費用|驗水費'
+"520028" = 'Bottled water|桶裝水'
+"520029" = '保險'
 "520030" = 'Warehouse Temp Salary|派車費用'
 "520033" = 'Stacker|pallet truck|Stacker rental|堆高機'
 "520036" = '管理費'
 "520037" = 'Shopee Xpress Temp'
 "600301" = 'Employee Welfare Medical Fee'
+"610103" = '郵資'
 "610104" = '計張費'
-"610105" = 'APP 人數上限擴充'
+"610105" = 'APP 人數上限擴充|後臺人數擴充'
 "610110" = 'SPX門市發票代傳至財政部及營業稅申報檔相關服務'
+"630001" = 'Dispatcher fare'
 "650005" = 'shipping fee|Logistics Fee'
