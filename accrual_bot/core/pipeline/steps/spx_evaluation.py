@@ -313,20 +313,29 @@ class StatusStage1Step(PipelineStep):
             ops_intermediary: str = config_manager.get(entity_type, 'ops_for_intermediary')
             ops_other: str = config_manager.get(entity_type, 'ops_for_other')
             
-            mask_erm_equals_current = df['Expected Received Month_轉換格式'] == date
+            mask_erm_equals_current = df['Expected Received Month_轉換格式'] <= date
             mask_account_rent = df['GL#'] == account_rent
             mask_ops_rent = df['PR Requester'].isin(ops_rent) 
-            mask_descerm_equals_current = df['YMs of Item Description'].str[:6].astype('Int64') == date
+            mask_descerm_equals_current = df['YMs of Item Description'].str[:6].astype('Int64') <= date
+            mask_descerm_is_not_error = df['YMs of Item Description'].str[:6].astype('Int64') != 100001
             mask_desc_contains_intermediary = df['Item Description'].fillna('na').str.contains('(?i)intermediary')
             mask_ops_intermediary = df['PR Requester'] == ops_intermediary
 
-            combined_cond = is_non_labeled & mask_erm_equals_current & mask_account_rent & mask_ops_rent
-            df.loc[combined_cond, tag_column] = '已完成_租金'
-            self._log_label_condition('ERM=當月租金', combined_cond.sum(), '已完成_租金')
+            combined_cond = (is_non_labeled & 
+                             mask_erm_equals_current & 
+                             mask_account_rent & 
+                             mask_ops_rent &
+                             mask_descerm_equals_current)
+            df.loc[combined_cond, tag_column] = '已完成_租金(ERM<=當月租金)'
+            self._log_label_condition('ERM<=當月租金', combined_cond.sum(), '已完成_租金(ERM<=當月租金)')
 
-            combined_cond = is_non_labeled & mask_descerm_equals_current & mask_account_rent & mask_ops_rent
-            df.loc[combined_cond, tag_column] = '已完成_租金'
-            self._log_label_condition('摘要月=當月租金', combined_cond.sum(), '已完成_租金')
+            combined_cond = (is_non_labeled & 
+                             mask_descerm_equals_current & 
+                             mask_account_rent & 
+                             mask_ops_rent &
+                             mask_descerm_is_not_error)
+            df.loc[combined_cond, tag_column] = '已完成_租金(摘要月<=當月租金)'
+            self._log_label_condition('摘要月<=當月租金', combined_cond.sum(), '已完成_租金(摘要月<=當月租金)')
 
             # 租金已入帳
             booked_in_ap = (~df['GL DATE'].isna()) & ((df['GL DATE'] != '') | (df['GL DATE'] != 'nan'))
@@ -341,7 +350,7 @@ class StatusStage1Step(PipelineStep):
                     mask_account_rent &
                     (df['Item Description'].str.contains('(?i)租金', na=False))
                  ) &
-                
+                # if ERM > 檔案日期(Processing Date) and ERM != '100001,100002' = True
                 (
                     ((df['Expected Received Month_轉換格式'] <= df['YMs of Item Description'].str[:6].astype('Int32')) &
                         (df['Expected Received Month_轉換格式'] > date) &
@@ -464,20 +473,29 @@ class StatusStage1Step(PipelineStep):
             ops_intermediary: str = config_manager.get(entity_type, 'ops_for_intermediary')
             ops_other: str = config_manager.get(entity_type, 'ops_for_other')
             
-            mask_erm_equals_current = df['Expected Received Month_轉換格式'] == date
+            mask_erm_equals_current = df['Expected Received Month_轉換格式'] <= date
             mask_account_rent = df['GL#'] == account_rent
             mask_ops_rent = df['Requester'].isin(ops_rent)
-            mask_descerm_equals_current = df['YMs of Item Description'].str[:6].astype('Int64') == date
+            mask_descerm_equals_current = df['YMs of Item Description'].str[:6].astype('Int64') <= date
+            mask_descerm_is_not_error = df['YMs of Item Description'].str[:6].astype('Int64') != 100001
             mask_desc_contains_intermediary = df['Item Description'].fillna('na').str.contains('(?i)intermediary')
             mask_ops_intermediary = df['Requester'] == ops_intermediary
 
-            combined_cond = is_non_labeled & mask_erm_equals_current & mask_account_rent & mask_ops_rent
-            df.loc[combined_cond, tag_column] = '已完成_租金'
-            self._log_label_condition('PR ERM=當月租金', combined_cond.sum(), '已完成_租金')
+            combined_cond = (is_non_labeled & 
+                             mask_erm_equals_current & 
+                             mask_account_rent & 
+                             mask_ops_rent &
+                             mask_descerm_equals_current)
+            df.loc[combined_cond, tag_column] = '已完成_租金(ERM<=當月租金)'
+            self._log_label_condition('ERM<=當月租金', combined_cond.sum(), '已完成_租金(ERM<=當月租金)')
 
-            combined_cond = is_non_labeled & mask_descerm_equals_current & mask_account_rent & mask_ops_rent
-            df.loc[combined_cond, tag_column] = '已完成_租金'
-            self._log_label_condition('PR摘要月=當月租金', combined_cond.sum(), '已完成_租金')
+            combined_cond = (is_non_labeled & 
+                             mask_descerm_equals_current & 
+                             mask_account_rent & 
+                             mask_ops_rent &
+                             mask_descerm_is_not_error)
+            df.loc[combined_cond, tag_column] = '已完成_租金(摘要月<=當月租金)'
+            self._log_label_condition('摘要月<=當月租金', combined_cond.sum(), '已完成_租金(摘要月<=當月租金)')
 
             uncompleted_rent = (
                 ((df['Remarked by Procurement'] != 'error') &
@@ -487,6 +505,7 @@ class StatusStage1Step(PipelineStep):
                     (df['Item Description'].str.contains('(?i)租金', na=False))
                  ) &
                 
+                # if ERM > 檔案日期(Processing Date) and ERM != '100001,100002' = True
                 (
                     ((df['Expected Received Month_轉換格式'] <= df['YMs of Item Description'].str[:6].astype('Int32')) &
                         (df['Expected Received Month_轉換格式'] > date) &
