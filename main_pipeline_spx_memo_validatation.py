@@ -33,7 +33,7 @@ def run_accounting_ops_validation(
     amount_columns: Optional[List[str]] = None,
     locker_pattern: Optional[str] = None,
     entity_type: str = 'SPX',
-    processing_type: str = 'memo validate',
+    processing_type: str = '累計驗收數量驗證',
     sheet_names: Optional[Dict[str, str]] = None,
     filename_template: Optional[str] = None
 ) -> Tuple[ProcessingContext, Dict[str, pd.DataFrame]]:
@@ -54,7 +54,7 @@ def run_accounting_ops_validation(
         amount_columns: OPS 金額欄位列表，預設為 None 使用標準配置
         locker_pattern: Locker 類型提取的正則表達式，預設為 None 使用標準配置
         entity_type: 實體類型，預設為 'SPX'
-        processing_type: 處理類型，預設為 'memo validate'
+        processing_type: 處理類型，預設為 '累計至本期驗收數量/金額 validate'
         sheet_names: 輸出 Excel 的 sheet 名稱對應，預設為 None 使用標準配置
         filename_template: 輸出檔案名稱模板，預設為 None 使用標準配置
     
@@ -82,7 +82,7 @@ def run_accounting_ops_validation(
         ...     output_dir='custom_output',
         ...     accounting_params={
         ...         'sheet_name': 0,
-        ...         'usecols': ['PO#', 'PO Line', 'Item Description', 'memo'],
+        ...         'usecols': ['PO#', 'po_line', 'Item Description', '累計至本期驗收數量/金額'],
         ...         'header': 0
         ...     },
         ...     sheet_names={
@@ -180,7 +180,7 @@ def _get_default_accounting_params() -> Dict[str, Any]:
     """取得會計底稿的預設讀取參數"""
     return {
         'sheet_name': 0,
-        'usecols': ['PO#', 'PO Line', 'Item Description', 'memo'],
+        'usecols': ['PO#', 'po_line', 'Item Description', '累計至本期驗收數量/金額'],
         'header': 0,
         'dtype': str
     }
@@ -248,7 +248,7 @@ def _build_pipeline(
                     }
                 },
                 required_columns={
-                    'accounting': ['PO Line', 'memo'],
+                    'accounting': ['po_line', '累計至本期驗收數量/金額'],
                     'ops': ['A', 'B', 'C']
                 }
             )
@@ -312,7 +312,7 @@ if __name__ == "__main__":
     print("-" * 60)
     
     context, data = run_accounting_ops_validation(
-        accounting_file=r'C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202510\202509_PO_FN_改memo.xlsx',
+        accounting_file=r'C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202510\202509_PO_FN.xlsx',
         ops_file=r'C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202510\SPX智取櫃及繳費機驗收明細(For FN)_2510.xlsx',
         processing_date=202510,
         output_dir="output",

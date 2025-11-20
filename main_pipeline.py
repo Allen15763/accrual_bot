@@ -110,7 +110,7 @@ async def run_spx_po_full_pipeline():
         pipeline_func=create_spx_po_complete_pipeline,
         entity='SPX',
         processing_type="PO",
-        save_checkpoints=False
+        save_checkpoints=True
     )
 
     return result

@@ -354,8 +354,8 @@ class AccountingOPSValidationStep(PipelineStep):
             return pd.DataFrame(columns=['PO#', 'accounting_locker_count'])
         
         # 按 PO# 和 locker_type 去重
-        df_unique = df_with_locker[['PO#', 'memo', 'locker_type']].drop_duplicates()
-        df_unique['memo'] = df_unique.memo.replace('', 0).astype('Float64')
+        df_unique = df_with_locker[['PO#', '累計至本期驗收數量/金額', 'locker_type']].drop_duplicates()
+        df_unique['累計至本期驗收數量/金額'] = df_unique['累計至本期驗收數量/金額'].replace('', 0).astype('Float64')
         
         # 計算每個 PO# 的 locker 類型數量
         df_agg = df_unique.groupby('PO#', as_index=False).agg(
@@ -363,7 +363,7 @@ class AccountingOPSValidationStep(PipelineStep):
         ).rename(columns={"PO#": 'po_number'})
 
         df_agg_by_type = df_unique.groupby(['PO#', 'locker_type'], as_index=False).agg(
-            memo_sum=('memo', 'sum')
+            memo_sum=('累計至本期驗收數量/金額', 'sum')
         ).rename(columns={"PO#": 'po_number'})
         
         self.logger.info(

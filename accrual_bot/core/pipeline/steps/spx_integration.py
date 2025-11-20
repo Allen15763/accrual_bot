@@ -30,7 +30,7 @@ class ColumnAdditionStep(PipelineStep):
     
     功能:
     1. 調用 add_basic_columns() 添加基礎欄位
-    2. 添加 SPX 特定欄位 (memo, GL DATE等)
+    2. 添加 SPX 特定欄位 (累計至本期驗收數量/金額等)
     
     輸入: DataFrame
     輸出: DataFrame with additional columns
@@ -56,7 +56,8 @@ class ColumnAdditionStep(PipelineStep):
             df, previous_month = self._add_basic_columns(df, m)
             
             # 添加 SPX 特定欄位
-            df['memo'] = None
+            if context.metadata.entity_type == 'SPX':
+                df['累計至本期驗收數量/金額'] = None
             df['GL DATE'] = None
             df['Remarked by Procurement PR'] = None
             df['Noted by Procurement PR'] = None
@@ -941,7 +942,7 @@ class ValidationDataProcessingStep(PipelineStep):
         # 修改相關欄位
         df = self._modify_relevant_columns(df)
 
-        # update memo column
+        # update 累計至本期驗收數量/金額 column
         df = self._update_cumulative_qty_for_ppe(df)
         
         return df
@@ -1117,14 +1118,14 @@ class ValidationDataProcessingStep(PipelineStep):
     
     def _update_cumulative_qty_for_ppe(
             self, df: pd.DataFrame,
-            raw_col: str = 'Noted by FN',
-            updated_col: str = 'memo') -> pd.DataFrame:
+            raw_col: str = '累計至上期驗收數量/金額',
+            updated_col: str = '累計至本期驗收數量/金額') -> pd.DataFrame:
         """更新會計摘要
 
         Args:
             df: 元資料
-            raw_col: 保留(複製)從前期底稿撈回來的memo欄位資訊. Defaults to 'Noted by FN'.
-            updated_col: 更新qty資訊保留其他字串訊息. Defaults to 'memo'.
+            raw_col: 保留(複製)從前期底稿撈回來的累計至本期驗收數量/金額欄位資訊. Defaults to '累計至上期驗收數量/金額'.
+            updated_col: 更新qty資訊. Defaults to '累計至本期驗收數量/金額'.
 
         Returns:
             Dataframe
@@ -1143,7 +1144,7 @@ class ValidationDataProcessingStep(PipelineStep):
         
         is_raw_col_not_na = df_copy[raw_col].notna()
         is_updated_col_zero = df_copy[updated_col] == 0
-        # 從原始memo欄位判斷不是null的值且加總後仍等於零，使用原始資訊
+        # 從原始累計至本期驗收數量/金額欄位判斷不是null的值且加總後仍等於零，使用原始資訊
         df_copy[updated_col] = np.where(is_raw_col_not_na & is_updated_col_zero,
                                         df_copy[raw_col],
                                         df_copy[updated_col])
@@ -1369,9 +1370,9 @@ class DataReformattingStep(PipelineStep):
                     df.insert(noted_index, col_name, col)
                     noted_index += 1
         
-        # 把本期驗收數量/金額移到 memo 前面
-        if '本期驗收數量/金額' in df.columns and 'memo' in df.columns:
-            memo_index = df.columns.get_loc('memo')
+        # 把本期驗收數量/金額移到 累計至本期驗收數量/金額 前面
+        if '本期驗收數量/金額' in df.columns and '累計至本期驗收數量/金額' in df.columns:
+            memo_index = df.columns.get_loc('累計至本期驗收數量/金額')
             validation_col = df.pop('本期驗收數量/金額')
             df.insert(memo_index, '本期驗收數量/金額', validation_col)
         

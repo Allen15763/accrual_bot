@@ -567,7 +567,7 @@ class PreviousWorkpaperIntegrationStep(PipelineStep):
     功能:
     1. 整合前期 PO 底稿
     2. 整合前期 PR 底稿
-    3. 處理 memo 欄位
+    3. 處理 累計至本期驗收數量/金額 欄位; SPX
     
     輸入: DataFrame + Previous WP (PO and PR)
     輸出: DataFrame with previous workpaper info
@@ -661,7 +661,7 @@ class PreviousWorkpaperIntegrationStep(PipelineStep):
             if 'PO Line' in df.columns:
                 fn_mapping = create_mapping_dict(previous_wp_renamed.rename(columns={'po_line': 'PO Line'}), 
                                                  'PO Line', 'Remarked by FN_l')
-                df['Remarked by 上月 FN'] = df['PO Line'].map(fn_mapping)
+                df['Remarked by 上月 FN'] = df['PO Line'].map(fn_mapping).fillna(pd.NA)
                 
                 # 獲取前期採購備註
                 procurement_mapping = create_mapping_dict(
@@ -669,22 +669,28 @@ class PreviousWorkpaperIntegrationStep(PipelineStep):
                     'PO Line', 'Remark by PR Team_l'
                 )
                 df['Remarked by 上月 Procurement'] = \
-                    df['PO Line'].map(procurement_mapping)
+                    df['PO Line'].map(procurement_mapping).fillna(pd.NA)
             
-            # 處理 memo 欄位
-            if 'memo' in previous_wp.columns and 'PO Line' in df.columns:
+            # 處理 累計至本期驗收數量/金額 欄位
+            if '累計至本期驗收數量/金額' in previous_wp.columns and 'PO Line' in df.columns:
                 if 'PO Line' in previous_wp.columns:
-                    memo_mapping = dict(zip(previous_wp['PO Line'], previous_wp['memo']))
+                    ppe_qty_mapping = dict(zip(previous_wp['PO Line'], previous_wp['累計至本期驗收數量/金額']))
                 else:
-                    memo_mapping = dict(zip(previous_wp['po_line'], previous_wp['memo']))
-                df['memo'] = df['PO Line'].map(memo_mapping)
+                    ppe_qty_mapping = dict(zip(previous_wp['po_line'], previous_wp['累計至本期驗收數量/金額']))
+                df['累計至本期驗收數量/金額'] = df['PO Line'].map(ppe_qty_mapping).fillna(pd.NA)
+
+            # 特殊會計備註
+            if 'noted_by_fn' in previous_wp.columns:
+                note_mapping = dict(zip(previous_wp['po_line'], previous_wp['noted_by_fn']))
+                df['Noted by FN'] = df['PO Line'].map(note_mapping).fillna(pd.NA)
             
             # 處理前期 FN 備註
             if 'Remarked by FN' in previous_wp.columns:
-                fn_mapping = dict(zip(previous_wp['PO Line'], previous_wp['Remarked by FN']))
+                col_po_line: str = previous_wp.filter(regex=r'(?i)po\sline').columns[0]
+                fn_mapping = dict(zip(previous_wp[col_po_line], previous_wp['Remarked by FN']))
             if 'remarked_by_fn' in previous_wp.columns:
                 fn_mapping = dict(zip(previous_wp['po_line'], previous_wp['remarked_by_fn']))
-            df['Remarked by 上月 FN'] = df['PO Line'].map(fn_mapping)
+            df['Remarked by 上月 FN'] = df['PO Line'].map(fn_mapping).fillna(pd.NA)
             return df
     
         except Exception as e:
@@ -705,6 +711,11 @@ class PreviousWorkpaperIntegrationStep(PipelineStep):
         if 'Remarked by FN_l' in previous_wp_pr.columns and 'PR Line' in df.columns:
             pr_fn_mapping = dict(zip(previous_wp_pr['PR Line'], previous_wp_pr['Remarked by FN_l']))
             df['Remarked by 上月 FN PR'] = df['PR Line'].map(pr_fn_mapping)
+
+            # 特殊會計備註
+            if 'noted_by_fn' in previous_wp_pr.columns:
+                note_mapping = dict(zip(previous_wp_pr['pr_line'], previous_wp_pr['noted_by_fn']))
+                df['Noted by FN'] = df['pr_line'].map(note_mapping).fillna(pd.NA)
         
         return df
     

@@ -694,7 +694,7 @@ class AccountingOPSDataLoadingStep(PipelineStep):
                 }
             },
             required_columns={
-                'accounting': ['PO Line', 'memo'],
+                'accounting': ['PO Line', '累計至本期驗收數量/金額'],
                 'ops': ['PO Number', 'Line', 'Validation Status']
             }
         )
@@ -725,7 +725,7 @@ class AccountingOPSDataLoadingStep(PipelineStep):
                 }
             required_columns: 必要欄位配置，格式:
                 {
-                    'accounting': ['PO Line', 'memo'],
+                    'accounting': ['PO Line', '累計至本期驗收數量/金額'],
                     'ops': ['PO Number', 'Line', 'Status']
                 }
             **kwargs: 其他 PipelineStep 參數
@@ -741,7 +741,7 @@ class AccountingOPSDataLoadingStep(PipelineStep):
         
         # 必要欄位配置
         self.required_columns = required_columns or {
-            'accounting': ['PO Line', 'memo'],
+            'accounting': ['PO Line', '累計至本期驗收數量/金額'],
             'ops': config_manager.get_list('SPX', 'locker_columns')[5:23]  # 第2行的櫃型
         }
         
@@ -1026,10 +1026,10 @@ class AccountingOPSDataLoadingStep(PipelineStep):
                     .str.replace(r'\.0$', '', regex=True)  # 移除 .0
                 )
             
-            # memo 欄位清理
-            if 'memo' in df_acc.columns:
-                df_acc['memo'] = (
-                    df_acc['memo']
+            # 累計至本期驗收數量/金額 欄位清理
+            if '累計至本期驗收數量/金額' in df_acc.columns:
+                df_acc['累計至本期驗收數量/金額'] = (
+                    df_acc['累計至本期驗收數量/金額']
                     .fillna('')
                     .astype(str)
                     .str.strip()
