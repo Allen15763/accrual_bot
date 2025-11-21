@@ -88,7 +88,7 @@ pivot_value_col = "Accr. Amount_variable"
 
 # Blaire 相關條件
 blaire_ssp = { keywords = '(?i)SSP', field = 'Item Description', status = '不估計(Blaire)', remark = 'Blaire', note = 'Item Description包含SSP' }
-blaire_logistics_fee = { keywords = '(?i)Logistics fee|Logistic fee', field = 'Item Description', status = '不估計(Blaire)', remark = 'Blaire', note = 'Item Description包含Logistics fee' }
+blaire_logistics_fee = { keywords = '(?i)Logistics fee|Logistic fee', field = 'Item Description', status = '不估計(Blaire)', remark = 'Blaire', note = 'Item Description包含Logistics fee或Logistic fee' }
 blaire_handling_fee = { keywords = '(?i)Handling fee', field = 'Item Description', status = '不估計(Blaire)', remark = 'Blaire', note = 'Item Description包含Handling fee' }
 blaire_remittance_fee = { keywords = '(?i)Remittance fee', field = 'Item Description', status = '不估計(Blaire)', remark = 'Blaire', note = 'Item Description包含Remittance fee' }
 blaire_shipping_fee = { keywords = '(?i)shipping fee', field = 'Item Description', status = '不估計(Blaire)', remark = 'Blaire', note = 'Item Description包含shipping fee' }
