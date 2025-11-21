@@ -46,6 +46,8 @@ from .spt_steps import (
 from .spt_loading import SPTDataLoadingStep, SPTPRDataLoadingStep
 from .spt_evaluation_affiliate import CommissionDataUpdateStep, PayrollDetectionStep
 from .spt_evaluation_erm import SPTERMLogicStep
+from .spt_evaluation_accountant import SPTStatusLabelConditions, SPTStatusLabelStep
+from .spt_account_prediction import AccountPredictionConditions, SPTAccountPredictionStep
 
 # SPX特定步驟
 from .spx_steps import (
@@ -136,6 +138,10 @@ __all__ = [
     'CommissionDataUpdateStep',
     'PayrollDetectionStep',
     'SPTERMLogicStep',
+    'SPTStatusLabelConditions',
+    'SPTStatusLabelStep',
+    'AccountPredictionConditions',
+    'SPTAccountPredictionStep',
     
     # SPX
     'SPXDepositCheckStep',

@@ -79,6 +79,215 @@ ga_cr_pivot_cols = [
 ]
 pivot_value_col = "Accr. Amount_variable"
 
+
+# SPT狀態標籤標記規則配置
+[spt_status_label_rules]
+
+# 優先於ERM的條件（強制覆蓋PO狀態和Remarked by FN）
+[spt_status_label_rules.priority_conditions]
+
+# Blaire 相關條件
+blaire_ssp = { keywords = '(?i)SSP', field = 'Item Description', status = '不估計(Blaire)', remark = 'Blaire', note = 'Item Description包含SSP' }
+blaire_logistics_fee = { keywords = '(?i)Logistics fee|Logistic fee', field = 'Item Description', status = '不估計(Blaire)', remark = 'Blaire', note = 'Item Description包含Logistics fee' }
+blaire_handling_fee = { keywords = '(?i)Handling fee', field = 'Item Description', status = '不估計(Blaire)', remark = 'Blaire', note = 'Item Description包含Handling fee' }
+blaire_remittance_fee = { keywords = '(?i)Remittance fee', field = 'Item Description', status = '不估計(Blaire)', remark = 'Blaire', note = 'Item Description包含Remittance fee' }
+blaire_shipping_fee = { keywords = '(?i)shipping fee', field = 'Item Description', status = '不估計(Blaire)', remark = 'Blaire', note = 'Item Description包含shipping fee' }
+blaire_hidden_code_fee = { keywords = '物流隱碼費|隱碼費', field = 'Item Description', status = '不估計(Blaire)', remark = 'Blaire', note = 'Item Description包含隱碼費' }
+blaire_commissions = { keywords = '(?i)Commissions', field = 'Item Description', status = '不估計(Blaire)', remark = 'Blaire', note = 'Item Description包含Commissions' }
+blaire_seller_affiliate = { keywords = '(?i)Seller affiliate', field = 'Item Description', status = '不估計(Blaire)', remark = 'Blaire', note = 'Item Description包含Seller affiliate' }
+blaire_refund = { keywords = '(?i)refund', field = 'Item Description', status = '不估計(Blaire)', remark = 'Blaire', note = 'Item Description包含refund' }
+blaire_service_charges = { keywords = '(?i)service charges', field = 'Item Description', status = '不估計(Blaire)', remark = 'Blaire', note = 'Item Description包含service charges' }
+blaire_tradewan_non_g21 = { dept_exclude_prefix = 'G21', supplier = 'TW_關貿網路股份有限公司', status = '不估計(Blaire)', remark = 'Blaire', note = 'Department不是G21開頭且Supplier為關貿' }
+
+# Shirley 相關條件
+shirley_telecom = { dept = 'G44 - Corporate IT (BE)', keywords = '電信費|通信費|月租費|通話費|簡訊|行動上網', field = 'Item Description', status = '不估計(Shirley)', remark = 'Shirley', note = 'G44部門的電信相關費用' }
+
+# Cindy 相關條件
+cindy_ctbc = { supplier = 'TW_中國信託商業銀行股份有限公司', status = '不估計(Cindy)', remark = 'Cindy', note = 'Supplier為中國信託' }
+cindy_to_confirm = { requester = 'Sherry Wu (吳欣怡)', dept = 'S01 - Marketing & Publishing', status = '待確認(Cindy)', remark = 'Cindy', note = 'Requester為Sherry Wu且部門為S01' }
+
+# Hosting 相關條件
+hosting_twnfixnet = { requester = 'Chen Hung I (陳虹沂)', dept = 'G42 - Corporate Infrastructure', supplier = 'TW_台灣固網股份有限公司', status = '不估計(Hosting)', remark = 'Hosting', note = 'Requester為陳虹沂且部門為G42且Supplier為台灣固網' }
+
+# Michael 相關條件
+michael_welfare = { supplier = 'TW_新加坡商蝦皮娛樂電商有限公司台灣分公司聯合職工福利委員會', keywords = '(?i)Employee welfare fund', field = 'Item Description', status = '不估計(Michael)', remark = 'Michael', note = 'Supplier為福委會且Item Description包含Employee welfare fund' }
+michael_cobranded_card = { supplier = 'TW_國泰世華商業銀行信用卡作業部', keywords = '(?i)Co-Branded Card Campaign Fee 聯名卡', field = 'Item Description', status = '不估計(Michael)', remark = 'Michael', note = 'Supplier為國泰世華且Item Description包含聯名卡' }
+
+# 租金相關條件
+rent_global_life = { supplier = 'TW_全球人壽保險股份有限公司', keywords = '辦公室租', field = 'Item Description', status = '不估計(租金)', remark = '租金', note = 'Supplier為全球人壽且Item Description包含辦公室租' }
+rent_taipei_wenchuang = { supplier = 'TW_臺北文創開發股份有限公司', keywords = '辦公室租', field = 'Item Description', status = '不估計(租金)', remark = '租金', note = 'Supplier為臺北文創且Item Description包含辦公室租' }
+rent_united_daily = { supplier = 'TW_聯合報股份有限公司', keywords = '(?i)office rental fee|deposit', field = 'Item Description', status = '不估計(租金)', remark = '租金', note = 'Supplier為聯合報且Item Description包含office rental fee/deposit' }
+
+# ERM條件（僅更新Remarked by FN，不更新PO狀態）
+[spt_status_label_rules.erm_conditions]
+
+tradewan_g21 = { dept_prefix = 'G21', supplier = 'TW_關貿網路股份有限公司', remark = 'Blaire', note = 'Department為G21開頭且Supplier為關貿' }
+jianqiang_non_mkt = { dept_exclude = '(?i)Marketing', supplier = 'TW_漸強賴伯股份有限公司', remark = 'Cindy-漸強', note = 'Department不包含Marketing且Supplier為漸強' }
+jianqiang_mkt = { dept_include = '(?i)Marketing', supplier = 'TW_漸強賴伯股份有限公司', remark = '漸強MKT', note = 'Department包含Marketing且Supplier為漸強' }
+
+
+# ============================================================================
+# SPT 會計科目規則配置
+# ============================================================================
+# 使用config_manager._config_toml.get('spt_account_prediction').get('rules')取得後會是一個List
+# 規則按 rule_id 順序執行，每筆記錄只匹配第一個符合的條件
+# 
+# 規則欄位說明：
+# - rule_id: 規則優先級（數字越小優先級越高）
+# - account: 會計科目代碼
+# - departments: 部門列表（可選，支援多個部門）
+# - supplier: 供應商名稱（可選）
+# - description_keywords: Item Description 關鍵字（可選，不分大小寫）
+# - condition_desc: 條件描述（顯示在 matched_conditions 欄位）
+# ============================================================================
+
+[[spt_account_prediction.rules]]
+rule_id = 1
+account = "450014"
+departments = ["S01 - Marketing & Publishing", "S02 - Business Development (S&M)", "G07 - Project"]
+description_keywords = "代收代付"
+condition_desc = "Department等於以下其中之一，S01 - Marketing & Publishing、S02 - Business Development (S&M)、G07 - Project，摘要包含\"代收代付\""
+
+[[spt_account_prediction.rules]]
+rule_id = 2
+account = "650050"
+departments = ["S01 - Marketing & Publishing", "S02 - Business Development (S&M)", "G07 - Project"]
+supplier = "TW_統一數網股份有限公司"
+condition_desc = "Department等於以下其中之一，S01 - Marketing & Publishing、S02 - Business Development (S&M)、G07 - Project，且Supplier等於TW_統一數網股份有限公司"
+
+[[spt_account_prediction.rules]]
+rule_id = 3
+account = "650003"
+departments = ["S01 - Marketing & Publishing", "S02 - Business Development (S&M)", "G07 - Project"]
+supplier = "TW_玉山銀行信用卡_dum(P)"
+condition_desc = "Department等於以下其中之一，S01 - Marketing & Publishing、S02 - Business Development (S&M)、G07 - Project，且Supplier等於TW_玉山銀行信用卡_dum(P)"
+
+[[spt_account_prediction.rules]]
+rule_id = 4
+account = "650003"
+departments = ["S01 - Marketing & Publishing", "S02 - Business Development (S&M)", "G07 - Project"]
+supplier = "TW_家品印刷有限公司"
+condition_desc = "Department等於以下其中之一，S01 - Marketing & Publishing、S02 - Business Development (S&M)、G07 - Project，且Supplier等於TW_家品印刷有限公司"
+
+[[spt_account_prediction.rules]]
+rule_id = 5
+account = "650003"
+departments = ["S01 - Marketing & Publishing", "S02 - Business Development (S&M)", "G07 - Project"]
+supplier = "TW_金玉堂彩色印刷廠股份有限公司"
+condition_desc = "Department等於以下其中之一，S01 - Marketing & Publishing、S02 - Business Development (S&M)、G07 - Project，且Supplier等於TW_金玉堂彩色印刷廠股份有限公司"
+
+[[spt_account_prediction.rules]]
+rule_id = 6
+account = "650003"
+departments = ["S01 - Marketing & Publishing", "S02 - Business Development (S&M)", "G07 - Project"]
+supplier = "TW_丸力覺醒有限公司"
+condition_desc = "Department等於以下其中之一，S01 - Marketing & Publishing、S02 - Business Development (S&M)、G07 - Project，且Supplier等於TW_丸力覺醒有限公司"
+
+[[spt_account_prediction.rules]]
+rule_id = 7
+account = "650019"
+departments = ["S01 - Marketing & Publishing", "S02 - Business Development (S&M)", "G07 - Project"]
+description_keywords = "AMS commission"
+condition_desc = "Department等於以下其中之一，S01 - Marketing & Publishing、S02 - Business Development (S&M)、G07 - Project，Item Description包含\"AMS commission\""
+
+[[spt_account_prediction.rules]]
+rule_id = 8
+account = "650022"
+departments = ["S01 - Marketing & Publishing", "S02 - Business Development (S&M)", "G07 - Project"]
+description_keywords = "Shopee commission"
+condition_desc = "Department等於以下其中之一，S01 - Marketing & Publishing、S02 - Business Development (S&M)、G07 - Project，Item Description包含\"Shopee commission\""
+
+[[spt_account_prediction.rules]]
+rule_id = 9
+account = "650022"
+departments = ["S01 - Marketing & Publishing", "S02 - Business Development (S&M)", "G07 - Project"]
+description_keywords = "AMS Campaign"
+condition_desc = "Department等於以下其中之一，S01 - Marketing & Publishing、S02 - Business Development (S&M)、G07 - Project，Item Description包含\"AMS Campaign\""
+
+[[spt_account_prediction.rules]]
+rule_id = 10
+account = "650003"
+departments = ["S01 - Marketing & Publishing", "S02 - Business Development (S&M)", "G07 - Project"]
+description_keywords = "AMS KOL"
+condition_desc = "Department等於以下其中之一，S01 - Marketing & Publishing、S02 - Business Development (S&M)、G07 - Project，Item Description包含\"AMS KOL\""
+
+[[spt_account_prediction.rules]]
+rule_id = 11
+account = "510001"
+departments = ["C01 - Operations (COR)"]
+supplier = "TW_詮力科技股份有限公司"
+description_keywords = "SMS expense"
+condition_desc = "Department等於C01 - Operations (COR)，Supplier等於TW_詮力科技股份有限公司，且Item Description包含\"SMS expense\"(不分大小寫)"
+
+[[spt_account_prediction.rules]]
+rule_id = 12
+account = "112002"
+departments = ["G03 - People (G&A)"]
+supplier = "TW_聯合大於大樓管理委員會"
+description_keywords = "SCT"
+condition_desc = "Department等於G03 - People (G&A)，Supplier等於TW_聯合大於大樓管理委員會，且Item Description包含\"SCT\"(不分大小寫)"
+
+[[spt_account_prediction.rules]]
+rule_id = 13
+account = "600301"
+departments = ["G03 - People (G&A)"]
+description_keywords = "Welfare Medical Fee"
+condition_desc = "Department等於G03 - People (G&A)，且Item Description包含\"Welfare Medical Fee\"(不分大小寫)"
+
+[[spt_account_prediction.rules]]
+rule_id = 14
+account = "600301"
+departments = ["G03 - People (G&A)"]
+description_keywords = "EAP"
+condition_desc = "Department等於G03 - People (G&A)，且Item Description包含\"EAP\"(不分大小寫)"
+
+[[spt_account_prediction.rules]]
+rule_id = 15
+account = "610206"
+departments = ["G03 - People (G&A)"]
+supplier = "TW_青晨盆景藝術苑"
+description_keywords = " Plants Service Fee"
+condition_desc = "Department等於G03 - People (G&A)，Supplier等於TW_青晨盆景藝術苑，且Item Description包含\" Plants Service Fee\"(不分大小寫)"
+
+[[spt_account_prediction.rules]]
+rule_id = 16
+account = "610206"
+departments = ["G03 - People (G&A)"]
+supplier = "TW_怡和祥企業有限公司"
+description_keywords = " 咖啡機牛奶發泡器清洗劑"
+condition_desc = "Department等於G03 - People (G&A)，Supplier等於TW_怡和祥企業有限公司，且Item Description包含\" 咖啡機牛奶發泡器清洗劑\"(不分大小寫)"
+
+[[spt_account_prediction.rules]]
+rule_id = 17
+account = "610102"
+departments = ["G03 - People (G&A)"]
+supplier = "TW_華生水資源生技股份有限公司"
+description_keywords = " 辦公室飲用水"
+condition_desc = "Department等於G03 - People (G&A)，Supplier等於TW_華生水資源生技股份有限公司，且Item Description包含\" 辦公室飲用水\"(不分大小寫)"
+
+[[spt_account_prediction.rules]]
+rule_id = 18
+account = "610206"
+departments = ["G03 - People (G&A)"]
+supplier = "TW_永大除蟲企業有限公司"
+description_keywords = " 消毒作業 "
+condition_desc = "Department等於G03 - People (G&A)，Supplier等於TW_永大除蟲企業有限公司，且Item Description包含\" 消毒作業 \"(不分大小寫)"
+
+[[spt_account_prediction.rules]]
+rule_id = 19
+account = "600311"
+departments = ["G03 - People (G&A)"]
+description_keywords = "Document_application"
+condition_desc = "Department等於G03 - People (G&A)，且Item Description包含\"Document_application\"(不分大小寫)"
+
+[[spt_account_prediction.rules]]
+rule_id = 20
+account = "610105"
+departments = ["C02 - Customer Service (COR)"]
+supplier = "TW_NTT Singapore Pte. Ltd."
+condition_desc = "Department等於C02 - Customer Service (COR)，Supplier等於TW_NTT Singapore Pte. Ltd."
+
+
 [spx]
 ap_columns = [
     "Company", "Period", "Vendor Name", "Invoice Number", 

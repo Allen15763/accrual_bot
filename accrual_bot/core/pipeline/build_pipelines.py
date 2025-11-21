@@ -65,6 +65,14 @@ def create_spt_po_complete_pipeline(file_paths: Dict[str, str]) -> Pipeline:
                 .add_step(steps.PayrollDetectionStep(name="Detect_Payroll_Records", required=True))
                 .add_step(steps.DateLogicStep(name="Process_Dates", required=True))
                 .add_step(steps.SPTERMLogicStep(name="Apply_ERM_Logic", required=True, retry_count=0))
+                .add_step(
+                    steps.SPTStatusLabelStep(
+                        name="Accounting_Label_Marking",
+                        status_column="PO狀態",          # 可選，預設為 PO狀態
+                        remark_column="Remarked by FN"  # 可選，預設為 Remarked by FN
+                    )
+                )
+                .add_step(steps.SPTAccountPredictionStep(name="Account_Logic", required=True, retry_count=0))
 
                 # ========== 階段4: 後處理 ==========
                 .add_step(steps.SPTPostProcessingStep(
@@ -141,6 +149,14 @@ def create_spt_pr_complete_pipeline(file_paths: Dict[str, str]) -> Pipeline:
                 .add_step(steps.PayrollDetectionStep(name="Detect_Payroll_Records", required=True))
                 .add_step(steps.DateLogicStep(name="Process_Dates", required=True))
                 .add_step(steps.SPXPRERMLogicStep(name="Apply_ERM_Logic", required=True, retry_count=0))
+                .add_step(
+                    steps.SPTStatusLabelStep(
+                        name="Accounting_Label_Marking",
+                        status_column="PR狀態",          # 可選，預設為 PO狀態
+                        remark_column="Remarked by FN"  # 可選，預設為 Remarked by FN
+                    )
+                )
+                .add_step(steps.SPTAccountPredictionStep(name="Account_Logic", required=True, retry_count=0))
                 
                 # # ========== 階段4: 後處理 ==========
                 .add_step(steps.SPTPostProcessingStep(name="Reformat_Data", required=True))
