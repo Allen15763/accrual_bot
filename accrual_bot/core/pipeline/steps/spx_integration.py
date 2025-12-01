@@ -56,7 +56,7 @@ class ColumnAdditionStep(PipelineStep):
             df, previous_month = self._add_basic_columns(df, m)
             
             # 添加 SPX 特定欄位
-            if context.metadata.entity_type == 'SPX':
+            if context.metadata.entity_type == 'SPX' and context.metadata.processing_type == 'PO':
                 df['累計至本期驗收數量/金額'] = None
             df['GL DATE'] = None
             df['Remarked by Procurement PR'] = None
@@ -615,6 +615,20 @@ class ValidationDataProcessingStep(PipelineStep):
                 )
             
             self.logger.info("Processing validation data...")
+
+            excel_params: dict = context.get_variable('file_paths').get('ops_validation').get('params')
+            self.df_locker = pd.read_excel(
+                validation_path, 
+                sheet_name=excel_params.get('sheet_name'), 
+                header=int(excel_params.get('header')), 
+                usecols=excel_params.get('usecols')
+            )
+
+            self.df_kiosk = pd.read_excel(
+                validation_path, 
+                sheet_name=excel_params.get('kiosk_sheet_name'), 
+                usecols=excel_params.get('kiosk_usecols')
+            )
             
             # 處理驗收數據
             locker_non_discount, locker_discount, discount_rate, kiosk_data = \
@@ -706,18 +720,13 @@ class ValidationDataProcessingStep(PipelineStep):
         
         try:
             # 讀取智取櫃驗收明細
-            df_locker = pd.read_excel(
-                validation_file_path, 
-                sheet_name=config_manager.get('SPX', 'locker_sheet_name'), 
-                header=int(config_manager.get('SPX', 'locker_header')), 
-                usecols=config_manager.get('SPX', 'locker_usecols')
-            )
+            df_locker = self.df_locker.copy()
             
             if df_locker.empty:
                 return {'non_discount': {}, 'discount': {}, 'discount_rate': None}
             
             # 設置欄位名稱
-            locker_columns = config_manager.get_list('SPX', 'locker_columns')
+            locker_columns = config_manager._config_toml.get('spx').get('locker_columns')
             df_locker.columns = locker_columns
             
             # 過濾和轉換
@@ -734,12 +743,8 @@ class ValidationDataProcessingStep(PipelineStep):
             if df_locker_filtered.empty:
                 return {'non_discount': {}, 'discount': {}, 'discount_rate': None}
             
-            # 聚合欄位
-            agg_cols = [
-                'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'DA', 
-                'XA', 'XB', 'XC', 'XD', 'XE', 'XF',
-                '超出櫃體安裝費', '超出櫃體運費', '裝運費'
-            ]
+            # 聚合欄位; _config_toml.get('spx').get('locker_columns')[5:-5]
+            agg_cols = config_manager._config_toml.get('spx').get('locker_agg_columns')
             
             return self._categorize_validation_data(df_locker_filtered, agg_cols)
             
@@ -759,11 +764,7 @@ class ValidationDataProcessingStep(PipelineStep):
         """
         try:
             # 讀取繳費機驗收明細
-            df_kiosk = pd.read_excel(
-                validation_file_path, 
-                sheet_name=config_manager.get('SPX', 'kiosk_sheet_name'), 
-                usecols=config_manager.get('SPX', 'kiosk_usecols')
-            )
+            df_kiosk = self.df_kiosk
             
             if df_kiosk.empty:
                 return {}
@@ -986,6 +987,7 @@ class ValidationDataProcessingStep(PipelineStep):
             'XD': r'locker\s*XD(?![A-Za-z0-9])',
             'XE': r'locker\s*XE(?![A-Za-z0-9])',
             'XF': r'locker\s*XF(?![A-Za-z0-9])',
+            'XG': r'locker\s*XG(?![A-Za-z0-9])',
             '裝運費': r'locker\s*安裝運費',
             '超出櫃體安裝費': r'locker\s*超出櫃體安裝費',
             '超出櫃體運費': r'locker\s*超出櫃體運費'
@@ -1014,9 +1016,7 @@ class ValidationDataProcessingStep(PipelineStep):
                 
                 # 提取櫃體種類
                 cabinet_type = None
-                priority_order = ['DA', '裝運費', '超出櫃體安裝費', '超出櫃體運費',
-                                  'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K',
-                                  'XA', 'XB', 'XC', 'XD', 'XE', 'XF']
+                priority_order = config_manager._config_toml.get('spx').get('locker_priority_order')
                 
                 for ctype in priority_order:
                     if ctype in patterns:

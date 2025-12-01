@@ -742,7 +742,7 @@ class AccountingOPSDataLoadingStep(PipelineStep):
         # 必要欄位配置
         self.required_columns = required_columns or {
             'accounting': ['PO Line', '累計至本期驗收數量/金額'],
-            'ops': config_manager.get_list('SPX', 'locker_columns')[5:23]  # 第2行的櫃型
+            'ops': config_manager._config_toml.get('spx').get('locker_columns')[5:23]  # 第2行的櫃型
         }
         
         # 數據源連接池
@@ -1043,7 +1043,7 @@ class AccountingOPSDataLoadingStep(PipelineStep):
             df_ops = loaded_data['ops_validation'].copy()
             
             # 設置欄位名稱
-            locker_columns = config_manager.get_list('SPX', 'locker_columns')
+            locker_columns = config_manager._config_toml.get('spx').get('locker_columns')
             df_ops.columns = locker_columns
             
             # 過濾和轉換

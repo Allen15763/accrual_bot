@@ -260,7 +260,7 @@ class PipelineWithCheckpoint:
         
         # 彙總結果
         successful = sum(1 for r in results if r.is_success)
-        failed = sum(1 for r in results if not r.is_success and not r.is_skipped)
+        failed = sum(1 for r in results if not r.is_success)
         # skipped = sum(1 for r in results if r.is_skipped)
         
         return {

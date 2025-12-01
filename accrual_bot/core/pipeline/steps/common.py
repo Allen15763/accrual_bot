@@ -606,6 +606,18 @@ class PreviousWorkpaperIntegrationStep(PipelineStep):
                 df = self._process_previous_pr(df, previous_wp_pr)
                 self.logger.info("Previous PR workpaper integrated")
 
+            # 從PO/PR前期底稿取回Reviewer資訊
+            processing_type = context.metadata.processing_type
+            entity = context.metadata.entity_type
+            if entity == 'SPT' and processing_type == 'PO':
+                if previous_wp is not None and not previous_wp.empty:
+                    df = self._process_reviewer_info(df, previous_wp)
+                    self.logger.info("Reviewer info updated from Previous PO")
+            if entity == 'SPT' and processing_type == 'PR':
+                if previous_wp_pr is not None and not previous_wp_pr.empty:
+                    df = self._process_reviewer_info(df, previous_wp_pr)
+                    self.logger.info("Reviewer info updated from Previous PR")
+
             # 路徑參數傳入raw_pr才執行，把remark...PR跟Noted...PR欄位複製到沒...PR的欄位
             if 'raw_pr' in context.get_variable('file_paths').keys():
                 df = self._copy_pr_result_non_pr_cols(df)
@@ -671,7 +683,13 @@ class PreviousWorkpaperIntegrationStep(PipelineStep):
                 df['Remarked by 上月 Procurement'] = \
                     df['PO Line'].map(procurement_mapping).fillna(pd.NA)
             
-            # 處理 累計至本期驗收數量/金額 欄位
+            # 處理 累計至本期驗收數量/金額 欄位; 
+            
+            """
+            這邊會先直接用上期的"累計至本期驗收數量"取代本期，
+            在ValidationDataProcessingStep時會複製整欄變成上期，
+                - Refer to _update_cumulative_qty_for_ppe()
+            """
             if '累計至本期驗收數量/金額' in previous_wp.columns and 'PO Line' in df.columns:
                 if 'PO Line' in previous_wp.columns:
                     ppe_qty_mapping = dict(zip(previous_wp['PO Line'], previous_wp['累計至本期驗收數量/金額']))
@@ -713,9 +731,11 @@ class PreviousWorkpaperIntegrationStep(PipelineStep):
             df['Remarked by 上月 FN PR'] = df['PR Line'].map(pr_fn_mapping)
 
             # 特殊會計備註
+            # 跑PO pipeline時，如果PO的Noted by FN已經有match到且PR再次match到的話，會用PR的覆蓋為最後輸出，其餘不影響。
             if 'noted_by_fn' in previous_wp_pr.columns:
-                note_mapping = dict(zip(previous_wp_pr['pr_line'], previous_wp_pr['noted_by_fn']))
-                df['Noted by FN'] = df['pr_line'].map(note_mapping).fillna(pd.NA)
+                key_col = previous_wp_pr.filter(regex='(?i)pr_line|PR Line').columns[0]
+                note_mapping = dict(zip(previous_wp_pr[key_col], previous_wp_pr['noted_by_fn']))
+                df['Noted by FN'] = df[key_col].map(note_mapping).fillna(df['Noted by FN'])
         
         return df
     
@@ -726,6 +746,39 @@ class PreviousWorkpaperIntegrationStep(PipelineStep):
             df_copy[col_remark_fn] = df_copy[col_remark_fn + ' PR']
 
         return df_copy
+    
+    def _process_reviewer_info(self, 
+                               df: pd.DataFrame, 
+                               df_ref: pd.DataFrame) -> pd.DataFrame:
+        col_po_line_count = len(df.filter(regex='(?i)po_line|po line').columns)
+        col_pr_line_count = len(df.filter(regex='(?i)pr_line|pr line').columns)
+        col_ref_po_line_count = len(df_ref.filter(regex='(?i)po_line|po line').columns)
+        col_ref_pr_line_count = len(df_ref.filter(regex='(?i)pr_line|pr line').columns)
+        col_reviewer_count = len(df_ref.filter(regex='(?i)Current month Reviewed by|current_month_reviewed_by').columns)
+        if col_po_line_count == 1 and col_ref_po_line_count == 1:
+            if col_reviewer_count == 1:
+                col_reviewer = df_ref.filter(regex='(?i)Current month Reviewed by|current_month_reviewed_by').columns[0]
+                col_key = df_ref.filter(regex='(?i)po_line|po line').columns[0]
+                map_dict = df_ref.loc[:, [col_reviewer, col_key]].set_index(col_key).to_dict()[col_reviewer]
+                df['previous_month_reviewed_by'] = df[df.filter(regex='(?i)po_line|po line').columns[0]].map(map_dict)
+                df['current_month_reviewed_by'] = df['previous_month_reviewed_by']
+                return df
+            self.logger.warning("搜尋Reviewer欄位發生錯誤，跳過該步驟")
+            return df
+        
+        elif col_pr_line_count == 1 and col_ref_pr_line_count == 1:
+            if col_reviewer_count == 1:
+                col_reviewer = df_ref.filter(regex='(?i)Current month Reviewed by|current_month_reviewed_by').columns[0]
+                col_key = df_ref.filter(regex='(?i)pr_line|pr line').columns[0]
+                map_dict = df_ref.loc[:, [col_reviewer, col_key]].set_index(col_key).to_dict()[col_reviewer]
+                df['previous_month_reviewed_by'] = df[df.filter(regex='(?i)pr_line|pr line').columns[0]].map(map_dict)
+                df['current_month_reviewed_by'] = df['previous_month_reviewed_by']
+                return df
+            self.logger.warning("搜尋Reviewer欄位發生錯誤，跳過該步驟")
+            return df
+        else:
+            self.logger.warning("搜尋po_line/pr_line欄位發生錯誤，跳過該步驟")
+            return df
     
     async def validate_input(self, context: ProcessingContext) -> bool:
         """驗證輸入"""

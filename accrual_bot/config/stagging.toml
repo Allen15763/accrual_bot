@@ -327,9 +327,17 @@ locker_suppliers = [
 ]
 locker_columns = [
     "discount", "PO單號", "廠商", "門市", "地址", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K",
-    "DA", "XA", "XB", "XC", "XD", "XE", "XF", "超出櫃體安裝費", "超出櫃體運費", "裝運費", 
+    "DA", "XA", "XB", "XC", "XD", "XE", "XF", "XG", "超出櫃體安裝費", "超出櫃體運費", "裝運費", 
     "進場月份", "驗收月份", "是否申請產編貼紙", "運費PO單號", "尾款月份"
 ]
+locker_agg_columns = [
+    "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "DA", "XA", "XB", "XC", "XD", "XE", "XF", "XG", 
+    "超出櫃體安裝費", "超出櫃體運費", "裝運費"
+]
+locker_priority_order = [
+    "DA", "裝運費", "超出櫃體安裝費", "超出櫃體運費",
+    "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K",
+    "XA", "XB", "XC", "XD", "XE", "XF", "XG"]
 expanded_contract_wb = "1psPmhZGixonVo6iX4SLhA2V4HM38iPbYN4BeFNs7WSM"
 expanded_contract_range = "A:Q"
 expanded_contract_range1 = "A:Y"

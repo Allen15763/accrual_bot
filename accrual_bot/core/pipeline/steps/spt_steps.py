@@ -457,6 +457,7 @@ class SPTPostProcessingStep(BasePostProcessingStep):
     6. 重新命名欄位和資料型態
     7. 移除臨時欄位
     8. 格式化 ERM
+    9. rearrange reviewer columns
     
     輸入: DataFrame
     輸出: Formatted DataFrame ready for export
@@ -517,6 +518,10 @@ class SPTPostProcessingStep(BasePostProcessingStep):
         # 10. 格式化 ERM
         df = self._reformat_erm(df)
         self._add_note("完成 ERM 格式化")
+
+        # 11. rearrange reviewer columns
+        df = self._rearrange_reviewer_col(df)
+        self._add_note("添加reviewer分類欄位")
         
         self.logger.info("SPT 數據格式化完成")
         return df
@@ -735,6 +740,15 @@ class SPTPostProcessingStep(BasePostProcessingStep):
         except Exception as e:
             self.logger.warning(f"Failed to reformat ERM: {str(e)}")
         
+        return df
+    
+    def _rearrange_reviewer_col(self, df: pd.DataFrame) -> pd.DataFrame:
+        a = df.pop('previous_month_reviewed_by')
+        b = df.pop('current_month_reviewed_by')
+        df = df.assign(
+            previous_month_reviewed_by=a,
+            current_month_reviewed_by=b
+        )
         return df
     
     def _validate_result(

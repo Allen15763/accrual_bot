@@ -350,7 +350,7 @@ def extract_date_range_from_description(
                 logger.warning(f"日期格式無效: {date_ym}")
         
         # 無法匹配任何格式
-        logger.warning(f"無法從描述中提取日期: {desc_str}")
+        # logger.warning(f"無法從描述中提取日期: {desc_str}")
         return DEFAULT_DATE_RANGE
             
     except (ValueError, AttributeError, IndexError) as e:
