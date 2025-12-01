@@ -1543,6 +1543,12 @@ class PRDataReformattingStep(DataReformattingStep):
             # reformat ERM
             df = self._reformat_erm(df)
             
+            # 減少輸出欄位
+            processing_type = context.metadata.processing_type
+            entity = context.metadata.entity_type
+            if entity == 'SPX' and processing_type == 'PR':
+                df = self._remove_columns(df)
+
             context.update_data(df)
             
             self.logger.info("Data reformatting completed")
@@ -1657,6 +1663,11 @@ class PRDataReformattingStep(DataReformattingStep):
         
         return df
     
+    def _remove_columns(self, df):
+        df_copy = df.copy()
+        cols = config_manager._config_toml.get("spx").get("output_columns_before_nlp_pr")
+        return df_copy[cols]
+
     async def validate_input(self, context: ProcessingContext) -> bool:
         """驗證輸入"""
         if context.data is None or context.data.empty:
