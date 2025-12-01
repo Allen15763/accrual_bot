@@ -512,7 +512,8 @@ class SPTPostProcessingStep(BasePostProcessingStep):
         self._add_note("完成暫時性數據保存")
         
         # 9. 移除臨時欄位
-        df = self._remove_temp_columns(df)
+        processing_type: str = context.metadata.processing_type
+        df = self._remove_temp_columns(df, processing_type)
         self._add_note("完成臨時欄位移除")
         
         # 10. 格式化 ERM
@@ -698,7 +699,7 @@ class SPTPostProcessingStep(BasePostProcessingStep):
                 f"Added auxiliary data: {data_name} (shape: {data_copy.shape})"
             )
     
-    def _remove_temp_columns(self, df: pd.DataFrame) -> pd.DataFrame:
+    def _remove_temp_columns(self, df: pd.DataFrame, processing_type: str) -> pd.DataFrame:
         """
         移除臨時計算列
         
@@ -714,6 +715,8 @@ class SPTPostProcessingStep(BasePostProcessingStep):
             'PR Product Code Check',
             'pr_product_code_check',
         ]
+        if processing_type == 'PR':
+            temp_columns.extend(['remarked_by_procurement_pr', 'noted_by_procurement_pr', 'remarked_by_上月_fn_pr'])
         
         for col in temp_columns:
             if col in df.columns:
