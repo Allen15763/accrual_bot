@@ -14,9 +14,10 @@ SPT 會計標籤標記步驟
 """
 
 import time
-import pandas as pd
 from typing import Dict, Any, List
 from datetime import datetime
+import pandas as pd
+import numpy as np
 
 from accrual_bot.core.pipeline.base import PipelineStep, StepResult, StepStatus
 from accrual_bot.core.pipeline.context import ProcessingContext
@@ -154,6 +155,7 @@ class SPTStatusLabelStep(PipelineStep):
             self._log_detailed_statistics(statistics)
 
             # === 階段 5: 更新上下文 ===
+            df = self._update_accrual_col(df)
             context.update_data(df)
 
             duration = time.time() - start_time
@@ -270,6 +272,8 @@ class SPTStatusLabelStep(PipelineStep):
         - dept_include: Department 包含匹配 (regex)
         - dept_exclude: Department 不包含匹配 (regex)
         - requester: Requester 精確匹配
+        - status_value_contains: 狀態欄位regex匹配
+        - remarked_by_procurement: remarked_by_procurement內容精確匹配
 
         Args:
             df: DataFrame
@@ -342,6 +346,25 @@ class SPTStatusLabelStep(PipelineStep):
                 requester_condition = requester == rule['requester']
                 condition &= requester_condition
 
+        # ========== 新增：Status 條件 (PO狀態/PR狀態) ==========
+        if 'status_value_contains' in rule and rule['status_value_contains']:
+            # 動態判斷使用哪個狀態欄位（PO狀態 或 PR狀態）
+            status_col = self.status_column  # 已在 execute() 中動態設定
+            if status_col in df.columns:
+                status_data = df.get(status_col, pd.Series(dtype=str))
+                status_condition = status_data.str.contains(
+                    rule['status_value_contains'], na=False, regex=True
+                )
+                condition &= status_condition
+
+        # ========== 新增：Remarked by Procurement 條件（精確匹配）==========
+        if 'remarked_by_procurement' in rule and rule['remarked_by_procurement']:
+            procurement_col = self._get_column_by_pattern(df, r'(?i)remarked.*procurement')
+            if procurement_col:
+                procurement_data = df.get(procurement_col, pd.Series(dtype=str))
+                procurement_condition = procurement_data == rule['remarked_by_procurement']
+                condition &= procurement_condition
+
         return condition
 
     def _get_column_by_pattern(self, df: pd.DataFrame, pattern: str) -> str:
@@ -370,6 +393,15 @@ class SPTStatusLabelStep(PipelineStep):
                 self.logger.info(f"   • {label}: {count:,}")
 
         self.logger.info("=" * 60 + "\n")
+
+    def _update_accrual_col(self, df: pd.DataFrame, accrual_col: str = '是否估計入帳') -> pd.DataFrame:
+        df_copy = df.copy()
+        df_copy[accrual_col] = np.where(
+            df_copy[self.status_column].str.contains("已完成", na=False),
+            'Y',
+            df_copy[accrual_col]
+        )
+        return df_copy
 
     async def validate_input(self, context: ProcessingContext) -> bool:
         """

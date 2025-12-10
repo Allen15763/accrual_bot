@@ -266,12 +266,9 @@ class SPTERMLogicStep(PipelineStep):
         # === 條件 2: 已入帳（有 GL DATE 且符合其他條件）===
         condition_2 = (
             (~df['GL DATE'].isna()) &
+            (df['match_type'] == 'ITEM_TO_RECEIPT') &
             cond.no_status &
-            cond.in_date_range &
-            cond.erm_before_or_equal_file_date &
             cond.quantity_matched &
-            cond.has_billing &
-            (cond.procurement_completed_or_rent | cond.fn_completed_or_posted) &
             (~cond.is_fa)
         )
         df.loc[condition_2, status_column] = '已入帳'
@@ -325,6 +322,21 @@ class SPTERMLogicStep(PipelineStep):
         )
         df.loc[condition_5, status_column] = '已完成(partially_billed)'
         self._log_condition_result("已完成(partially_billed)", condition_5.sum())
+
+        # 🔴 新增：更新 no_status
+        cond.no_status = (df[status_column].isna()) | (df[status_column] == 'nan')
+
+        # === 條件 5.1: 已完成(not_billed) ===
+        condition_5 = (
+            cond.no_status &
+            cond.in_date_range &
+            cond.erm_before_or_equal_file_date &
+            cond.quantity_matched &
+            (df['Entry Billed Amount'].astype('Float64') == 0) &
+            cond.has_unpaid_amount
+        )
+        df.loc[condition_5, status_column] = '已完成(not_billed)'
+        self._log_condition_result("已完成(not_billed)", condition_5.sum())
 
         # 🔴 新增：更新 no_status
         cond.no_status = (df[status_column].isna()) | (df[status_column] == 'nan')

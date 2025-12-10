@@ -91,8 +91,8 @@ blaire_ssp = { keywords = '(?i)SSP', field = 'Item Description', status = '不�
 blaire_logistics_fee = { keywords = '(?i)Logistics fee|Logistic fee', field = 'Item Description', status = '不估計(Blaire)', remark = 'Blaire', note = 'Item Description包含Logistics fee或Logistic fee' }
 blaire_handling_fee = { keywords = '(?i)Handling fee', field = 'Item Description', status = '不估計(Blaire)', remark = 'Blaire', note = 'Item Description包含Handling fee' }
 blaire_remittance_fee = { keywords = '(?i)Remittance fee', field = 'Item Description', status = '不估計(Blaire)', remark = 'Blaire', note = 'Item Description包含Remittance fee' }
-blaire_shipping_fee = { keywords = '(?i)shipping fee', field = 'Item Description', status = '不估計(Blaire)', remark = 'Blaire', note = 'Item Description包含shipping fee' }
-blaire_hidden_code_fee = { keywords = '物流隱碼費|隱碼費', field = 'Item Description', status = '不估計(Blaire)', remark = 'Blaire', note = 'Item Description包含隱碼費' }
+blaire_shipping_fee = { keywords = '(?i)shipping fee|逆物流運費', field = 'Item Description', status = '不估計(Blaire)', remark = 'Blaire', note = 'Item Description包含shipping fee、逆物流運費' }
+blaire_hidden_code_fee = { keywords = '物流隱碼費|隱碼費|補標費', field = 'Item Description', status = '不估計(Blaire)', remark = 'Blaire', note = 'Item Description包含隱碼費、補標費' }
 blaire_commissions = { keywords = '(?i)Commissions', field = 'Item Description', status = '不估計(Blaire)', remark = 'Blaire', note = 'Item Description包含Commissions' }
 blaire_seller_affiliate = { keywords = '(?i)Seller affiliate', field = 'Item Description', status = '不估計(Blaire)', remark = 'Blaire', note = 'Item Description包含Seller affiliate' }
 blaire_refund = { keywords = '(?i)refund', field = 'Item Description', status = '不估計(Blaire)', remark = 'Blaire', note = 'Item Description包含refund' }
@@ -118,10 +118,19 @@ rent_global_life = { supplier = 'TW_全球人壽保險股份有限公司', keywo
 rent_taipei_wenchuang = { supplier = 'TW_臺北文創開發股份有限公司', keywords = '辦公室租', field = 'Item Description', status = '不估計(租金)', remark = '租金', note = 'Supplier為臺北文創且Item Description包含辦公室租' }
 rent_united_daily = { supplier = 'TW_聯合報股份有限公司', keywords = '(?i)office rental fee|deposit', field = 'Item Description', status = '不估計(租金)', remark = '租金', note = 'Supplier為聯合報且Item Description包含office rental fee/deposit' }
 
+# POST ERM(更新PO狀態)
+
+# ERM判斷狀態包含「Description Period is out of ERM」且採購備註等於「已完成」
+exceed_period_but_pq_confirmed = { status_value_contains = '(?i)error\(Description Period is out of ERM\)', remarked_by_procurement = '已完成', status = '已完成(exceed period but pq confirmed)',  note = 'ERM不在摘要的時間區間內但採購備註等於「已完成」'}
+# 原本判斷Check收貨的項目且採購備註已完成。(可能前端沒上系統驗收或部分驗收)
+check_qty_and_pq_confirmed = { status_value_contains = '(?i)Check收貨', remarked_by_procurement = '已完成', status = '已完成(check qty and pq confirmed)',  note = 'ERM在摘要時間區間內、ERM小於等於月結月份、Entry Qty不等於Received Qty、採購備註等於「已完成」'}
+parsing_err_but_pq_confirmed = { status_value_contains = '格式錯誤，退單', remarked_by_procurement = '已完成', status = '已完成(desc parsing error but pq confirmed)',  note = '無法正確解析Item Description的時間區間但採購備註等於「已完成」'}
+incomplete_but_pq_confirmed = { status_value_contains = '未完成', remarked_by_procurement = '已完成', status = '已完成(incomplete but pq confirmed)',  note = 'ERM大於月結月份且ERM在摘要時間區間內、採購備註等於「已完成」'}
+hris_bug = { keywords = '(?i)卡單', field = 'Remarked by 上月 FN', status = '過往系統卡單',  note = '前期會計備註卡單'}
+
 # ERM條件（僅更新Remarked by FN，不更新PO狀態）
 [spt_status_label_rules.erm_conditions]
 
-tradewan_g21 = { dept_prefix = 'G21', supplier = 'TW_關貿網路股份有限公司', remark = 'Blaire', note = 'Department為G21開頭且Supplier為關貿' }
 jianqiang_non_mkt = { dept_exclude = '(?i)Marketing', supplier = 'TW_漸強賴伯股份有限公司', remark = 'Cindy-漸強', note = 'Department不包含Marketing且Supplier為漸強' }
 jianqiang_mkt = { dept_include = '(?i)Marketing', supplier = 'TW_漸強賴伯股份有限公司', remark = '漸強MKT', note = 'Department包含Marketing且Supplier為漸強' }
 
