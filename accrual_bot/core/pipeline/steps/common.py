@@ -1206,7 +1206,7 @@ def create_error_metadata(error: Exception, context: ProcessingContext,
     
     # 添加上下文變量
     error_metadata['context_variables'] = {
-        k: str(v)[:100] for k, v in context.variables.items()  # 限制長度
+        k: str(v)[:100] for k, v in context._variables.items()  # 限制長度
     }
     
     # 添加額外資訊

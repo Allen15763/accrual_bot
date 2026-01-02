@@ -987,6 +987,8 @@ class ValidationDataProcessingStep(PipelineStep):
             'XD': r'locker\s*XD(?![A-Za-z0-9])',
             'XE': r'locker\s*XE(?![A-Za-z0-9])',
             'XF': r'locker\s*XF(?![A-Za-z0-9])',
+            'XA30': r'locker\s*XA30(?![A-Za-z0-9])',
+            'XC30': r'locker\s*XC30(?![A-Za-z0-9])',
             'XG': r'locker\s*XG(?![A-Za-z0-9])',
             '裝運費': r'locker\s*安裝運費',
             '超出櫃體安裝費': r'locker\s*超出櫃體安裝費',
