@@ -302,6 +302,9 @@ class SPTDataLoadingStep(PipelineStep):
         if 'GL#' in df.columns:
             df['GL#'] = np.where(df['GL#'] == 'N.A.', '666666', df['GL#'])
             df['GL#'] = df['GL#'].fillna('666666').astype('Float64').round(0).astype('Int64').astype('string')
+        
+        if 'Project Number' in df.columns:
+            df.rename(columns={'Project Number': 'Project'})
 
         self.logger.debug(f"成功導入PO數據, 數據維度: {df.shape}")
         
@@ -893,6 +896,9 @@ class SPTPRDataLoadingStep(PipelineStep):
                 .astype('Int64')
                 .astype('string')
             )
+
+        if 'Project Number' in df.columns:
+            df.rename(columns={'Project Number': 'Project'})
         
         self.logger.debug(f"成功導入 PR 數據, 數據維度: {df.shape}")
         
