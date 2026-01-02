@@ -180,7 +180,7 @@ def _get_default_accounting_params() -> Dict[str, Any]:
     """取得會計底稿的預設讀取參數"""
     return {
         'sheet_name': 0,
-        'usecols': ['PO#', 'po_line', 'Item Description', '累計至本期驗收數量/金額'],
+        'usecols': ['po_number', 'po_line', 'item_description', '累計至本期驗收數量/金額'],
         'header': 0,
         'dtype': str
     }
@@ -190,8 +190,8 @@ def _get_default_ops_params() -> Dict[str, Any]:
     """取得 OPS 底稿的預設讀取參數"""
     return {
         'sheet_name': '智取櫃驗收明細',
-        'usecols': 'A:AE',
-        'header': 1
+        'usecols': 'A:AH',
+        'header': 2
     }
 
 
@@ -199,7 +199,7 @@ def _get_default_amount_columns() -> List[str]:
     """取得預設的金額欄位列表"""
     return [
         'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
-        'I', 'J', 'K', 'DA', 'XA', 'XB', 'XC', 'XD', 'XE', 'XF',
+        'I', 'J', 'K', 'DA', 'XA', 'XB', 'XC', 'XD', 'XE', 'XF', 'XG', "XA30", "XC30",
         '超出櫃體安裝費', '超出櫃體運費', '裝運費'
     ]
 
@@ -312,9 +312,9 @@ if __name__ == "__main__":
     print("-" * 60)
     
     context, data = run_accounting_ops_validation(
-        accounting_file=r'C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202510\202509_PO_FN.xlsx',
-        ops_file=r'C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202510\SPX智取櫃及繳費機驗收明細(For FN)_2510.xlsx',
-        processing_date=202510,
+        accounting_file=r'C:\SEA\Accrual\prpo_bot\resources\頂一下\202512\前期底稿\SPX\202511_PO_FN.xlsx',
+        ops_file=r'C:\SEA\Accrual\prpo_bot\resources\頂一下\202512\Original Data\SPX智取櫃及繳費機驗收明細(For FN_2512).xlsx',
+        processing_date=202512,
         output_dir="output",
         sheet_names={
             'accounting_workpaper': '會計底稿',

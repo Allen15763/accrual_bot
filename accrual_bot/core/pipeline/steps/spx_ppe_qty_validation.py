@@ -265,7 +265,21 @@ class AccountingOPSValidationStep(PipelineStep):
         # 聚合：計算每個 PO 單號中非空金額欄位的數量
         # agg_dict = {col: lambda x: x.notna().sum() for col in existing_amount_cols}
         # df_agg = df_ops.groupby('PO單號', as_index=False).agg(agg_dict)
-        df_agg = df_ops.groupby('PO單號', as_index=False)[self.amount_columns].sum()
+        def convert_type(df):
+            df_copy = df.copy()
+            col = ['PO單號', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 
+                   'DA', 'XA', 'XB', 'XC', 'XD', 'XE', 'XF', 'XG', 'XA30', 'XC30', 
+                   '超出櫃體安裝費', '超出櫃體運費', '裝運費']
+            df_copy = (df_copy[col]
+                       .set_index('PO單號')
+                       .astype('string')
+                       .fillna('0')
+                       .replace('', '0')
+                       .map(lambda x: '0' if 'REF' in x else x)
+                       .astype('Float64'))
+            return df_copy.reset_index()
+            
+        df_agg = convert_type(df_ops).groupby('PO單號', as_index=False)[self.amount_columns].sum()
         
         # 計算總 locker 數量（所有金額欄位的總和）不含費用
         exclude_fee_cols = [col for col in existing_amount_cols if '費' not in col]
@@ -298,8 +312,8 @@ class AccountingOPSValidationStep(PipelineStep):
         Returns:
             pd.DataFrame: 加入 locker_type 欄位的會計資料
         """
-        if 'Item Description' not in df_accounting.columns:
-            raise ValueError("Column 'Item Description' not found in accounting data")
+        if 'Item Description' not in df_accounting.columns and 'item_description' not in df_accounting.columns:
+            raise ValueError("Column 'Item Description/item_description' not found in accounting data")
         
         def extract_locker_info(text):
             """提取 locker 資訊"""
@@ -312,7 +326,8 @@ class AccountingOPSValidationStep(PipelineStep):
             return None
         
         # 提取 locker_type
-        df_accounting['locker_type'] = (df_accounting['Item Description']
+        key_col = df_accounting.filter(regex='(?i)Item Description|Item_Description').columns[0]
+        df_accounting['locker_type'] = (df_accounting[key_col]
                                         .apply(extract_locker_info)
                                         .str.replace('主機', '主櫃')
                                         .str.replace('控制主櫃', 'DA')
@@ -341,6 +356,8 @@ class AccountingOPSValidationStep(PipelineStep):
         Returns:
             pd.DataFrame: 聚合後的會計資料
         """
+        if 'po_number' in df_accounting.columns:
+            df_accounting.rename(columns={'po_number': 'PO#'}, inplace=True)
         if 'PO#' not in df_accounting.columns:
             raise ValueError("Column 'PO#' not found in accounting data")
         
@@ -525,7 +542,7 @@ class AccountingOPSValidationStep(PipelineStep):
             return False
         
         # 檢查必要欄位
-        required_accounting_cols = ['PO#', 'Item Description']
+        required_accounting_cols = ['po_number', 'item_description']
         missing_acc_cols = [
             col for col in required_accounting_cols 
             if col not in df_accounting.columns
