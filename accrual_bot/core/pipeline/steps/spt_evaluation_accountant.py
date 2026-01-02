@@ -97,8 +97,13 @@ class SPTStatusLabelStep(PipelineStep):
             self.logger.info(f"成功載入 {len(rules_config)} 條 {rule_type} 規則")
 
             # 驗證規則
+            exception_rules = ['exceed_period_but_pq_confirmed', 
+                               'check_qty_and_pq_confirmed',
+                               'parsing_err_but_pq_confirmed',
+                               'incomplete_but_pq_confirmed',
+                               'hris_bug']
             for rule_name, rule in rules_config.items():
-                if 'remark' not in rule:
+                if 'remark' not in rule and rule_name not in exception_rules:
                     self.logger.warning(
                         f"規則 '{rule_name}' 缺少必要欄位 'remark'"
                     )
