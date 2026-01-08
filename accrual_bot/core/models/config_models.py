@@ -5,9 +5,9 @@
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Any, Union
+from typing import Dict, List, Optional, Any
 from pathlib import Path
-from .data_models import EntityType, ProcessingType
+from .data_models import EntityType
 
 
 @dataclass
@@ -31,41 +31,6 @@ class EntityConfig:
     
     # 驗證規則
     validation_rules: Dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass
-class ProcessingConfig:
-    """處理配置模型"""
-    processing_type: ProcessingType
-    entity_config: EntityConfig
-    
-    # 檔案設定
-    input_file_path: Optional[Path] = None
-    output_directory: Optional[Path] = None
-    
-    # 處理參數
-    concurrent_threads: int = 4
-    batch_size: int = 1000
-    timeout_seconds: int = 300
-    
-    # 欄位映射
-    field_mappings: Dict[str, str] = field(default_factory=dict)
-    
-    # 過濾條件
-    filter_conditions: Dict[str, Any] = field(default_factory=dict)
-    
-    # 排序設定
-    sort_columns: List[str] = field(default_factory=list)
-    sort_ascending: bool = True
-    
-    # 驗證設定
-    enable_validation: bool = True
-    strict_mode: bool = False
-    
-    # 日誌設定
-    log_level: str = "INFO"
-    enable_debug: bool = False
-
 
 @dataclass
 class ExportConfig:
@@ -201,53 +166,3 @@ def create_default_entity_config(entity_type: EntityType) -> EntityConfig:
             entity_name=entity_type.value
         )
 
-
-def create_default_processing_config(
-    processing_type: ProcessingType,
-    entity_type: EntityType
-) -> ProcessingConfig:
-    """創建默認處理配置
-    
-    Args:
-        processing_type: 處理類型
-        entity_type: 實體類型
-    
-    Returns:
-        ProcessingConfig: 默認配置
-    """
-    entity_config = create_default_entity_config(entity_type)
-    
-    return ProcessingConfig(
-        processing_type=processing_type,
-        entity_config=entity_config,
-        concurrent_threads=4,
-        batch_size=1000,
-        timeout_seconds=300,
-        enable_validation=True,
-        strict_mode=False,
-        log_level="INFO"
-    )
-
-
-def create_default_export_config(
-    format: str = "excel",
-    filename: str = ""
-) -> ExportConfig:
-    """創建默認匯出配置
-    
-    Args:
-        format: 匯出格式
-        filename: 檔案名稱
-    
-    Returns:
-        ExportConfig: 默認配置
-    """
-    return ExportConfig(
-        format=format,
-        output_filename=filename,
-        include_timestamp=True,
-        excel_sheet_name="Data",
-        include_index=False,
-        csv_encoding="utf-8-sig",
-        enable_autofilter=True
-    )

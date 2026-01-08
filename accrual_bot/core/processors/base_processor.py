@@ -746,7 +746,7 @@ class BaseDataProcessor:
                 # 定義「上月FN」備註關單條件
                 remarked_close_by_fn_last_month = (
                     df['Remarked by 上月 FN'].str.contains('刪|關', na=False) | 
-                    df['Remarked by 上月 FN PR'].str.contains('刪|關', na=False)
+                    df['Remarked by 上月 FN PR'].astype(str).str.contains('刪|關', na=False)
                 )
                 
                 # 統一轉換日期格式
@@ -792,8 +792,8 @@ class BaseDataProcessor:
                 
                 # 條件7：若「Remarked by 上月 FN PR」含有「入FA」，則提取該數字，並更新狀態
                 cond7 = (
-                    (df['Remarked by 上月 FN PR'].str.contains('入FA', na=False)) & 
-                    (~df['Remarked by 上月 FN PR'].str.contains('部分完成', na=False))
+                    (df['Remarked by 上月 FN PR'].astype(str).str.contains('入FA', na=False)) & 
+                    (~df['Remarked by 上月 FN PR'].astype(str).str.contains('部分完成', na=False))
                 )
                 if cond7.any():
                     extracted_pr = self.extract_fa_remark(df.loc[cond7, 'Remarked by 上月 FN PR'])
@@ -869,8 +869,9 @@ class BaseDataProcessor:
                 po_general_fa = df['Remarked by 上月 FN'].str.contains('入FA', na=False)
                 po_specific_pattern = df['Remarked by 上月 FN'].str.contains(r'部分完成.*\d{6}入FA', na=False, regex=True)
 
-                pr_general_fa = df['Remarked by 上月 FN PR'].str.contains('入FA', na=False)
-                pr_specific_pattern = df['Remarked by 上月 FN PR'].str.contains(r'部分完成.*\d{6}入FA', na=False, regex=True)
+                pr_general_fa = df['Remarked by 上月 FN PR'].astype(str).str.contains('入FA', na=False)
+                pr_specific_pattern = (df['Remarked by 上月 FN PR']
+                                       .astype(str).str.contains(r'部分完成.*\d{6}入FA', na=False, regex=True))
 
                 doesnt_contain_fa = (~pr_general_fa & ~po_general_fa)
                 specific_pattern = (pr_specific_pattern | po_specific_pattern)
@@ -891,7 +892,7 @@ class BaseDataProcessor:
                 
                 # 定義「上月FN」備註關單條件
                 remarked_close_by_fn_last_month = (
-                    df['Remarked by 上月 FN'].str.contains('刪|關', na=False)
+                    df['Remarked by 上月 FN'].astype(str).str.contains('刪|關', na=False)
                 )
                 
                 # 統一轉換日期格式
@@ -927,8 +928,8 @@ class BaseDataProcessor:
                 # 條件6：若「Remarked by 上月 FN」含有「入FA」，則提取該數字，並更新狀態(xxxxxx入FA)
                 # 部分完成xxxxxx入FA不計入，前期FN備註如果是部分完成的會掉到erm邏輯判斷
                 cond6 = (
-                    (df['Remarked by 上月 FN'].str.contains('入FA', na=False)) & 
-                    (~df['Remarked by 上月 FN'].str.contains('部分完成', na=False))
+                    (df['Remarked by 上月 FN'].astype(str).str.contains('入FA', na=False)) & 
+                    (~df['Remarked by 上月 FN'].astype(str).str.contains('部分完成', na=False))
                 )
                 if cond6.any():
                     extracted_fn = self.extract_fa_remark(df.loc[cond6, 'Remarked by 上月 FN'])
@@ -982,7 +983,8 @@ class BaseDataProcessor:
 
                 combined_cond = is_non_labeled & mask_ops_intermediary & mask_desc_contains_intermediary & \
                     ((df['Expected Received Month_轉換格式'] == date) |
-                     ((df['Expected Received Month_轉換格式'] < date) & (df['Remarked by 上月 FN'].str.contains('已完成')))
+                     ((df['Expected Received Month_轉換格式'] < date) & (df['Remarked by 上月 FN']
+                                                                     .astype(str).str.contains('已完成')))
                      )
                 df.loc[combined_cond, tag_column] = '已完成_intermediary'
                 

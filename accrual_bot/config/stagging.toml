@@ -1,0 +1,444 @@
+[paths]
+ref_path_mob = "accrual_bot/config/ref.xlsx"
+ref_path_spt = "accrual_bot/config/ref_SPTTW.xlsx"
+log_path = "./logs"
+colab_zip = "/content/drive/Shareddrives/INT_TWN_SEA_FN_Shared_Resources/15_FBA/Allen/accrual_bot.zip"
+
+[general]
+pt_YM = '''(\d{4}\/(0[1-9]|1[0-2])(\s|$))'''
+pt_YMD = '''(\d{4}\/(0[1-9]|1[0-2])\/((0[1-9])|(1[0-9])|(2[0-9])|(3[0-1]))(\s|$))'''
+pt_YMtoYM = '''(\d{4}\/(0[1-9]|1[0-2])[-]\d{4}\/(0[1-9]|1[0-2])(\s|$))'''
+pt_YMDtoYMD = '''(\d{4}\/(0[1-9]|1[0-2])\/((0[1-9])|(1[0-9])|(2[0-9])|(3[0-1]))[-]\d{4}\/(0[1-9]|1[0-2])\/((0[1-9])|(1[0-9])|(2[0-9])|(3[0-1]))(\s|$))'''
+
+[date_patterns]
+DATE_YMD_TO_YMD = '(\d{4}/\d{2}/\d{2})\s*-\s*(\d{4}/\d{2}/\d{2})'
+DATE_YM_TO_YM = '(\d{4}/\d{2})\s*-\s*(\d{4}/\d{2})'
+DATE_YMD = '(\d{4}/\d{2}/\d{2})'
+DATE_YM = '(\d{4}/\d{2})'
+
+[category_patterns_by_desc]
+# --- 新增與調整的分類 ---
+"Management Fee" = '管理費'
+"Employee Welfare" = '(?i)^(?!.*Postage and Courier).*(?:Welfare|體檢)'
+"Equipment Rental" = '(?i)租賃費|租賃第|月租費|事務機租賃'
+"IT Hardware" = '(?i)IT - EE - FS|cisco|meraki'
+"Transportation Fees" = '(?i)^(?!.*Travel).*(?:etag|紅單|ticket|car rent|租車)'
+"Printing & Stationery" = '(?i)^(?!.*Postage and Courier).*(?:Printing and Stationery|影印|計張|事務機耗材|stationery|tape|膠帶|文宣)'
+"Legal/Consulting Fees" = '(?i)^(?!.*Travel).*(?:legal consultant|公證)'
+"Change" = '找零金'
+"Locker" = '智取櫃'
+"Kiosk Payment" = '(?i)^(?!.*(?:找零金|租賃))(?=.*繳費機)(?=.*payment).*'
+
+# --- 原有的分類 ---
+"Deposit" = '(?i)deposit|押金設算息|押金'
+"Rental" = '(?i)rental|租金'
+"Logistics" = '(?i)^(?!.*(?:安裝運費|櫃體運費)).*(?:logistics|shipping fee|運費|運什費|物流袋|物流籠車|roller container)'
+"Salary & Agency Fee" = '(?i)salary|agency fee'
+"Utilities" = '(?i)^(?!.*Supplies).*(?:水費|電費|internet|telephone|telecom|飲水|Utilities|Electricity)'
+# 排除 "Travel" 的維修費用
+"Repair & Maintenance" = '(?i)^(?!.*Travel).*(?:維修|修繕|工程|cleaning|維護保養)'
+"Supplies" = '(?i)supplies|consumables|equipment|mouse|battery|pda|cctv|pallet|硬體|hardware|手工具|標示'
+"Travel Expense" = '(?i)Travel Exp.'
+"Insurance" = '(?i)insurance|保險'
+"Postage & Courier" = '(?i)postage and courier|郵資'
+# 將服務費放在較後面，避免攔截掉更具體的項目
+"Service Fee" = '(?i)service fee|服務費|service charge'
+
+[mob]
+pr_pivot_index = [
+    "PR#", "Project", "Supplier", "Account code_variable", 
+    "Account Name_variable", "Product code._variable", 
+    "Region_c_variable", "Dep._variable", "Item Description"
+]
+po_pivot_index = [
+    "PO#", "Project", "Supplier", "Account code_variable", 
+    "Account Name_variable", "Product code._variable", 
+    "Region_c_variable", "Dep._variable", "Item Description"
+]
+sm_cr_pivot_cols = ["Liability_variable", "Product Code"]
+ga_cr_pivot_cols = ["Liability_variable", "Account Name_variable"]
+pivot_value_col = "Accr. Amount_variable"
+
+[spt]
+pr_pivot_index = [
+    "Account code_variable", "Account Name_variable", "Supplier", 
+    "PR#", "Project", "Product code._variable", 
+    "Region_c_variable", "Dep._variable"
+]
+po_pivot_index = [
+    "Account code_variable", "Account Name_variable", "Supplier", 
+    "PO#", "Project", "Product code._variable", 
+    "Region_c_variable", "Dep._variable"
+]
+sm_cr_pivot_cols = [
+    "Account code_variable", "Account Name_variable", 
+    "Supplier", "Liability_variable"
+]
+ga_cr_pivot_cols = [
+    "Account code_variable", "Account Name_variable", "Liability_variable"
+]
+pivot_value_col = "Accr. Amount_variable"
+
+
+# SPT狀態標籤標記規則配置
+[spt_status_label_rules]
+
+# 優先於ERM的條件（強制覆蓋PO狀態和Remarked by FN）
+[spt_status_label_rules.priority_conditions]
+
+# Blaire 相關條件
+blaire_ssp = { keywords = '(?i)SSP', field = 'Item Description', status = '不估計(Blaire)', remark = 'Blaire', note = 'Item Description包含SSP' }
+blaire_logistics_fee = { keywords = '(?i)Logistics fee|Logistic fee', field = 'Item Description', status = '不估計(Blaire)', remark = 'Blaire', note = 'Item Description包含Logistics fee或Logistic fee' }
+blaire_handling_fee = { keywords = '(?i)Handling fee', field = 'Item Description', status = '不估計(Blaire)', remark = 'Blaire', note = 'Item Description包含Handling fee' }
+blaire_remittance_fee = { keywords = '(?i)Remittance fee', field = 'Item Description', status = '不估計(Blaire)', remark = 'Blaire', note = 'Item Description包含Remittance fee' }
+blaire_shipping_fee = { keywords = '(?i)shipping fee|逆物流運費', field = 'Item Description', status = '不估計(Blaire)', remark = 'Blaire', note = 'Item Description包含shipping fee、逆物流運費' }
+blaire_hidden_code_fee = { keywords = '物流隱碼費|隱碼費|補標費', field = 'Item Description', status = '不估計(Blaire)', remark = 'Blaire', note = 'Item Description包含隱碼費、補標費' }
+blaire_commissions = { keywords = '(?i)Commissions', field = 'Item Description', status = '不估計(Blaire)', remark = 'Blaire', note = 'Item Description包含Commissions' }
+blaire_seller_affiliate = { keywords = '(?i)Seller affiliate', field = 'Item Description', status = '不估計(Blaire)', remark = 'Blaire', note = 'Item Description包含Seller affiliate' }
+blaire_refund = { keywords = '(?i)refund', field = 'Item Description', status = '不估計(Blaire)', remark = 'Blaire', note = 'Item Description包含refund' }
+blaire_service_charges = { keywords = '(?i)service charges', field = 'Item Description', status = '不估計(Blaire)', remark = 'Blaire', note = 'Item Description包含service charges' }
+blaire_tradewan_non_g21 = { dept_exclude_prefix = 'G21', supplier = 'TW_關貿網路股份有限公司', status = '不估計(Blaire)', remark = 'Blaire', note = 'Department不是G21開頭且Supplier為關貿' }
+
+# Shirley 相關條件
+shirley_telecom = { dept = 'G44 - Corporate IT (BE)', keywords = '電信費|通信費|月租費|通話費|簡訊|行動上網', field = 'Item Description', status = '不估計(Shirley)', remark = 'Shirley', note = 'G44部門的電信相關費用' }
+
+# Cindy 相關條件
+cindy_ctbc = { supplier = 'TW_中國信託商業銀行股份有限公司', status = '不估計(Cindy)', remark = 'Cindy', note = 'Supplier為中國信託' }
+cindy_to_confirm = { requester = 'Sherry Wu (吳欣怡)', dept = 'S01 - Marketing & Publishing', status = '待確認(Cindy)', remark = 'Cindy', note = 'Requester為Sherry Wu且部門為S01' }
+
+# Hosting 相關條件
+hosting_twnfixnet = { requester = 'Chen Hung I (陳虹沂)', dept = 'G42 - Corporate Infrastructure', supplier = 'TW_台灣固網股份有限公司', status = '不估計(Hosting)', remark = 'Hosting', note = 'Requester為陳虹沂且部門為G42且Supplier為台灣固網' }
+
+# Michael 相關條件
+michael_welfare = { supplier = 'TW_新加坡商蝦皮娛樂電商有限公司台灣分公司聯合職工福利委員會', keywords = '(?i)Employee welfare fund', field = 'Item Description', status = '不估計(Michael)', remark = 'Michael', note = 'Supplier為福委會且Item Description包含Employee welfare fund' }
+michael_cobranded_card = { supplier = 'TW_國泰世華商業銀行信用卡作業部', keywords = '(?i)Co-Branded Card Campaign Fee 聯名卡', field = 'Item Description', status = '不估計(Michael)', remark = 'Michael', note = 'Supplier為國泰世華且Item Description包含聯名卡' }
+
+# 租金相關條件
+rent_global_life = { supplier = 'TW_全球人壽保險股份有限公司', keywords = '辦公室租', field = 'Item Description', status = '不估計(租金)', remark = '租金', note = 'Supplier為全球人壽且Item Description包含辦公室租' }
+rent_taipei_wenchuang = { supplier = 'TW_臺北文創開發股份有限公司', keywords = '辦公室租', field = 'Item Description', status = '不估計(租金)', remark = '租金', note = 'Supplier為臺北文創且Item Description包含辦公室租' }
+rent_united_daily = { supplier = 'TW_聯合報股份有限公司', keywords = '(?i)office rental fee|deposit', field = 'Item Description', status = '不估計(租金)', remark = '租金', note = 'Supplier為聯合報且Item Description包含office rental fee/deposit' }
+
+# POST ERM(更新PO狀態)
+
+# ERM判斷狀態包含「Description Period is out of ERM」且採購備註等於「已完成」
+exceed_period_but_pq_confirmed = { status_value_contains = '(?i)error\(Description Period is out of ERM\)', remarked_by_procurement = '已完成', status = '已完成(exceed period but pq confirmed)',  note = 'ERM不在摘要的時間區間內但採購備註等於「已完成」'}
+# 原本判斷Check收貨的項目且採購備註已完成。(可能前端沒上系統驗收或部分驗收)
+check_qty_and_pq_confirmed = { status_value_contains = '(?i)Check收貨', remarked_by_procurement = '已完成', status = '已完成(check qty and pq confirmed)',  note = 'ERM在摘要時間區間內、ERM小於等於月結月份、Entry Qty不等於Received Qty、採購備註等於「已完成」'}
+parsing_err_but_pq_confirmed = { status_value_contains = '格式錯誤，退單', remarked_by_procurement = '已完成', status = '已完成(desc parsing error but pq confirmed)',  note = '無法正確解析Item Description的時間區間但採購備註等於「已完成」'}
+incomplete_but_pq_confirmed = { status_value_contains = '未完成', remarked_by_procurement = '已完成', status = '已完成(incomplete but pq confirmed)',  note = 'ERM大於月結月份且ERM在摘要時間區間內、採購備註等於「已完成」'}
+hris_bug = { keywords = '(?i)卡單', field = 'Remarked by 上月 FN', status = '過往系統卡單',  note = '前期會計備註卡單'}
+
+# ERM條件（僅更新Remarked by FN，不更新PO狀態）
+[spt_status_label_rules.erm_conditions]
+
+jianqiang_non_mkt = { dept_exclude = '(?i)Marketing', supplier = 'TW_漸強賴伯股份有限公司', remark = 'Cindy-漸強', note = 'Department不包含Marketing且Supplier為漸強' }
+jianqiang_mkt = { dept_include = '(?i)Marketing', supplier = 'TW_漸強賴伯股份有限公司', remark = '漸強MKT', note = 'Department包含Marketing且Supplier為漸強' }
+
+
+# ============================================================================
+# SPT 會計科目規則配置
+# ============================================================================
+# 使用config_manager._config_toml.get('spt_account_prediction').get('rules')取得後會是一個List
+# 規則按 rule_id 順序執行，每筆記錄只匹配第一個符合的條件
+# 
+# 規則欄位說明：
+# - rule_id: 規則優先級（數字越小優先級越高）
+# - account: 會計科目代碼
+# - departments: 部門列表（可選，支援多個部門）
+# - supplier: 供應商名稱（可選）
+# - description_keywords: Item Description 關鍵字（可選，不分大小寫）
+# - condition_desc: 條件描述（顯示在 matched_conditions 欄位）
+# ============================================================================
+
+[[spt_account_prediction.rules]]
+rule_id = 1
+account = "450014"
+departments = ["S01 - Marketing & Publishing", "S02 - Business Development (S&M)", "G07 - Project"]
+description_keywords = "代收代付"
+condition_desc = "Department等於以下其中之一，S01 - Marketing & Publishing、S02 - Business Development (S&M)、G07 - Project，摘要包含\"代收代付\""
+
+[[spt_account_prediction.rules]]
+rule_id = 2
+account = "650050"
+departments = ["S01 - Marketing & Publishing", "S02 - Business Development (S&M)", "G07 - Project"]
+supplier = "TW_統一數網股份有限公司"
+condition_desc = "Department等於以下其中之一，S01 - Marketing & Publishing、S02 - Business Development (S&M)、G07 - Project，且Supplier等於TW_統一數網股份有限公司"
+
+[[spt_account_prediction.rules]]
+rule_id = 3
+account = "650003"
+departments = ["S01 - Marketing & Publishing", "S02 - Business Development (S&M)", "G07 - Project"]
+supplier = "TW_玉山銀行信用卡_dum(P)"
+condition_desc = "Department等於以下其中之一，S01 - Marketing & Publishing、S02 - Business Development (S&M)、G07 - Project，且Supplier等於TW_玉山銀行信用卡_dum(P)"
+
+[[spt_account_prediction.rules]]
+rule_id = 4
+account = "650003"
+departments = ["S01 - Marketing & Publishing", "S02 - Business Development (S&M)", "G07 - Project"]
+supplier = "TW_家品印刷有限公司"
+condition_desc = "Department等於以下其中之一，S01 - Marketing & Publishing、S02 - Business Development (S&M)、G07 - Project，且Supplier等於TW_家品印刷有限公司"
+
+[[spt_account_prediction.rules]]
+rule_id = 5
+account = "650003"
+departments = ["S01 - Marketing & Publishing", "S02 - Business Development (S&M)", "G07 - Project"]
+supplier = "TW_金玉堂彩色印刷廠股份有限公司"
+condition_desc = "Department等於以下其中之一，S01 - Marketing & Publishing、S02 - Business Development (S&M)、G07 - Project，且Supplier等於TW_金玉堂彩色印刷廠股份有限公司"
+
+[[spt_account_prediction.rules]]
+rule_id = 6
+account = "650003"
+departments = ["S01 - Marketing & Publishing", "S02 - Business Development (S&M)", "G07 - Project"]
+supplier = "TW_丸力覺醒有限公司"
+condition_desc = "Department等於以下其中之一，S01 - Marketing & Publishing、S02 - Business Development (S&M)、G07 - Project，且Supplier等於TW_丸力覺醒有限公司"
+
+[[spt_account_prediction.rules]]
+rule_id = 7
+account = "650019"
+departments = ["S01 - Marketing & Publishing", "S02 - Business Development (S&M)", "G07 - Project"]
+description_keywords = "AMS commission"
+condition_desc = "Department等於以下其中之一，S01 - Marketing & Publishing、S02 - Business Development (S&M)、G07 - Project，Item Description包含\"AMS commission\""
+
+[[spt_account_prediction.rules]]
+rule_id = 8
+account = "650022"
+departments = ["S01 - Marketing & Publishing", "S02 - Business Development (S&M)", "G07 - Project"]
+description_keywords = "Shopee commission"
+condition_desc = "Department等於以下其中之一，S01 - Marketing & Publishing、S02 - Business Development (S&M)、G07 - Project，Item Description包含\"Shopee commission\""
+
+[[spt_account_prediction.rules]]
+rule_id = 9
+account = "650022"
+departments = ["S01 - Marketing & Publishing", "S02 - Business Development (S&M)", "G07 - Project"]
+description_keywords = "AMS Campaign"
+condition_desc = "Department等於以下其中之一，S01 - Marketing & Publishing、S02 - Business Development (S&M)、G07 - Project，Item Description包含\"AMS Campaign\""
+
+[[spt_account_prediction.rules]]
+rule_id = 10
+account = "650003"
+departments = ["S01 - Marketing & Publishing", "S02 - Business Development (S&M)", "G07 - Project"]
+description_keywords = "AMS KOL"
+condition_desc = "Department等於以下其中之一，S01 - Marketing & Publishing、S02 - Business Development (S&M)、G07 - Project，Item Description包含\"AMS KOL\""
+
+[[spt_account_prediction.rules]]
+rule_id = 11
+account = "510001"
+departments = ["C01 - Operations (COR)"]
+supplier = "TW_詮力科技股份有限公司"
+description_keywords = "SMS expense"
+condition_desc = "Department等於C01 - Operations (COR)，Supplier等於TW_詮力科技股份有限公司，且Item Description包含\"SMS expense\"(不分大小寫)"
+
+[[spt_account_prediction.rules]]
+rule_id = 12
+account = "112002"
+departments = ["G03 - People (G&A)"]
+supplier = "TW_聯合大於大樓管理委員會"
+description_keywords = "SCT"
+condition_desc = "Department等於G03 - People (G&A)，Supplier等於TW_聯合大於大樓管理委員會，且Item Description包含\"SCT\"(不分大小寫)"
+
+[[spt_account_prediction.rules]]
+rule_id = 13
+account = "600301"
+departments = ["G03 - People (G&A)"]
+description_keywords = "Welfare Medical Fee"
+condition_desc = "Department等於G03 - People (G&A)，且Item Description包含\"Welfare Medical Fee\"(不分大小寫)"
+
+[[spt_account_prediction.rules]]
+rule_id = 14
+account = "600301"
+departments = ["G03 - People (G&A)"]
+description_keywords = "EAP"
+condition_desc = "Department等於G03 - People (G&A)，且Item Description包含\"EAP\"(不分大小寫)"
+
+[[spt_account_prediction.rules]]
+rule_id = 15
+account = "610206"
+departments = ["G03 - People (G&A)"]
+supplier = "TW_青晨盆景藝術苑"
+description_keywords = " Plants Service Fee"
+condition_desc = "Department等於G03 - People (G&A)，Supplier等於TW_青晨盆景藝術苑，且Item Description包含\" Plants Service Fee\"(不分大小寫)"
+
+[[spt_account_prediction.rules]]
+rule_id = 16
+account = "610206"
+departments = ["G03 - People (G&A)"]
+supplier = "TW_怡和祥企業有限公司"
+description_keywords = " 咖啡機牛奶發泡器清洗劑"
+condition_desc = "Department等於G03 - People (G&A)，Supplier等於TW_怡和祥企業有限公司，且Item Description包含\" 咖啡機牛奶發泡器清洗劑\"(不分大小寫)"
+
+[[spt_account_prediction.rules]]
+rule_id = 17
+account = "610102"
+departments = ["G03 - People (G&A)"]
+supplier = "TW_華生水資源生技股份有限公司"
+description_keywords = " 辦公室飲用水"
+condition_desc = "Department等於G03 - People (G&A)，Supplier等於TW_華生水資源生技股份有限公司，且Item Description包含\" 辦公室飲用水\"(不分大小寫)"
+
+[[spt_account_prediction.rules]]
+rule_id = 18
+account = "610206"
+departments = ["G03 - People (G&A)"]
+supplier = "TW_永大除蟲企業有限公司"
+description_keywords = " 消毒作業 "
+condition_desc = "Department等於G03 - People (G&A)，Supplier等於TW_永大除蟲企業有限公司，且Item Description包含\" 消毒作業 \"(不分大小寫)"
+
+[[spt_account_prediction.rules]]
+rule_id = 19
+account = "600311"
+departments = ["G03 - People (G&A)"]
+description_keywords = "Document_application"
+condition_desc = "Department等於G03 - People (G&A)，且Item Description包含\"Document_application\"(不分大小寫)"
+
+[[spt_account_prediction.rules]]
+rule_id = 20
+account = "610105"
+departments = ["C02 - Customer Service (COR)"]
+supplier = "TW_NTT Singapore Pte. Ltd."
+condition_desc = "Department等於C02 - Customer Service (COR)，Supplier等於TW_NTT Singapore Pte. Ltd."
+
+
+[spx]
+ap_columns = [
+    "Company", "Period", "Vendor Name", "Invoice Number", 
+    "Invoice Amount", "PO_LINE_NUMBER", "PO Number", 
+    "Receipt Number", "Match Type"
+]
+pr_ga_pivot_index = [
+    "Account code", "Account Name", "Supplier", "PR#", 
+    "Project", "Product code", "Region_c", "Dep."
+]
+pr_sm_pivot_index = [
+    "Account code", "Supplier", "Account Name", 
+    "PR#", "Product code", "Dep."
+]
+po_pivot_index = [
+    "Account code", "Account Name", "Supplier", "PO#", 
+    "Project", "Product code.1", "Region_c", "Dep."
+]
+sm_cr_pivot_cols = ["Account code", "Account Name", "Project", "Liability"]
+ga_cr_pivot_cols = ["Account code", "Account Name", "Liability"]
+pivot_value_col = "Accr. Amount"
+exp_accounts = [650005, 650001, 610104, 630001, 650003, 610105, 620008, 600310, 610110, 620003]
+bao_supplier = ["TW_寶倉物流股份有限公司", "TW_新技術供應鏈與物流股份有限公司"]
+bao_categories = ["Cost of Logistics and Warehouse - Water", "Cost of Logistics and Warehouse - Electricity"]
+deposit_keywords = '''(?i)押金|保證金|Deposit|找零金|定存'''
+deposit_keywords_label = "摘要內有押金/保證金/Deposit/找零金"
+utility_suppliers = "台灣電力|自來水|遠傳電信|中華電信|台灣大哥大|新世紀資通"
+ops_for_rent = ["Angel Li (李佳宣)", "Zoey Li (李涵郁)", "Mike Zhong (鍾明賢)", "Emily Hsu (許毓淩)"]
+ops_for_intermediary = "Kei Chen (陳謹婷)"
+ops_for_other = "Judy Hsu (許淳方)"
+account_rent = 520036
+kiosk_suppliers = ["TW_立保科技股份有限公司", "TW_博辰科技股份有限公司"]
+locker_suppliers = [
+    "TW_台灣松下銷售股份有限公司", 
+    "TW_皇丞創新科技股份有限公司", 
+    "TW_譽經科技股份有限公司"
+]
+locker_columns = [
+    "discount", "PO單號", "廠商", "門市", "地址", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K",
+    "DA", "XA", "XB", "XC", "XD", "XE", "XF", "XG", "XA30", "XC30", "超出櫃體安裝費", "超出櫃體運費", "裝運費", 
+    "進場月份", "驗收月份", "是否申請產編貼紙", "運費PO單號", "尾款月份"
+]
+locker_agg_columns = [
+    "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "DA", "XA", "XB", "XC", "XD", "XE", "XF", "XG", "XA30", "XC30",
+    "超出櫃體安裝費", "超出櫃體運費", "裝運費"
+]
+locker_priority_order = [
+    "DA", "裝運費", "超出櫃體安裝費", "超出櫃體運費",
+    "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K",
+    "XA", "XB", "XC", "XD", "XE", "XF", "XG", "XA30", "XC30"]
+expanded_contract_wb = "1psPmhZGixonVo6iX4SLhA2V4HM38iPbYN4BeFNs7WSM"
+expanded_contract_range = "A:Q"
+expanded_contract_range1 = "A:Y"
+expanded_contract_sheet1 = "archived_contract(第一期最新合約)"
+expanded_contract_sheet2 = "第二期續約案件"
+expanded_contract_sheet3 = "第三期續約案件"
+contract_filing_list_sheet = "歸檔清單"
+contract_filing_list_range = "D,H,P"
+key_for_merging_origin_and_renew_contract = ["sp_code", "address"]
+
+output_columns_before_nlp = [
+    "po_link","po_number","po_submitter",
+    "po_submitter_email","region","department",
+    "po_supplier", "pr_requester","description","currency",
+    "po_total_amount","po_total_amount_usd","pr_number",
+    "po_status", "total_invoice_amount","last_action_date",
+    "expected_receive_month", "pia","category",
+    "product_code","rgn","gl_number",
+    "item_description","unit_price","entry_quantity",
+    "received_quantity","billed_quantity","prepay_quantity",
+    "entry_amount","entry_billed_amount","entry_prepay_amount",
+    "po_entry_status","是否結案",
+    "結案是否有差異數量","check_with_entry_invoice","pr_line",
+    "po_line","remarked_by_procurement","noted_by_procurement",
+    "remarked_by_procurement_pr","noted_by_procurement_pr","remarked_by_上月_fn",
+    "remarked_by_上月_fn_pr","noted_by_fn","remarked_by_上月_procurement",
+    "po狀態","remarked_by_fn","是否估計入帳",
+    "是否為fa","是否為s&m","account_code",
+    "account_name","product_code_c","region_c",
+    "dep.","currency_c","accr._amount",
+    "liability","是否有預付","累計至上期驗收數量/金額",
+    "本期驗收數量/金額","累計至本期驗收數量/金額","gl_date",
+    "match_type","category_from_desc",
+    "predicted_account","matched_keyword","裝修一般/分期",
+    "question_from_reviewer","check_by_ap",
+]
+
+output_columns_before_nlp_pr = [
+    "pr_link","pr_number","requester",
+    "region","department","pr_supplier",
+    "description","currency","total_amount",
+    "last_action_date","expected_receive_month","pia",
+    "category","product_code","rgn",
+    "gl_number","item_description","unit_price",
+    "entry_quantity","entry_amount","po_number",
+    "是否結案","結案是否有差異數量","check_with_entry_invoice",
+    "pr_line","remarked_by_procurement","noted_by_procurement",
+    "remarked_by_fn","remarked_by_上月_fn","noted_by_fn",
+    "remarked_by_上月_procurement","pr狀態","是否估計入帳",
+    "是否為fa","是否為s&m","account_code",
+    "account_name","product_code_c","region_c",
+    "dep.","currency_c","accr._amount",
+    "liability","是否有預付","gl_date",
+    "category_from_desc","predicted_account","matched_keyword",
+    "question_from_reviewer","check_by_ap",
+]
+
+[fa_accounts]
+mob = [199999, 530016, 610303]
+spt = [199999]
+spx = [199999]
+
+[logging]
+level = "INFO"
+format = "%(asctime)s %(levelname)s: %(message)s"
+
+[credentials]
+certificate_path = "./secret/credentials.json"
+scopes = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
+
+# 會計科目與關鍵字的對應規則
+[account_rules]
+"199999" = '路由器\(Router\)'
+"520012" = '繳費機租賃費|印表機租金|Plastic pallet|事務機租賃|Water dispenser rental|事務機移機'
+"520013" = '\^Leased\^'  # 注意: TOML 中反斜線需要轉義，所以 \^ 變成 \\^
+"520014" = 'Cleaning fee|消毒|removal fee|SOC Daily necessities|保全服務費|防治|封鈔袋|收補鈔服務費|weeding fee|垃圾清運|Rodent control|Disinfection|保全警衛服務費|清運費|rental mop|租賃手持拖把|租賃拖把|清理化糞池'
+"520016" = '文具用品|破壞袋|Office Stationery|stationery and consumables|生活用品|營運用品|paper|PDA Gungrip|PDA LCD Protector|除塵拖及地墊租賃|手工具採購|mop rental|Cleaning utensil rental|夾鏈袋|垃圾袋|門市事務機耗材費|傳輸線|護貝膜'
+"520017" = 'tape|膠帶|退貨組_|物流袋|膠膜|PE單片|carton'
+"520018" = '門市室內標示|intermediary fee|貼紙|政府審查規費Interior Decoration application fee|感熱紙捲|室內標示|SPX制服|合格安全鞋'
+"520019" = 'PDA|滅火器工程|Office Hardware|門市小圓招|門市斜坡架|APP新安裝|監視器工程|Guardrail equipment|CCTV|門市貨架增設|門市寄件設備零件|門市智慧監控直立主機|門市智慧監控授權卡片|門市智慧監控硬碟|Hardware accessories|備品採購|平板車|延長線|Type-C HUB|籠車|RFID Card|Receipt Printer|Barcode Scanner|Printer Cutter|U-Type adapter|固定式掃馬槍|物流箱+卡片夾'
+"520025" = '倉庫管理費'
+"520026" = '維護費|關轉工程|保養工程|維修|撤櫃|智取店撤除|APP 其他檢修|退租撤店工程|監視器改善工程|Repair|replacement|maintenance|更換飲水濾心|復裝費用|驗水費'
+"520028" = 'Bottled water|桶裝水'
+"520029" = '保險'
+"520030" = 'Warehouse Temp Salary|派車費用'
+"520033" = 'Stacker|pallet truck|Stacker rental|堆高機'
+"520036" = '管理費'
+"520037" = 'Shopee Xpress Temp'
+"600301" = 'Employee Welfare Medical Fee'
+"610103" = '郵資'
+"610104" = '計張費'
+"610105" = 'APP 人數上限擴充|後臺人數擴充'
+"610110" = 'SPX門市發票代傳至財政部及營業稅申報檔相關服務'
+"630001" = 'Dispatcher fare'
+"650005" = 'shipping fee|Logistics Fee'

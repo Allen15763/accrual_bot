@@ -36,7 +36,10 @@ from .data_utils import (
     validate_dataframe_columns,
     concat_dataframes_safely,
     parallel_apply,
-    memory_efficient_operation
+    memory_efficient_operation,
+    classify_description,
+    give_account_by_keyword,
+    get_ref_on_colab
 )
 
 __all__ = [
@@ -73,5 +76,8 @@ __all__ = [
     'validate_dataframe_columns',
     'concat_dataframes_safely',
     'parallel_apply',
-    'memory_efficient_operation'
+    'memory_efficient_operation',
+    'classify_description',
+    'give_account_by_keyword',
+    'get_ref_on_colab'
 ]

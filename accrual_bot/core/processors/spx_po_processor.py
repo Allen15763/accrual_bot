@@ -4,6 +4,7 @@
 """
 
 import os
+import re
 import pandas as pd
 import numpy as np
 from typing import Tuple, List, Dict, Optional, Union, Any
@@ -11,7 +12,7 @@ from typing import Tuple, List, Dict, Optional, Union, Any
 try:
     from .po_processor import BasePOProcessor
     from ...utils.logging import get_logger
-    from ...utils import get_unique_filename
+    from ...utils import get_unique_filename, classify_description, give_account_by_keyword
     from ...data.importers.google_sheets_importer import GoogleSheetsImporter
     from ...data.importers.async_data_importer import AsyncDataImporter  # 新增
 except ImportError:
@@ -26,7 +27,7 @@ except ImportError:
     
     from core.processors.po_processor import BasePOProcessor
     from utils.logging import get_logger
-    from utils import get_unique_filename
+    from utils import get_unique_filename, classify_description, give_account_by_keyword
     from data.importers.google_sheets_importer import GoogleSheetsImporter
     from data.importers.async_data_importer import AsyncDataImporter  # 新增
 
@@ -453,7 +454,7 @@ class SpxPOProcessor(BasePOProcessor):
             ).loc[:, 'Account Desc']
             
             # 設置Product code - SPX固定值
-            df.loc[need_to_accrual, 'Product code'] = "LG_SPX_OWN"
+            df.loc[need_to_accrual, 'Product code'] = df.loc[need_to_accrual, 'Product Code']
             
             # 設置Region_c - SPX固定值
             df.loc[need_to_accrual, 'Region_c'] = "TW"
@@ -634,22 +635,30 @@ class SpxPOProcessor(BasePOProcessor):
                     file_paths.append(file_path)
                     file_names[file_type] = os.path.basename(file_path)
             
-            # if os.path.isfile(r'C:\SEA\Accrual\prpo_bot\prpo_bot_renew_v2\output\import_results.pkl'):
-            if os.path.isfile(r'C:\SEA\Accrual\prpo_bot\prpo_bot_renew_v2\output\import_results.pkl') is not True:
-                import pickle as pkl
-                with open(r'C:\SEA\Accrual\prpo_bot\prpo_bot_renew_v2\output\import_results.pkl', 'rb') as f:
-                    import_results = pkl.load(f)
-                self.logger.info('Loaded existing files.')
-            else:
-                # 並發導入所有文件 - 與原始版本相同的調用方式
-                import_results = async_importer.concurrent_read_files(
-                    file_types, 
-                    file_paths, 
-                    file_names=file_names,
-                    config={'certificate_path': self.config_manager.get('CREDENTIALS', 'certificate_path'),
-                            'scopes': self.config_manager.get_list('CREDENTIALS', 'scopes')},
-                    ap_columns=self.config_manager.get_list('SPX', 'ap_columns')
-                )
+            # # if os.path.isfile(r'C:\SEA\Accrual\prpo_bot\prpo_bot_renew_v2\output\import_results.pkl'):
+            # if os.path.isfile(r'C:\SEA\Accrual\prpo_bot\prpo_bot_renew_v2\output\import_results.pkl') is not True:
+            #     import pickle as pkl
+            #     with open(r'C:\SEA\Accrual\prpo_bot\prpo_bot_renew_v2\output\import_results.pkl', 'rb') as f:
+            #         import_results = pkl.load(f)
+            #     self.logger.info('Loaded existing files.')
+            # else:
+            #     # 並發導入所有文件 - 與原始版本相同的調用方式
+            #     import_results = async_importer.concurrent_read_files(
+            #         file_types, 
+            #         file_paths, 
+            #         file_names=file_names,
+            #         config={'certificate_path': self.config_manager.get('CREDENTIALS', 'certificate_path'),
+            #                 'scopes': self.config_manager.get_list('CREDENTIALS', 'scopes')},
+            #         ap_columns=self.config_manager.get_list('SPX', 'ap_columns')
+            #     )
+            import_results = async_importer.concurrent_read_files(
+                file_types, 
+                file_paths, 
+                file_names=file_names,
+                config={'certificate_path': self.config_manager.get('CREDENTIALS', 'certificate_path'),
+                        'scopes': self.config_manager.get_list('CREDENTIALS', 'scopes')},
+                ap_columns=self.config_manager.get_list('SPX', 'ap_columns')
+            )
             
             # 檢測並處理原始PO數據
             if 'raw_po' in import_results:
@@ -743,11 +752,22 @@ class SpxPOProcessor(BasePOProcessor):
 
             # 處理驗收
             if fileUrl_opsValidation:
-                locker_non_discount, locker_discount, kiosk_data = \
+                locker_non_discount, locker_discount, discount_rate, kiosk_data = \
                     self.process_validation_data(fileUrl_opsValidation, date)
-                df = self.apply_validation_data_to_po(df, locker_non_discount, locker_discount, kiosk_data)
+                df = self.apply_validation_data_to_po(df, 
+                                                      locker_non_discount, 
+                                                      locker_discount, 
+                                                      discount_rate, 
+                                                      kiosk_data)
             # 格式化數據
             df = self.reformate(df)
+
+            df['CATEGORY'] = df['Item Description'].apply(classify_description)
+            # 暫時全放提供使用者參考不驗證"是否估計入帳"
+            df = give_account_by_keyword(df, 'Item Description', export_keyword=True)
+            # df['Predicted_Account'] = np.where(df['是否估計入帳'] == 'Y', df['Predicted_Account'], None)
+            # df['Matched_Keyword'] = np.where(df['是否估計入帳'] == 'Y', df['Matched_Keyword'], None)
+            df = self.is_installment(df)
             
             # 導出文件
             self._save_output(df, file_name)
@@ -760,7 +780,7 @@ class SpxPOProcessor(BasePOProcessor):
         
     def process_validation_data(self, 
                                 validation_file_path: str, 
-                                target_date: int) -> Tuple[Dict[str, dict], Dict[str, dict], Dict[str, dict]]:
+                                target_date: int) -> Tuple[Dict[str, dict], Dict[str, dict], float, Dict[str, dict]]:
         """
         處理驗收數據 - 智取櫃和繳費機驗收明細
         
@@ -769,7 +789,7 @@ class SpxPOProcessor(BasePOProcessor):
             target_date: 目標日期 (YYYYMM格式)
             
         Returns:
-            Tuple[Dict, Dict, Dict]: (智取櫃非折扣驗收數量, 智取櫃折扣驗收數量, 繳費機驗收數量)
+            Tuple[Dict, Dict, Dict]: (智取櫃非折扣驗收數量, 智取櫃折扣驗收數量, 折扣率, 繳費機驗收數量)
             
         Raises:
             ValueError: 當驗收數據處理失敗時
@@ -789,7 +809,7 @@ class SpxPOProcessor(BasePOProcessor):
             kiosk_data = self._process_kiosk_validation_data(validation_file_path, target_date)
             
             self.logger.info("成功完成驗收數據處理")
-            return locker_data['non_discount'], locker_data['discount'], kiosk_data
+            return locker_data['non_discount'], locker_data['discount'], locker_data['discount_rate'], kiosk_data
             
         except Exception as e:
             self.logger.error(f"處理驗收數據時發生錯誤: {str(e)}", exc_info=True)
@@ -853,6 +873,7 @@ class SpxPOProcessor(BasePOProcessor):
             # 定義聚合欄位
             agg_cols = [
                 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'DA', 
+                'XA', 'XB', 'XC', 'XD', 'XE', 'XF',
                 '超出櫃體安裝費', '超出櫃體運費', '裝運費'
             ]
             
@@ -949,10 +970,10 @@ class SpxPOProcessor(BasePOProcessor):
             data_type: 數據類型標識 ('locker' 或 'kiosk')
             
         Returns:
-            Dict[str, dict]: 包含 'non_discount' 和 'discount' 鍵的字典
+            Dict[str, dict]: 包含 'non_discount' 和 'discount'， 'discount_rate' 鍵的字典
         """
         try:
-            validation_results = {'non_discount': {}, 'discount': {}}
+            validation_results = {'non_discount': {}, 'discount': {}, 'discount_rate': None}
             
             # 檢查是否有 discount 欄位
             if 'discount' not in df.columns:
@@ -962,9 +983,14 @@ class SpxPOProcessor(BasePOProcessor):
             # 確保 discount 欄位為字符串類型
             df['discount'] = df['discount'].fillna('').astype(str)
             
-            # 非折扣驗收 (不包含 X折驗收 的記錄)
+            # 非折扣驗收 (不包含 X折驗收/出貨 的記錄)
             try:
-                non_discount_condition = ~df['discount'].str.contains(r'\d折驗收', na=False, regex=True)
+                non_discount_condition = (
+                    ~df['discount'].str.contains(
+                        self.config_manager._config_data.get("SPX").get("locker_discount_pattern"), 
+                        na=False, 
+                        regex=True)
+                )
                 df_non_discount = df.loc[non_discount_condition, :]
                 
                 if not df_non_discount.empty and 'PO單號' in df_non_discount.columns:
@@ -976,9 +1002,10 @@ class SpxPOProcessor(BasePOProcessor):
             except Exception as e:
                 self.logger.error(f"處理非折扣{data_type}數據時出錯: {str(e)}")
             
-            # 折扣驗收 (包含 X折驗收 的記錄)
+            # 折扣驗收 (包含 X折驗收/出貨 的記錄)
             try:
-                discount_condition = df['discount'].str.contains(r'\d折驗收', na=False, regex=True)
+                discount_condition = df['discount'].str.contains(
+                    self.config_manager._config_data.get("SPX").get("locker_discount_pattern"), na=False, regex=True)
                 df_discount = df.loc[discount_condition, :]
                 
                 if not df_discount.empty and 'PO單號' in df_discount.columns:
@@ -987,6 +1014,7 @@ class SpxPOProcessor(BasePOProcessor):
                         .sum()
                         .to_dict('index')
                     )
+                    validation_results['discount_rate'] = self._extract_discount_rate(df_discount.discount.unique())
             except Exception as e:
                 self.logger.error(f"處理折扣{data_type}數據時出錯: {str(e)}")
             
@@ -1000,6 +1028,7 @@ class SpxPOProcessor(BasePOProcessor):
                                     df: pd.DataFrame, 
                                     locker_non_discount: Dict[str, dict], 
                                     locker_discount: Dict[str, dict], 
+                                    discount_rate: float,
                                     kiosk_data: Dict[str, dict]) -> pd.DataFrame:
         """
         將驗收數據應用到PO DataFrame中
@@ -1008,6 +1037,7 @@ class SpxPOProcessor(BasePOProcessor):
             df: PO DataFrame
             locker_non_discount: 智取櫃非折扣驗收數據 {PO#: {A:value, B:value, ...}}
             locker_discount: 智取櫃折扣驗收數據 {PO#: {A:value, B:value, ...}}
+            discount_rate: 折扣率
             kiosk_data: 繳費機驗收數據 {PO#: value}
             
         Returns:
@@ -1039,7 +1069,7 @@ class SpxPOProcessor(BasePOProcessor):
             df = self._apply_locker_validation(df, locker_non_discount, locker_suppliers, is_discount=False)
             
             # 處理智取櫃折扣驗收  
-            df = self._apply_locker_validation(df, locker_discount, locker_suppliers, is_discount=True)
+            df = self._apply_locker_validation(df, locker_discount, locker_suppliers, discount_rate, is_discount=True)
             
             # 處理繳費機驗收
             df = self._apply_kiosk_validation(df, kiosk_data, kiosk_suppliers)
@@ -1056,7 +1086,8 @@ class SpxPOProcessor(BasePOProcessor):
     def _apply_locker_validation(self, 
                                  df: pd.DataFrame, 
                                  locker_data: Dict[str, dict], 
-                                 locker_suppliers: List[str], 
+                                 locker_suppliers: List[str],
+                                 discount_rate: float = None, 
                                  is_discount: bool = False) -> pd.DataFrame:
         """
         應用智取櫃驗收數據
@@ -1091,6 +1122,13 @@ class SpxPOProcessor(BasePOProcessor):
                 'K': r'locker\s*K(?![A-Za-z0-9])',
                 # DA類（控制主櫃）
                 'DA': r'locker\s*控制主[櫃|機]',
+                # X類
+                'XA': r'locker\s*XA(?![A-Za-z0-9])',
+                'XB': r'locker\s*XB(?![A-Za-z0-9])',
+                'XC': r'locker\s*XC(?![A-Za-z0-9])',
+                'XD': r'locker\s*XD(?![A-Za-z0-9])',
+                'XE': r'locker\s*XE(?![A-Za-z0-9])',
+                'XF': r'locker\s*XF(?![A-Za-z0-9])',
                 # 特殊種類
                 '裝運費': r'locker\s*安裝運費',
                 '超出櫃體安裝費': r'locker\s*超出櫃體安裝費', 
@@ -1106,7 +1144,7 @@ class SpxPOProcessor(BasePOProcessor):
                     item_desc = str(row['Item Description'])
                     po_supplier = str(row['PO Supplier'])
                     
-                    # 檢查基本條件
+                    # 檢查基本條件; 不在locker_data內的資料該圈將被跳過
                     if not self._check_locker_conditions(po_number, item_desc, po_supplier, 
                                                          locker_data, locker_suppliers, is_discount):
                         continue
@@ -1124,6 +1162,12 @@ class SpxPOProcessor(BasePOProcessor):
                             if current_value == 0:  # 只有當前值為0時才設置新值
                                 validation_value = po_validation_data[cabinet_type]
                                 df.at[idx, '本期驗收數量/金額'] = validation_value
+
+                                # 如果是折扣驗收，記錄折扣率
+                                if is_discount:
+                                    if discount_rate:
+                                        df.at[idx, '折扣率'] = discount_rate
+
                                 processed_count += 1
                                 
                                 self.logger.debug(f"PO#{po_number} 櫃體類型{cabinet_type} "
@@ -1203,7 +1247,8 @@ class SpxPOProcessor(BasePOProcessor):
             
             # 按照優先級順序檢查模式（特殊類型優先，避免誤匹配）
             priority_order = ['DA', '裝運費', '超出櫃體安裝費', '超出櫃體運費', 
-                              'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K']
+                              'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K',
+                              'XA', 'XB', 'XC', 'XD', 'XE', 'XF']
             
             for cabinet_type in priority_order:
                 if cabinet_type in patterns:
@@ -1324,7 +1369,7 @@ class SpxPOProcessor(BasePOProcessor):
         df_copy.loc[need_to_accrual, 'Account Name'] = 'AP,FA Clear Account'
         
         # 設置Product code - SPX固定值
-        df_copy.loc[need_to_accrual, 'Product code'] = "LG_SPX_OWN"
+        df_copy.loc[need_to_accrual, 'Product code'] = df_copy.loc[need_to_accrual, 'Product Code']
         
         # 設置Region_c - SPX固定值
         df_copy.loc[need_to_accrual, 'Region_c'] = "TW"
@@ -1339,6 +1384,14 @@ class SpxPOProcessor(BasePOProcessor):
         df_copy['temp_amount'] = (
             df_copy['Unit Price'].astype(float) * df_copy['本期驗收數量/金額'].fillna(0).astype(float)
         )
+        # 如果有折扣率，套用折扣
+        if '折扣率' in df_copy.columns:
+            has_discount = df_copy['折扣率'].notna()
+            df_copy.loc[has_discount, 'temp_amount'] = (
+                df_copy.loc[has_discount, 'temp_amount'] * 
+                df_copy.loc[has_discount, '折扣率'].astype(float)
+            )
+            df_copy.drop('折扣率', axis=1, inplace=True)
         non_shipping = ~df_copy['Item Description'].str.contains('運費|安裝費')
         df_copy.loc[need_to_accrual & non_shipping, 'Accr. Amount'] = \
             df_copy.loc[need_to_accrual & non_shipping, 'temp_amount']
@@ -1449,3 +1502,73 @@ class SpxPOProcessor(BasePOProcessor):
         except Exception as e:
             self.logger.error(f"保存輸出檔案失敗: {e}")
             return None
+        
+    def is_installment(self, df: pd.DataFrame) -> pd.DataFrame:
+        df_copy = df.copy()
+        mask1 = df_copy['Item Description'].str.contains('裝修')
+        mask2 = df_copy['Item Description'].str.contains('第[一|二|三]期款項')
+
+        conditions = [
+            (mask1 & mask2),      # Condition for 'Installment'
+            (mask1)               # Condition for 'General' (if not an installment)
+        ]
+        choices = [
+            '分期',               # Value if condition 1 is met
+            '一般'                # Value if condition 2 is met
+        ]
+
+        df_copy['裝修一般/分期'] = np.select(conditions, choices, default=None)
+        return df_copy
+        
+    def _extract_discount_rate(self, discount_input: Optional[Union[str, np.ndarray]]) -> Optional[float]:
+        """從輸入中提取折扣率。
+        
+        此函數能處理字串或包含字串的 NumPy 陣列。
+        如果輸入為陣列，預設只會處理第一個元素。
+
+        Args:
+            discount_input: 折扣字串 (e.g., "8折驗收") 或包含此類字串的 NumPy 陣列。
+            
+        Returns:
+            折扣率 (e.g., 0.8)，若無法提取或輸入無效則返回 None。
+        """
+        # --- 步驟 1: 輸入正規化 (Input Normalization) ---
+        target_str: Optional[str] = None
+
+        if discount_input is None:
+            return None
+        
+        if isinstance(discount_input, str):
+            target_str = discount_input
+        elif isinstance(discount_input, np.ndarray):
+            if discount_input.size == 0:
+                self.logger.info("輸入的 ndarray 為空，無法提取折扣率。")
+                return None
+            
+            if discount_input.size > 1:
+                self.logger.warning(
+                    f"輸入為多值陣列，只處理第一個元素 '{discount_input[0]}'. "
+                    f"被忽略的值: {list(discount_input[1:])}"
+                )
+            target_str = str(discount_input[0])  # 確保取出的元素是字串
+        else:
+            self.logger.error(f"不支援的輸入類型: {type(discount_input)}")
+            raise TypeError(f"Input must be str or np.ndarray, not {type(discount_input)}")
+
+        # --- 步驟 2: 核心提取邏輯 (Core Extraction Logic) ---
+        if not target_str:  # 處理空字串或 None 的情況
+            return None
+
+        match = re.search(r'(\d+)折', target_str)
+        if match:
+            try:
+                discount_num = int(match.group(1))
+                rate = discount_num / 10.0
+                self.logger.info(f"從 '{target_str}' 成功提取折扣率: {rate}")
+                return rate
+            except (ValueError, IndexError):
+                self.logger.error(f"從 '{target_str}' 匹配到數字但轉換失敗。")
+                return None
+
+        self.logger.debug(f"在 '{target_str}' 中未找到符合 'N折' 格式的內容。")
+        return None

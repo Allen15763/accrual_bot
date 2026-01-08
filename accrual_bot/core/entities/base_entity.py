@@ -6,13 +6,13 @@
 
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Dict, List, Optional, Any, Union
+from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 from pathlib import Path
 
 try:
     from ...core.models.data_models import EntityType, ProcessingType, ProcessingResult
-    from ...core.models.config_models import ProcessingConfig, EntityConfig
+    from ...core.models.config_models import EntityConfig
     from ...utils.logging import Logger
 except ImportError:
     import sys
@@ -21,7 +21,7 @@ except ImportError:
     if str(current_dir) not in sys.path:
         sys.path.insert(0, str(current_dir))
     from core.models.data_models import EntityType, ProcessingType, ProcessingResult
-    from core.models.config_models import ProcessingConfig, EntityConfig
+    from core.models.config_models import EntityConfig
     from utils.logging import Logger
 
 
@@ -62,31 +62,6 @@ class ProcessingFiles:
         
         return True
     
-    def get_available_files(self) -> Dict[str, str]:
-        """獲取可用的檔案"""
-        files = {"raw_data": self.raw_data_file}
-        
-        if self.previous_workpaper and Path(self.previous_workpaper).exists():
-            files["previous_workpaper"] = self.previous_workpaper
-        
-        if self.procurement_file and Path(self.procurement_file).exists():
-            files["procurement"] = self.procurement_file
-        
-        if self.closing_list and Path(self.closing_list).exists():
-            files["closing_list"] = self.closing_list
-        
-        if self.ap_invoice_file and Path(self.ap_invoice_file).exists():
-            files["ap_invoice"] = self.ap_invoice_file
-        
-        if self.previous_workpaper_pr and Path(self.previous_workpaper_pr).exists():
-            files["previous_workpaper_pr"] = self.previous_workpaper_pr
-        
-        if self.procurement_file_pr and Path(self.procurement_file_pr).exists():
-            files["procurement_pr"] = self.procurement_file_pr
-        
-        return files
-
-
 class EntityProcessor(ABC):
     """實體處理器介面"""
     
