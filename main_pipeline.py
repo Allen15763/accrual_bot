@@ -21,7 +21,7 @@ async def run_spx_pr_full_pipeline():
     
     file_paths_pr = {
         'raw_pr': {
-            'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202511\202511_purchase_request.xlsx",
+            'path': r"C:\SEA\Accrual\prpo_bot\resources\頂一下\202512\Original Data\202512_purchase_request_20260201_092128.csv",
             'params': {'encoding': 'utf-8', 
                        'sep': ',', 
                        'dtype': str, 
@@ -30,11 +30,11 @@ async def run_spx_pr_full_pipeline():
                        }
         },
         'previous_pr': {
-            'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202511\202510_PR_FN.xlsx",  # xxx_改欄名，暫不需要
+            'path': r"C:\SEA\Accrual\prpo_bot\resources\頂一下\202512\前期底稿\SPX\202511_PR_FN.xlsx",  # xxx_改欄名，暫不需要
             'params': {'dtype': str, }
         },
         'procurement_pr': {
-            'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202511\202511_PR_PQ.xlsx",
+            'path': r"C:\SEA\Accrual\prpo_bot\resources\頂一下\202512\Original Data\202512_PR_PQ.xlsx",
             'params': {'dtype': str, }
         },
 
@@ -44,7 +44,7 @@ async def run_spx_pr_full_pipeline():
 
     result = await execute_pipeline_with_checkpoint(
         file_paths=file_paths_pr,
-        processing_date=202511,
+        processing_date=202512,
         pipeline_func=create_spx_pr_complete_pipeline,
         entity='SPX',
         processing_type="PR",
@@ -65,7 +65,7 @@ async def run_spx_po_full_pipeline():
     
     file_paths = {
         'raw_po': {
-            'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202511\202511_purchase_order.csv",
+            'path': r"C:\SEA\Accrual\prpo_bot\resources\頂一下\202512\Original Data\202512_purchase_order_20260201_092408.csv",
             'params': {'encoding': 'utf-8', 
                        'sep': ',', 
                        'dtype': str, 
@@ -74,31 +74,31 @@ async def run_spx_po_full_pipeline():
                        }
         },
         'previous': {
-            'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202511\202510_PO_FN.xlsx",  # ..._改小寫，也行
+            'path': r"C:\SEA\Accrual\prpo_bot\resources\頂一下\202512\前期底稿\SPX\202511_PO_FN.xlsx",  # ..._改小寫，也行
             'params': {'sheet_name': 0, 'header': 0, 'dtype': str, }
         },
         'procurement_po': {
-            'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202511\202511_PO_PQ.xlsx",
+            'path': r"C:\SEA\Accrual\prpo_bot\resources\頂一下\202512\Original Data\202512_PO_PQ.xlsx",
             'params': {'dtype': str, }
         },
         'ap_invoice': {
-            'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202511\202511_AP_Invoice_Match_Monitoring_Ext.xlsx",
+            'path': r"C:\SEA\Accrual\prpo_bot\resources\頂一下\202512\Original Data\202512_AP_Invoice_Match_Monitoring_Ext.xlsx",
             'params': {}
         },
         'previous_pr': {
-            'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202511\202510_PR_FN.xlsx",
+            'path': r"C:\SEA\Accrual\prpo_bot\resources\頂一下\202512\前期底稿\SPX\202511_PR_FN.xlsx",
             'params': {'dtype': str, }
         },
         'procurement_pr': {
-            'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202511\202511_PR_PQ.xlsx",
+            'path': r"C:\SEA\Accrual\prpo_bot\resources\頂一下\202512\Original Data\202512_PR_PQ.xlsx",
             'params': {'dtype': str, }
         },
         'ops_validation': {
-            'path': r"C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202511\SPX智取櫃及繳費機驗收明細(For FN)_2511.xlsx",
+            'path': r"C:\SEA\Accrual\prpo_bot\resources\頂一下\202512\Original Data\SPX智取櫃及繳費機驗收明細(For FN_2512).xlsx",
             'params': {
                 'sheet_name': '智取櫃驗收明細',
-                'header': 2,  # 第二行作為表頭
-                'usecols': 'A:AF',  # 同上
+                'header': 3,  # 第二行作為表頭
+                'usecols': 'A:AH',  # 同上
                 # 'dtype': str, 
                 'kiosk_sheet_name': '繳費機驗收明細',
                 'kiosk_usecols': 'A:G',
@@ -109,7 +109,7 @@ async def run_spx_po_full_pipeline():
     
     result = await execute_pipeline_with_checkpoint(
         file_paths=file_paths,
-        processing_date=202511,
+        processing_date=202512,
         pipeline_func=create_spx_po_complete_pipeline,
         entity='SPX',
         processing_type="PO",
@@ -124,7 +124,7 @@ async def run_spx_ppe_full_pipeline():
 
     result = await execute_pipeline_with_checkpoint(
         file_paths=r'G:\共用雲端硬碟\INT_TWN_SEA_FN_Shared_Resources\00_Temp_Internal_share\SPX\租金\SPX租金合約歸檔清單及匯款狀態_marge1.xlsx',
-        processing_date=202511,
+        processing_date=202512,
         pipeline_func=create_ppe_pipeline,
         entity='SPX',
         processing_type="PPE",
@@ -138,7 +138,7 @@ async def run_spt_po_full_pipeline():
     from accrual_bot.core.pipeline.build_pipelines import create_spt_po_complete_pipeline
     file_paths = {
         'raw_po': {
-            'path': r"C:\SEA\Accrual\prpo_bot\resources\頂一下\202511\SPT\202511_purchase_order_20250112_091930.csv",
+            'path': r"C:\SEA\Accrual\prpo_bot\resources\頂一下\202512\Original Data\202512_purchase_order_20260201_092408.csv",
             'params': {'encoding': 'utf-8', 
                        'sep': ',', 
                        'dtype': str, 
@@ -147,23 +147,23 @@ async def run_spt_po_full_pipeline():
                        }
         },
         'previous': {
-            'path': r"C:\SEA\Accrual\prpo_bot\resources\頂一下\202511\SPT\202510_PO_FN.xlsx",
+            'path': r"C:\SEA\Accrual\prpo_bot\resources\頂一下\202512\前期底稿\202511_PO_FN.xlsx",
             'params': {'sheet_name': 0, 'header': 0, 'dtype': str, }
         },
         'procurement_po': {
-            'path': r"C:\SEA\Accrual\prpo_bot\resources\頂一下\202511\SPT\202511_PO_PQ.xlsx",
+            'path': r"C:\SEA\Accrual\prpo_bot\resources\頂一下\202512\Original Data\202512_PO_PQ.xlsx",
             'params': {'dtype': str, }
         },
         'ap_invoice': {
-            'path': r"C:\SEA\Accrual\prpo_bot\resources\頂一下\202511\SPT\202511_AP_Invoice_Match_Monitoring_Ext.xlsx",
+            'path': r"C:\SEA\Accrual\prpo_bot\resources\頂一下\202512\Original Data\202512_AP_Invoice_Match_Monitoring_Ext.xlsx",
             'params': {}
         },
         'previous_pr': {
-            'path': r"C:\SEA\Accrual\prpo_bot\resources\頂一下\202511\SPT\202510_PR_FN.xlsx",
+            'path': r"C:\SEA\Accrual\prpo_bot\resources\頂一下\202512\前期底稿\202511_PR_FN.xlsx",
             'params': {'dtype': str, }
         },
         'procurement_pr': {
-            'path': r"C:\SEA\Accrual\prpo_bot\resources\頂一下\202511\SPT\202511_PR_PQ.xlsx",
+            'path': r"C:\SEA\Accrual\prpo_bot\resources\頂一下\202512\Original Data\202512_PR_PQ.xlsx",
             'params': {'dtype': str, }
         },
         'media_finished': {
@@ -182,7 +182,7 @@ async def run_spt_po_full_pipeline():
 
     result: dict = await execute_pipeline_with_checkpoint(
         file_paths=file_paths,
-        processing_date=202511,
+        processing_date=202512,
         pipeline_func=create_spt_po_complete_pipeline,
         entity='SPT',
         save_checkpoints=True,
@@ -194,7 +194,7 @@ async def run_spt_pr_full_pipeline():
     from accrual_bot.core.pipeline.build_pipelines import create_spt_pr_complete_pipeline
     file_paths = {
         'raw_pr': {
-            'path': r"C:\SEA\Accrual\prpo_bot\resources\頂一下\202511\SPT\202511_purchase_request_20250112_091659.csv",
+            'path': r"C:\SEA\Accrual\prpo_bot\resources\頂一下\202512\Original Data\202512_purchase_request_20260201_092128.csv",
             'params': {'encoding': 'utf-8', 
                        'sep': ',', 
                        'dtype': str, 
@@ -203,11 +203,11 @@ async def run_spt_pr_full_pipeline():
                        }
         },
         'previous_pr': {
-            'path': r"C:\SEA\Accrual\prpo_bot\resources\頂一下\202511\SPT\202510_PR_FN.xlsx",
+            'path': r"C:\SEA\Accrual\prpo_bot\resources\頂一下\202512\前期底稿\202511_PR_FN.xlsx",
             'params': {'dtype': str, }
         },
         'procurement_pr': {
-            'path': r"C:\SEA\Accrual\prpo_bot\resources\頂一下\202511\SPT\202511_PR_PQ.xlsx",
+            'path': r"C:\SEA\Accrual\prpo_bot\resources\頂一下\202512\Original Data\202512_PR_PQ.xlsx",
             'params': {'dtype': str, }
         },
         'media_finished': {
@@ -226,7 +226,7 @@ async def run_spt_pr_full_pipeline():
 
     result: dict = await execute_pipeline_with_checkpoint(
         file_paths=file_paths,
-        processing_date=202511,
+        processing_date=202512,
         pipeline_func=create_spt_pr_complete_pipeline,
         entity='SPT',
         save_checkpoints=False,
@@ -241,7 +241,7 @@ if __name__ == "__main__":
     # asyncio.run(example_usage())
 
     # Run all steps
-    # result = asyncio.run(run_spx_po_full_pipeline())
+    result = asyncio.run(run_spx_po_full_pipeline())
     
     # Start from specific point
     # from accrual_bot.core.pipeline.build_pipelines import create_spx_po_complete_pipeline  # 替換成實際路徑
@@ -259,8 +259,8 @@ if __name__ == "__main__":
     # ))
 
     # Run PPE steps
-    # result = asyncio.run(run_spx_ppe_full_pipeline())
-    # result.get('context').data.to_excel(r'C:\SEA\Accrual\prpo_bot\resources\SPX未結模組\raw_202511\ppe\年限表_202511.xlsx', index=False)
+    result = asyncio.run(run_spx_ppe_full_pipeline())
+    result.get('context').data.to_excel(r'C:\SEA\Accrual\prpo_bot\resources\頂一下\202512\PPE\年限表_202512.xlsx', index=False)
 
     # Run PR
     # result = asyncio.run(run_spx_pr_full_pipeline())
@@ -276,6 +276,6 @@ if __name__ == "__main__":
     #     save_checkpoints=False
     # ))
 
-    result = asyncio.run(run_spt_pr_full_pipeline())
+    # result = asyncio.run(run_spt_pr_full_pipeline())
 
     print(1)
