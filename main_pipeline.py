@@ -259,14 +259,14 @@ if __name__ == "__main__":
     # ))
 
     # Run PPE steps
-    result = asyncio.run(run_spx_ppe_full_pipeline())
-    result.get('context').data.to_excel(r'C:\SEA\Accrual\prpo_bot\resources\頂一下\202512\PPE\年限表_202512.xlsx', index=False)
+    # result = asyncio.run(run_spx_ppe_full_pipeline())
+    # result.get('context').data.to_excel(r'C:\SEA\Accrual\prpo_bot\resources\頂一下\202512\PPE\年限表_202512.xlsx', index=False)
 
     # Run PR
-    # result = asyncio.run(run_spx_pr_full_pipeline())
+    result = asyncio.run(run_spx_pr_full_pipeline())
 
     # Run SPT
-    # result = asyncio.run(run_spt_po_full_pipeline())
+    result = asyncio.run(run_spt_po_full_pipeline())
 
     # from accrual_bot.core.pipeline.build_pipelines import create_spt_po_complete_pipeline  # 替換成實際路徑
     # result = asyncio.run(resume_from_step(
@@ -276,6 +276,6 @@ if __name__ == "__main__":
     #     save_checkpoints=False
     # ))
 
-    # result = asyncio.run(run_spt_pr_full_pipeline())
+    result = asyncio.run(run_spt_pr_full_pipeline())
 
     print(1)
