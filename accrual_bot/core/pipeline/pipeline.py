@@ -12,6 +12,7 @@ import pandas as pd
 
 from .base import PipelineStep, StepResult, StepStatus, SequentialStep
 from .context import ProcessingContext
+from accrual_bot.utils.logging import get_logger
 
 
 @dataclass
@@ -54,10 +55,7 @@ class Pipeline:
         """
         self.config = config
         self.steps: List[PipelineStep] = []
-        self.logger = logging.getLogger(f"Pipeline.{config.name}")
-        
-        # 設置日誌級別
-        self.logger.setLevel(getattr(logging, config.log_level))
+        self.logger = get_logger(f"Pipeline.{config.name}")
         
         # 執行統計
         self._execution_count = 0

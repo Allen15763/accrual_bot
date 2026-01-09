@@ -8,6 +8,7 @@ import sys
 import configparser
 import logging
 import datetime
+import threading
 from typing import Dict, List, Any, Optional, Union
 from pathlib import Path
 import tomllib
@@ -97,14 +98,22 @@ def resolve_flexible_path(relative_path: str, reference_file: str = None) -> Opt
 
 
 class ConfigManager:
-    """配置管理器，單例模式"""
-    
+    """
+    配置管理器，線程安全的單例模式
+
+    使用雙重檢查鎖定（Double-Checked Locking）模式確保線程安全
+    """
+
     _instance = None
     _initialized = False
-    
+    _lock = threading.Lock()  # 類級別鎖，用於線程安全的實例創建
+
     def __new__(cls):
         if cls._instance is None:
-            cls._instance = super(ConfigManager, cls).__new__(cls)
+            with cls._lock:
+                # 雙重檢查：獲取鎖後再次確認實例是否已創建
+                if cls._instance is None:
+                    cls._instance = super(ConfigManager, cls).__new__(cls)
         return cls._instance
     
     def __init__(self):

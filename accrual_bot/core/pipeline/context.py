@@ -7,7 +7,8 @@ from dataclasses import dataclass, field
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 import pandas as pd
-import logging
+
+from accrual_bot.utils.logging import get_logger
 
 
 @dataclass
@@ -84,7 +85,7 @@ class ProcessingContext:
         # 驗證結果
         self._validations: Dict[str, ValidationResult] = {}
         
-        self.logger = logging.getLogger(f"Context.{entity_type}")
+        self.logger = get_logger(f"Context.{entity_type}")
     
     # === 主數據操作 ===
     

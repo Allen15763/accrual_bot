@@ -3,6 +3,10 @@ Pipeline 步驟實現
 包含各種通用和實體特定的處理步驟
 """
 
+# 抽象基類
+from .base_loading import BaseLoadingStep
+from .base_evaluation import BaseERMEvaluationStep, BaseERMConditions
+
 # 基礎步驟
 from .common import (
     DataCleaningStep,
@@ -100,6 +104,11 @@ from .post_processing import (
 )
 
 __all__ = [
+    # Base Classes
+    'BaseLoadingStep',
+    'BaseERMEvaluationStep',
+    'BaseERMConditions',
+
     # Common
     'DataCleaningStep',
     'DateFormattingStep',
