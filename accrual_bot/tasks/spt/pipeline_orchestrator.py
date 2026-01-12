@@ -21,6 +21,22 @@ from accrual_bot.tasks.spt.steps import (
     PayrollDetectionStep,
 )
 
+from accrual_bot.tasks.spx.steps import (
+    SPXPRExportStep,  # SPT 使用 SPX 的 Export (內容相同)
+    SPXPRERMLogicStep,
+)
+
+# Import shared steps from core
+from accrual_bot.core.pipeline.steps import (
+    ProductFilterStep,
+    ColumnAdditionStep,
+    APInvoiceIntegrationStep,
+    PreviousWorkpaperIntegrationStep,
+    ProcurementIntegrationStep,
+    DateLogicStep,
+    SPTPostProcessingStep,
+)
+
 
 class SPTPipelineOrchestrator:
     """
@@ -156,6 +172,7 @@ class SPTPipelineOrchestrator:
             Optional[PipelineStep]: 步驟實例或 None
         """
         step_registry = {
+            # Data Loading
             'SPTDataLoading': lambda: SPTDataLoadingStep(
                 name="SPTDataLoading",
                 file_paths=file_paths
@@ -164,20 +181,77 @@ class SPTPipelineOrchestrator:
                 name="SPTPRDataLoading",
                 file_paths=file_paths
             ),
+
+            # Data Preparation & Filtering
+            'ProductFilter': lambda: ProductFilterStep(
+                name="ProductFilter",
+                product_pattern='(?i)SPX',
+                exclude=True,
+                required=True
+            ),
+            'ColumnAddition': lambda: ColumnAdditionStep(
+                name="ColumnAddition",
+                required=True
+            ),
+
+            # Data Integration
+            'APInvoiceIntegration': lambda: APInvoiceIntegrationStep(
+                name="APInvoiceIntegration",
+                required=True
+            ),
+            'PreviousWorkpaperIntegration': lambda: PreviousWorkpaperIntegrationStep(
+                name="PreviousWorkpaperIntegration",
+                required=True
+            ),
+            'ProcurementIntegration': lambda: ProcurementIntegrationStep(
+                name="ProcurementIntegration",
+                required=True
+            ),
+
+            # Business Logic - SPT Specific
             'CommissionDataUpdate': lambda: CommissionDataUpdateStep(
-                name="CommissionDataUpdate"
+                name="CommissionDataUpdate",
+                status_column="PR狀態" if processing_type == 'PR' else "PO狀態",
+                required=True
             ),
             'PayrollDetection': lambda: PayrollDetectionStep(
-                name="PayrollDetection"
+                name="PayrollDetection",
+                required=True
+            ),
+            'DateLogic': lambda: DateLogicStep(
+                name="DateLogic",
+                required=True
             ),
             'SPTERMLogic': lambda: SPTERMLogicStep(
-                name="SPTERMLogic"
+                name="SPTERMLogic",
+                required=True
+            ),
+            'SPXPRERMLogic': lambda: SPXPRERMLogicStep(
+                name="SPXPRERMLogic",
+                required=True
             ),
             'SPTStatusLabel': lambda: SPTStatusLabelStep(
-                name="SPTStatusLabel"
+                name="SPTStatusLabel",
+                status_column="PR狀態" if processing_type == 'PR' else "PO狀態",
+                remark_column="Remarked by FN"
             ),
             'SPTAccountPrediction': lambda: SPTAccountPredictionStep(
-                name="SPTAccountPrediction"
+                name="SPTAccountPrediction",
+                required=True
+            ),
+
+            # Post Processing & Export
+            'SPTPostProcessing': lambda: SPTPostProcessingStep(
+                name="SPTPostProcessing",
+                required=True
+            ),
+            'SPTExport': lambda: SPXPRExportStep(
+                name="SPTExport",
+                output_dir="output",
+                sheet_name="PR" if processing_type == 'PR' else "PO",
+                include_index=False,
+                required=True,
+                retry_count=0
             ),
         }
 

@@ -23,37 +23,64 @@ DATE_YM = '(\d{4}/\d{2})'
 [pipeline.spt]
 enabled_po_steps = [
     "SPTDataLoading",
+    "ProductFilter",
+    "ColumnAddition",
+    "APInvoiceIntegration",
+    "PreviousWorkpaperIntegration",
+    "ProcurementIntegration",
     "CommissionDataUpdate",
     "PayrollDetection",
+    "DateLogic",
     "SPTERMLogic",
     "SPTStatusLabel",
-    "SPTAccountPrediction"
+    "SPTAccountPrediction",
+    "SPTPostProcessing",
+    "SPTExport",
 ]
 enabled_pr_steps = [
     "SPTPRDataLoading",
+    "ProductFilter",
+    "ColumnAddition",
+    "PreviousWorkpaperIntegration",
+    "ProcurementIntegration",
     "CommissionDataUpdate",
     "PayrollDetection",
-    "SPTERMLogic",
+    "DateLogic",
+    "SPXPRERMLogic",
     "SPTStatusLabel",
-    "SPTAccountPrediction"
+    "SPTAccountPrediction",
+    "SPTPostProcessing",
+    "SPTExport",
 ]
 
 [pipeline.spx]
 enabled_po_steps = [
     "SPXDataLoading",
+    "ProductFilter",
     "ColumnAddition",
+    "APInvoiceIntegration",
+    "PreviousWorkpaperIntegration",
+    "ProcurementIntegration",
+    "DateLogic",
     "ClosingListIntegration",
     "StatusStage1",
     "SPXERMLogic",
-    "DepositStatusUpdate",
     "ValidationDataProcessing",
+    "DepositStatusUpdate",
+    "DataReformatting",
     "SPXExport"
 ]
 enabled_pr_steps = [
     "SPXPRDataLoading",
+    "ProductFilter",
     "ColumnAddition",
+    "PreviousWorkpaperIntegration",
+    "ProcurementIntegration",
+    "DateLogic",
+    "ClosingListIntegration",
     "StatusStage1",
     "SPXPRERMLogic",
+    "PRDataReformatting",
     "SPXPRExport"
 ]
 

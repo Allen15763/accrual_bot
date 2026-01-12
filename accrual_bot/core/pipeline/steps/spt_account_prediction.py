@@ -303,8 +303,12 @@ class SPTAccountPredictionStep(PipelineStep):
             return False
         
         # 檢查必要欄位
-        required_columns = ['Department', 'Supplier', 'Item Description']
-        missing = [col for col in required_columns if col not in df.columns]
+        if context.metadata.processing_type == 'PO':
+            required_columns = ['Department', 'PO Supplier', 'Item Description']
+            missing = [col for col in required_columns if col not in df.columns]
+        else:
+            required_columns = ['Department', 'PR Supplier', 'Item Description']
+            missing = [col for col in required_columns if col not in df.columns]
         
         if missing:
             self.logger.error(f"缺少必要欄位: {missing}")

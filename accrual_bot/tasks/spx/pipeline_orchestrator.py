@@ -25,6 +25,17 @@ from accrual_bot.tasks.spx.steps import (
     SPXPRExportStep,
 )
 
+# Import shared steps from core
+from accrual_bot.core.pipeline.steps import (
+    ProductFilterStep,
+    APInvoiceIntegrationStep,
+    PreviousWorkpaperIntegrationStep,
+    ProcurementIntegrationStep,
+    DateLogicStep,
+    DataReformattingStep,
+    PRDataReformattingStep,
+)
+
 
 class SPXPipelineOrchestrator:
     """
@@ -161,6 +172,7 @@ class SPXPipelineOrchestrator:
             Optional[PipelineStep]: 步驟實例或 None
         """
         step_registry = {
+            # Data Loading
             'SPXDataLoading': lambda: SPXDataLoadingStep(
                 name="SPXDataLoading",
                 file_paths=file_paths
@@ -169,11 +181,38 @@ class SPXPipelineOrchestrator:
                 name="SPXPRDataLoading",
                 file_paths=file_paths
             ),
+
+            # Data Preparation & Filtering
+            'ProductFilter': lambda: ProductFilterStep(
+                name="ProductFilter",
+                product_pattern='(?i)LG_SPX',
+                required=True
+            ),
             'ColumnAddition': lambda: ColumnAdditionStep(
                 name="ColumnAddition"
             ),
+
+            # Data Integration
+            'APInvoiceIntegration': lambda: APInvoiceIntegrationStep(
+                name="APInvoiceIntegration",
+                required=True
+            ),
+            'PreviousWorkpaperIntegration': lambda: PreviousWorkpaperIntegrationStep(
+                name="PreviousWorkpaperIntegration",
+                required=True
+            ),
+            'ProcurementIntegration': lambda: ProcurementIntegrationStep(
+                name="ProcurementIntegration",
+                required=True
+            ),
             'ClosingListIntegration': lambda: ClosingListIntegrationStep(
                 name="ClosingListIntegration"
+            ),
+
+            # Business Logic
+            'DateLogic': lambda: DateLogicStep(
+                name="DateLogic",
+                required=True
             ),
             'StatusStage1': lambda: StatusStage1Step(
                 name="StatusStage1"
@@ -189,6 +228,16 @@ class SPXPipelineOrchestrator:
             ),
             'ValidationDataProcessing': lambda: ValidationDataProcessingStep(
                 name="ValidationDataProcessing"
+            ),
+
+            # Post Processing & Export
+            'DataReformatting': lambda: DataReformattingStep(
+                name="DataReformatting",
+                required=True
+            ),
+            'PRDataReformatting': lambda: PRDataReformattingStep(
+                name="PRDataReformatting",
+                required=True
             ),
             'SPXExport': lambda: SPXExportStep(
                 name="SPXExport"

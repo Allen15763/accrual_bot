@@ -1,0 +1,117 @@
+# =============================================================================
+# paths.toml - 檔案路徑配置
+# =============================================================================
+# 支援變數替換:
+#   {YYYYMM}      - 處理日期 (例如: 202512)
+#   {PREV_YYYYMM} - 前一個月 (例如: 202511)
+#   {YYMM}        - 簡短日期格式 (例如: 2512)
+#   {resources}   - 資源根目錄
+
+[base]
+# 資源根目錄
+resources = "C:/SEA/Accrual/prpo_bot/resources/頂一下"
+
+# 輸出目錄
+output = "./output"
+
+
+# =============================================================================
+# SPX PO 路徑配置
+# =============================================================================
+[spx.po]
+raw_po = "{resources}/{YYYYMM}/Original Data/{YYYYMM}_purchase_order_*.csv"
+previous = "{resources}/{YYYYMM}/前期底稿/SPX/{PREV_YYYYMM}_PO_FN.xlsx"
+procurement_po = "{resources}/{YYYYMM}/Original Data/{YYYYMM}_PO_PQ.xlsx"
+ap_invoice = "{resources}/{YYYYMM}/Original Data/{YYYYMM}_AP_Invoice_Match_Monitoring_Ext.xlsx"
+previous_pr = "{resources}/{YYYYMM}/前期底稿/SPX/{PREV_YYYYMM}_PR_FN.xlsx"
+procurement_pr = "{resources}/{YYYYMM}/Original Data/{YYYYMM}_PR_PQ.xlsx"
+ops_validation = "{resources}/{YYYYMM}/Original Data/SPX智取櫃及繳費機驗收明細(For FN_{YYMM}).xlsx"
+
+[spx.po.params]
+raw_po = { encoding = "utf-8", sep = ",", dtype = "str", keep_default_na = false, na_values = [""] }
+previous = { sheet_name = 0, header = 0, dtype = "str" }
+procurement_po = { dtype = "str" }
+ap_invoice = {}
+previous_pr = { dtype = "str" }
+procurement_pr = { dtype = "str" }
+ops_validation = { sheet_name = "智取櫃驗收明細", header = 3, usecols = "A:AH", kiosk_sheet_name = "繳費機驗收明細", kiosk_usecols = "A:G" }
+
+
+# =============================================================================
+# SPX PR 路徑配置
+# =============================================================================
+[spx.pr]
+raw_pr = "{resources}/{YYYYMM}/Original Data/{YYYYMM}_purchase_request_*.csv"
+previous_pr = "{resources}/{YYYYMM}/前期底稿/SPX/{PREV_YYYYMM}_PR_FN.xlsx"
+procurement_pr = "{resources}/{YYYYMM}/Original Data/{YYYYMM}_PR_PQ.xlsx"
+
+[spx.pr.params]
+raw_pr = { encoding = "utf-8", sep = ",", dtype = "str", keep_default_na = false, na_values = [""] }
+previous_pr = { dtype = "str" }
+procurement_pr = { dtype = "str" }
+
+
+# =============================================================================
+# SPX PPE 路徑配置
+# =============================================================================
+[spx.ppe]
+contract_filing_list = "G:/共用雲端硬碟/INT_TWN_SEA_FN_Shared_Resources/00_Temp_Internal_share/SPX/租金/SPX租金合約歸檔清單及匯款狀態_marge1.xlsx"
+
+[spx.ppe.params]
+contract_filing_list = {}
+
+
+# =============================================================================
+# SPT PO 路徑配置
+# =============================================================================
+[spt.po]
+raw_po = "{resources}/{YYYYMM}/Original Data/{YYYYMM}_purchase_order_*.csv"
+previous = "{resources}/{YYYYMM}/前期底稿/{PREV_YYYYMM}_PO_FN.xlsx"
+procurement_po = "{resources}/{YYYYMM}/Original Data/{YYYYMM}_PO_PQ.xlsx"
+ap_invoice = "{resources}/{YYYYMM}/Original Data/{YYYYMM}_AP_Invoice_Match_Monitoring_Ext.xlsx"
+previous_pr = "{resources}/{YYYYMM}/前期底稿/{PREV_YYYYMM}_PR_FN.xlsx"
+procurement_pr = "{resources}/{YYYYMM}/Original Data/{YYYYMM}_PR_PQ.xlsx"
+media_finished = "{resources}/{PREV_YYYYMM}/SPT/Sea TV program coverage list-2025.xlsx"
+media_left = "{resources}/{PREV_YYYYMM}/SPT/Sea TV program coverage list-2025.xlsx"
+media_summary = "{resources}/{PREV_YYYYMM}/SPT/Sea TV program coverage list-2025.xlsx"
+
+[spt.po.params]
+raw_po = { encoding = "utf-8", sep = ",", dtype = "str", keep_default_na = false, na_values = [""] }
+previous = { sheet_name = 0, header = 0, dtype = "str" }
+procurement_po = { dtype = "str" }
+ap_invoice = {}
+previous_pr = { dtype = "str" }
+procurement_pr = { dtype = "str" }
+media_finished = { dtype = "str", sheet_name = "2024-2025使用完畢" }
+media_left = { dtype = "str", sheet_name = "2024-25新聞剩餘量" }
+media_summary = { dtype = "str", sheet_name = "2024-2025新聞總表(已用記錄)" }
+
+
+# =============================================================================
+# SPT PR 路徑配置
+# =============================================================================
+[spt.pr]
+raw_pr = "{resources}/{YYYYMM}/Original Data/{YYYYMM}_purchase_request_*.csv"
+previous_pr = "{resources}/{YYYYMM}/前期底稿/{PREV_YYYYMM}_PR_FN.xlsx"
+procurement_pr = "{resources}/{YYYYMM}/Original Data/{YYYYMM}_PR_PQ.xlsx"
+media_finished = "{resources}/{PREV_YYYYMM}/SPT/Sea TV program coverage list-2025.xlsx"
+media_left = "{resources}/{PREV_YYYYMM}/SPT/Sea TV program coverage list-2025.xlsx"
+media_summary = "{resources}/{PREV_YYYYMM}/SPT/Sea TV program coverage list-2025.xlsx"
+
+[spt.pr.params]
+raw_pr = { encoding = "utf-8", sep = ",", dtype = "str", keep_default_na = false, na_values = [""] }
+previous_pr = { dtype = "str" }
+procurement_pr = { dtype = "str" }
+media_finished = { dtype = "str", sheet_name = "2024-2025使用完畢" }
+media_left = { dtype = "str", sheet_name = "2024-25新聞剩餘量" }
+media_summary = { dtype = "str", sheet_name = "2024-2025新聞總表(已用記錄)" }
+
+
+# =============================================================================
+# MOB 路徑配置 (待實作)
+# =============================================================================
+[mob.po]
+# TODO: 新增 MOB PO 路徑
+
+[mob.pr]
+# TODO: 新增 MOB PR 路徑
