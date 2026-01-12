@@ -8,6 +8,23 @@
 - 配置驅動的步驟加載
 - 異步 pipeline 執行
 
+## 當前實作狀態 (2026-01)
+
+| 組件 | 狀態 | 測試文件 |
+|------|------|----------|
+| **測試基礎設施** | ✅ 完成 | `conftest.py`, `pytest.ini`, `fixtures/` |
+| **ConfigManager 測試** | ✅ 完成 | `test_config_manager.py` (74 lines, 4 tests) |
+| **BaseLoadingStep 測試** | ✅ 完成 | `test_base_loading.py` (328 lines, 15+ tests) |
+| **BaseERMEvaluationStep 測試** | ✅ 完成 | `test_base_evaluation.py` (366 lines, 17+ tests) |
+| **SPT Orchestrator 測試** | ✅ 完成 | `test_spt_orchestrator.py` (259 lines) |
+| **SPX Orchestrator 測試** | ✅ 完成 | `test_spx_orchestrator.py` (215 lines) |
+| **Pipeline 集成測試** | ✅ 完成 | `test_pipeline_orchestrators.py` (75 lines) |
+| **測試文檔** | ✅ 完成 | `tests/README.md` (204 lines) |
+
+**總計**: ~1,300+ 行測試代碼，50+ 測試方法
+
+---
+
 ## 現況分析
 
 ### 現有測試結構
@@ -1638,4 +1655,3 @@ start htmlcov\index.html  # Windows
 7. 根據覆蓋率報告補充缺失的測試用例
 8. 集成到 CI/CD pipeline
 
-**估計工作量**: 5-7 天（取決於測試深度）

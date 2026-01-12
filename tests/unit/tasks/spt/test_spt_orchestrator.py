@@ -5,6 +5,7 @@ from accrual_bot.tasks.spt.pipeline_orchestrator import SPTPipelineOrchestrator
 from accrual_bot.core.pipeline import Pipeline
 
 
+@pytest.mark.unit
 class TestSPTPipelineOrchestrator:
     """SPTPipelineOrchestrator 測試套件"""
 

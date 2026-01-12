@@ -74,6 +74,7 @@ class ConcreteERMStep(BaseERMEvaluationStep):
 
 # --- 測試套件 ---
 
+@pytest.mark.unit
 class TestBaseERMEvaluationStep:
     """BaseERMEvaluationStep 測試套件"""
 

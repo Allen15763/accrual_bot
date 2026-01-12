@@ -4,6 +4,7 @@ import threading
 from accrual_bot.utils.config import ConfigManager
 
 
+@pytest.mark.unit
 class TestConfigManagerThreadSafety:
     """ConfigManager 線程安全測試"""
 

@@ -36,6 +36,7 @@ class ConcreteLoadingStep(BaseLoadingStep):
 
 # --- 測試套件 ---
 
+@pytest.mark.unit
 class TestBaseLoadingStep:
     """BaseLoadingStep 測試套件"""
 

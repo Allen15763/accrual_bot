@@ -23,6 +23,13 @@ python main_pipeline.py
 # Run tests
 python -m pytest tests/
 
+# Run tests by category
+python -m pytest tests/ -m unit          # Unit tests only
+python -m pytest tests/ -m integration   # Integration tests only
+
+# Run with coverage
+python -m pytest tests/ --cov=accrual_bot --cov-report=html
+
 # Type checking
 python -m mypy accrual_bot/
 
@@ -123,6 +130,30 @@ Configuration is accessed via **thread-safe singleton** `ConfigManager` from `ac
 - Automatically loads configuration on first access
 
 All pipeline modules use the unified `get_logger()` function from `accrual_bot.utils.logging` for consistent log formatting.
+
+## Testing
+
+The project uses pytest with async support. Test structure:
+
+```
+tests/
+├── conftest.py                    # Shared fixtures (mock_config_manager, processing_context, etc.)
+├── pytest.ini                     # pytest configuration with markers
+├── fixtures/sample_data.py        # Test data generators
+├── unit/                          # Unit tests (@pytest.mark.unit)
+│   ├── core/pipeline/steps/       # BaseLoadingStep, BaseERMEvaluationStep tests
+│   ├── tasks/spt/                 # SPT Orchestrator tests
+│   ├── tasks/spx/                 # SPX Orchestrator tests
+│   └── utils/config/              # ConfigManager thread-safety tests
+└── integration/                   # Integration tests (@pytest.mark.integration)
+```
+
+**Coverage targets**: Overall ≥80%, ConfigManager 100%, Base Classes ≥85%, Orchestrators ≥90%
+
+**Key fixtures** (from `conftest.py`):
+- `mock_config_manager`: Mocks ConfigManager with pipeline configuration
+- `processing_context`: ProcessingContext with sample DataFrame and auxiliary data
+- `mock_data_source_factory`: AsyncMock for data source operations
 
 ## Key Patterns
 
