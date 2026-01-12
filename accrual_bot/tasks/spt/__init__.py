@@ -2,4 +2,6 @@
 SPT Task Module - SPT entity-specific implementations
 """
 
-__all__ = []
+from accrual_bot.tasks.spt.pipeline_orchestrator import SPTPipelineOrchestrator
+
+__all__ = ["SPTPipelineOrchestrator"]

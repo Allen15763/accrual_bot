@@ -2,4 +2,6 @@
 SPX Task Module - SPX entity-specific implementations
 """
 
-__all__ = []
+from accrual_bot.tasks.spx.pipeline_orchestrator import SPXPipelineOrchestrator
+
+__all__ = ["SPXPipelineOrchestrator"]
