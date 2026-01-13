@@ -2,8 +2,10 @@ checkpoints/
 secret/
 Pipfile
 Pipfile.lock
-test_*.py
-*.md
+*.csv
+*.parquet
+*.db
+*.duckdb
 note_pip_google API.txt
 static/
 processing_worker.py
@@ -12,7 +14,6 @@ output/
 other_temp/
 downloaded/
 kag*/
-tests/
 test_dataset.csv
 combined_query.csv
 .idea/

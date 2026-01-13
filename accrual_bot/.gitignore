@@ -1,7 +1,5 @@
 Pipfile
 Pipfile.lock
-test_*.py
-*.md
 note_pip_google API.txt
 static/
 processing_worker.py
@@ -10,7 +8,6 @@ output/
 other_temp/
 downloaded/
 kag*/
-tests/
 test_dataset.csv
 combined_query.csv
 .idea/

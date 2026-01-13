@@ -1,0 +1,45 @@
+# =============================================================================
+# run_config.toml - Pipeline 執行配置
+# =============================================================================
+# 修改此檔案來選擇要執行的 pipeline，然後按 F5 執行
+
+[run]
+# 業務實體類型: SPX, SPT, MOB
+entity = "SPX"
+
+# 處理類型: PO, PR, PPE
+processing_type = "PPE"
+
+# 處理日期 (YYYYMM 格式)
+processing_date = 202512
+
+
+[debug]
+# 逐步執行模式 - 每個步驟後暫停等待確認
+step_by_step = false
+
+# 儲存 checkpoint
+save_checkpoints = false
+
+# 顯示詳細日誌
+verbose = false
+
+
+[resume]
+# 是否從 checkpoint 恢復執行
+enabled = false
+
+# checkpoint 名稱 (例如: "SPX_PO_202512_after_Load_All_Data、SPX_PO_202512_after_SPXDataLoading")
+checkpoint_name = "SPX_PO_202512_after_Load_All_Data"
+
+# 從哪個步驟開始 (例如: "ProductFilter")
+# Orchestrator定義的step name
+from_step = "ProductFilter"
+
+
+[output]
+# 輸出目錄
+output_dir = "./output"
+
+# 自動導出結果
+auto_export = true

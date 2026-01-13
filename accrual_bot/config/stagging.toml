@@ -16,6 +16,74 @@ DATE_YM_TO_YM = '(\d{4}/\d{2})\s*-\s*(\d{4}/\d{2})'
 DATE_YMD = '(\d{4}/\d{2}/\d{2})'
 DATE_YM = '(\d{4}/\d{2})'
 
+# ============================================================================
+# Pipeline Configuration - Configuration-driven step loading
+# ============================================================================
+
+[pipeline.spt]
+enabled_po_steps = [
+    "SPTDataLoading",
+    "ProductFilter",
+    "ColumnAddition",
+    "APInvoiceIntegration",
+    "PreviousWorkpaperIntegration",
+    "ProcurementIntegration",
+    "CommissionDataUpdate",
+    "PayrollDetection",
+    "DateLogic",
+    "SPTERMLogic",
+    "SPTStatusLabel",
+    "SPTAccountPrediction",
+    "SPTPostProcessing",
+    "SPTExport",
+]
+enabled_pr_steps = [
+    "SPTPRDataLoading",
+    "ProductFilter",
+    "ColumnAddition",
+    "PreviousWorkpaperIntegration",
+    "ProcurementIntegration",
+    "CommissionDataUpdate",
+    "PayrollDetection",
+    "DateLogic",
+    "SPXPRERMLogic",
+    "SPTStatusLabel",
+    "SPTAccountPrediction",
+    "SPTPostProcessing",
+    "SPTExport",
+]
+
+[pipeline.spx]
+enabled_po_steps = [
+    "SPXDataLoading",
+    "ProductFilter",
+    "ColumnAddition",
+    "APInvoiceIntegration",
+    "PreviousWorkpaperIntegration",
+    "ProcurementIntegration",
+    "DateLogic",
+    "ClosingListIntegration",
+    "StatusStage1",
+    "SPXERMLogic",
+    "ValidationDataProcessing",
+    "DepositStatusUpdate",
+    "DataReformatting",
+    "SPXExport"
+]
+enabled_pr_steps = [
+    "SPXPRDataLoading",
+    "ProductFilter",
+    "ColumnAddition",
+    "PreviousWorkpaperIntegration",
+    "ProcurementIntegration",
+    "DateLogic",
+    "ClosingListIntegration",
+    "StatusStage1",
+    "SPXPRERMLogic",
+    "PRDataReformatting",
+    "SPXPRExport"
+]
+
 [category_patterns_by_desc]
 # --- 新增與調整的分類 ---
 "Management Fee" = '管理費'
