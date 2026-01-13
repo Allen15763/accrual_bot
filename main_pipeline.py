@@ -70,14 +70,31 @@ async def main() -> Dict[str, Any]:
     config = load_run_config()
     logger.info(f"執行配置: entity={config.entity}, type={config.processing_type}, date={config.processing_date}")
 
-    # 2. 載入檔案路徑
+    # 2. 檢查是否從 checkpoint 恢復執行
+    if config.resume_enabled:
+        logger.info("從 checkpoint 恢復執行模式")
+        if not config.checkpoint_name or not config.from_step:
+            raise ValueError("Resume 模式需要設定 checkpoint_name 和 from_step")
+
+        result = await resume_from_checkpoint(
+            checkpoint_name=config.checkpoint_name,
+            from_step=config.from_step,
+            entity=config.entity,
+            processing_type=config.processing_type,
+            processing_date=config.processing_date,
+            save_checkpoints=config.save_checkpoints
+        )
+        _print_result_summary(result)
+        return result
+
+    # 3. 一般執行模式 - 載入檔案路徑
     file_paths = load_file_paths(
         entity=config.entity,
         processing_type=config.processing_type,
         processing_date=config.processing_date
     )
 
-    # 3. 取得 Orchestrator 並建立 Pipeline
+    # 4. 取得 Orchestrator 並建立 Pipeline
     orchestrator = get_orchestrator(config.entity)
 
     if config.processing_type == "PO":
@@ -85,16 +102,18 @@ async def main() -> Dict[str, Any]:
     elif config.processing_type == "PR":
         pipeline = orchestrator.build_pr_pipeline(file_paths)
     elif config.processing_type == "PPE":
-        # PPE 需要特殊處理 - 暫時使用 PO pipeline
-        # TODO: 實作 PPE pipeline
-        logger.warning("PPE pipeline 尚未完整實作，使用 PO pipeline 替代")
-        pipeline = orchestrator.build_po_pipeline(file_paths)
+        # PPE 處理
+        if hasattr(orchestrator, 'build_ppe_pipeline'):
+            pipeline = orchestrator.build_ppe_pipeline(file_paths, config.processing_date)
+            logger.info("使用 PPE pipeline")
+        else:
+            raise ValueError(f"{config.entity} 不支援 PPE 處理類型")
     else:
         raise ValueError(f"不支援的處理類型: {config.processing_type}")
 
     logger.info(f"Pipeline 建立完成: {pipeline.config.name}, 共 {len(pipeline.steps)} 個步驟")
 
-    # 4. 建立處理上下文
+    # 5. 建立處理上下文
     # 初始化空 DataFrame，由第一個步驟載入資料
     context = ProcessingContext(
         data=pd.DataFrame(),
@@ -106,7 +125,7 @@ async def main() -> Dict[str, Any]:
     # 將 file_paths 儲存到 context 中，供步驟存取參數
     context.set_variable('file_paths', file_paths)
 
-    # 5. 執行 Pipeline
+    # 6. 執行 Pipeline
     if config.step_by_step:
         # 逐步執行模式
         logger.info("啟用逐步執行模式")
@@ -123,7 +142,7 @@ async def main() -> Dict[str, Any]:
         # 將 context 加入結果
         result["context"] = context
 
-    # 6. 顯示結果摘要
+    # 7. 顯示結果摘要
     _print_result_summary(result)
 
     return result
@@ -153,6 +172,85 @@ def _print_result_summary(result: Dict[str, Any]):
             print(f"輸出路徑: {output_path}")
 
     print("=" * 60 + "\n")
+
+
+async def resume_from_checkpoint(
+    checkpoint_name: str,
+    from_step: str,
+    entity: str,
+    processing_type: str,
+    processing_date: int,
+    save_checkpoints: bool = True
+) -> Dict[str, Any]:
+    """
+    從 checkpoint 恢復執行
+
+    Args:
+        checkpoint_name: checkpoint 名稱 (例如: "SPX_PO_202512_after_Load_All_Data")
+        from_step: 從哪個步驟開始 (例如: "Add_Columns")
+        entity: 業務實體 (SPX/SPT/MOB)
+        processing_type: 處理類型 (PO/PR/PPE)
+        processing_date: 處理日期 (YYYYMM)
+        save_checkpoints: 是否儲存 checkpoint
+
+    Returns:
+        Dict[str, Any]: 執行結果
+
+    範例:
+        result = await resume_from_checkpoint(
+            checkpoint_name="SPX_PO_202511_after_Filter_Products",
+            from_step="Add_Columns",
+            entity="SPX",
+            processing_type="PO",
+            processing_date=202511,
+            save_checkpoints=False
+        )
+
+        or
+
+        result = asyncio.run(resume_from_checkpoint(...))
+    """
+    from accrual_bot.core.pipeline.checkpoint import CheckpointManager, PipelineWithCheckpoint
+
+    logger.info(f"從 checkpoint 恢復執行: {checkpoint_name}")
+    logger.info(f"起始步驟: {from_step}")
+
+    # 1. 載入 checkpoint
+    checkpoint_manager = CheckpointManager("./checkpoints")
+    context = checkpoint_manager.load_checkpoint(checkpoint_name)
+
+    # 2. 載入檔案路徑
+    file_paths = load_file_paths(entity, processing_type, processing_date)
+
+    # 3. 將 file_paths 儲存到 context（如果 checkpoint 中沒有）
+    if not context.get_variable('file_paths'):
+        context.set_variable('file_paths', file_paths)
+
+    # 4. 建立 pipeline
+    orchestrator = get_orchestrator(entity)
+
+    if processing_type == 'PO':
+        pipeline = orchestrator.build_po_pipeline(file_paths)
+    elif processing_type == 'PR':
+        pipeline = orchestrator.build_pr_pipeline(file_paths)
+    elif processing_type == 'PPE':
+        if hasattr(orchestrator, 'build_ppe_pipeline'):
+            pipeline = orchestrator.build_ppe_pipeline(file_paths, processing_date)
+        else:
+            raise ValueError(f"{entity} 不支援 PPE 處理類型")
+    else:
+        raise ValueError(f"不支援的處理類型: {processing_type}")
+
+    # 5. 執行 pipeline（從指定步驟開始）
+    executor = PipelineWithCheckpoint(pipeline, checkpoint_manager)
+    result = await executor.execute_with_checkpoint(
+        context=context,
+        save_after_each_step=save_checkpoints,
+        start_from_step=from_step
+    )
+
+    logger.info("Resume 執行完成")
+    return result
 
 
 # =============================================================================
@@ -247,3 +345,5 @@ if __name__ == "__main__":
 
     # 設定退出碼
     sys.exit(0 if result.get("success", False) else 1)
+
+    print(1)

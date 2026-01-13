@@ -34,6 +34,11 @@ from accrual_bot.core.pipeline.steps import (
     DateLogicStep,
     DataReformattingStep,
     PRDataReformattingStep,
+    PPEDataLoadingStep,
+    PPEDataCleaningStep,
+    PPEDataMergeStep,
+    PPEContractDateUpdateStep,
+    PPEMonthDifferenceStep,
 )
 
 
@@ -146,6 +151,74 @@ class SPXPipelineOrchestrator:
             step = self._create_step(step_name, file_paths, processing_type='PR')
             if step:
                 pipeline.add_step(step)
+
+        # 添加自定義步驟
+        if custom_steps:
+            for step in custom_steps:
+                pipeline.add_step(step)
+
+        return pipeline
+
+    def build_ppe_pipeline(
+        self,
+        file_paths: Dict[str, Any],
+        processing_date: int,
+        custom_steps: Optional[List[PipelineStep]] = None
+    ) -> Pipeline:
+        """
+        構建 SPX PPE (Property, Plant & Equipment) 處理 pipeline
+
+        Args:
+            file_paths: 文件路徑配置
+            processing_date: 處理日期 (YYYYMM)
+            custom_steps: 自定義步驟（可選）
+
+        Returns:
+            Pipeline: 配置好的 pipeline
+        """
+        pipeline_config = PipelineConfig(
+            name="SPX_PPE_Processing",
+            description="SPX PPE contract depreciation period calculation",
+            entity_type=self.entity_type,
+            stop_on_error=True
+        )
+
+        pipeline = Pipeline(pipeline_config)
+
+        # PPE 管道的固定步驟順序
+        contract_filing_list_path = file_paths.get('contract_filing_list', {}).get('path')
+
+        # 1. PPE Data Loading
+        pipeline.add_step(PPEDataLoadingStep(
+            name="PPEDataLoading",
+            contract_filing_list_url=contract_filing_list_path
+        ))
+
+        # 2. PPE Data Cleaning
+        pipeline.add_step(PPEDataCleaningStep(
+            name="PPEDataCleaning"
+        ))
+
+        # 3. PPE Data Merge
+        merge_keys = config_manager.get_list(
+            'SPX',
+            'key_for_merging_origin_and_renew_contract'
+        )
+        pipeline.add_step(PPEDataMergeStep(
+            name="PPEDataMerge",
+            merge_keys=merge_keys
+        ))
+
+        # 4. PPE Contract Date Update
+        pipeline.add_step(PPEContractDateUpdateStep(
+            name="PPEContractDateUpdate"
+        ))
+
+        # 5. PPE Month Difference Calculation
+        pipeline.add_step(PPEMonthDifferenceStep(
+            name="PPEMonthDifference",
+            current_month=processing_date
+        ))
 
         # 添加自定義步驟
         if custom_steps:
