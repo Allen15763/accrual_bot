@@ -254,21 +254,21 @@ class PipelineWithCheckpoint:
                 )
             
             # 如果失敗且設定為遇錯即停
-            if not result.is_success and self.pipeline.config.stop_on_error:
+            if result.is_failed and self.pipeline.config.stop_on_error:
                 print(f"❌ 步驟失敗,停止執行: {result.message}")
                 break
         
         # 彙總結果
         successful = sum(1 for r in results if r.is_success)
-        failed = sum(1 for r in results if not r.is_success)
-        # skipped = sum(1 for r in results if r.is_skipped)
+        failed = sum(1 for r in results if r.is_failed)
+        skipped = sum(1 for r in results if r.is_skipped)
         
         return {
             'success': failed == 0,
             'total_steps': len(results),
             'successful_steps': successful,
             'failed_steps': failed,
-            # 'skipped_steps': skipped,
+            'skipped_steps': skipped,
             'results': results,  # List[StepResult]
             'context': context
         }

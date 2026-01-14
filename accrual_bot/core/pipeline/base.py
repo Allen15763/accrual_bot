@@ -44,6 +44,10 @@ class StepResult:
     def is_failed(self) -> bool:
         return self.status == StepStatus.FAILED
     
+    @property
+    def is_skipped(self) -> bool:
+        return self.status == StepStatus.SKIPPED
+    
     def to_dict(self) -> Dict[str, Any]:
         """轉換為字典"""
         return {
