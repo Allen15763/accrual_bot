@@ -562,19 +562,34 @@ class ProductFilterStep(PipelineStep):
 
 class PreviousWorkpaperIntegrationStep(PipelineStep):
     """
-    前期底稿整合步驟
-    
+    前期底稿整合步驟 - 配置驅動版本
+
     功能:
     1. 整合前期 PO 底稿
     2. 整合前期 PR 底稿
     3. 處理 累計至本期驗收數量/金額 欄位; SPX
-    
+    4. 支援透過 TOML 配置新增欄位映射
+
     輸入: DataFrame + Previous WP (PO and PR)
     輸出: DataFrame with previous workpaper info
     """
-    
+
     def __init__(self, name: str = "PreviousWorkpaperIntegration", **kwargs):
         super().__init__(name, description="Integrate previous workpaper", **kwargs)
+        self._load_mapping_config()
+
+    def _load_mapping_config(self) -> None:
+        """從配置載入映射規則"""
+        config = config_manager._config_toml.get('previous_workpaper_integration', {})
+        self.column_patterns = config.get('column_patterns', {})
+        self.po_mappings = config.get('po_mappings', {}).get('fields', [])
+        self.pr_mappings = config.get('pr_mappings', {}).get('fields', [])
+        self.reviewer_config = config.get('reviewer_mapping', {})
+
+        self.logger.debug(
+            f"Loaded mapping config: {len(self.po_mappings)} PO mappings, "
+            f"{len(self.pr_mappings)} PR mappings"
+        )
     
     async def execute(self, context: ProcessingContext) -> StepResult:
         """執行前期底稿整合"""
@@ -584,7 +599,8 @@ class PreviousWorkpaperIntegrationStep(PipelineStep):
             previous_wp = context.get_auxiliary_data('previous')
             previous_wp_pr = context.get_auxiliary_data('previous_pr')
             m = context.get_variable('processing_month')
-            
+            entity = context.metadata.entity_type
+
             if previous_wp is None and previous_wp_pr is None:
                 self.logger.warning("No previous workpaper data available, skipping")
                 return StepResult(
@@ -593,38 +609,38 @@ class PreviousWorkpaperIntegrationStep(PipelineStep):
                     data=df,
                     message="No previous workpaper data"
                 )
-            
+
             self.logger.info("Processing previous workpaper integration...")
-            
+
             # 處理 PO 前期底稿
             if previous_wp is not None and not previous_wp.empty:
-                df = self._process_previous_po(df, previous_wp, m)
+                df = self._process_previous_po(df, previous_wp, m, entity)
                 self.logger.info("Previous PO workpaper integrated")
-            
+
             # 處理 PR 前期底稿
             if previous_wp_pr is not None and not previous_wp_pr.empty:
-                df = self._process_previous_pr(df, previous_wp_pr)
+                df = self._process_previous_pr(df, previous_wp_pr, entity)
                 self.logger.info("Previous PR workpaper integrated")
 
-            # 從PO/PR前期底稿取回Reviewer資訊
+            # 從PO/PR前期底稿取回Reviewer資訊 (配置驅動 - 僅限指定實體)
             processing_type = context.metadata.processing_type
-            entity = context.metadata.entity_type
-            if entity == 'SPT' and processing_type == 'PO':
-                if previous_wp is not None and not previous_wp.empty:
+            enabled_entities = self.reviewer_config.get('enabled_entities', [])
+
+            if entity in enabled_entities:
+                if processing_type == 'PO' and previous_wp is not None and not previous_wp.empty:
                     df = self._process_reviewer_info(df, previous_wp)
                     self.logger.info("Reviewer info updated from Previous PO")
-            if entity == 'SPT' and processing_type == 'PR':
-                if previous_wp_pr is not None and not previous_wp_pr.empty:
+                elif processing_type == 'PR' and previous_wp_pr is not None and not previous_wp_pr.empty:
                     df = self._process_reviewer_info(df, previous_wp_pr)
                     self.logger.info("Reviewer info updated from Previous PR")
 
             # 路徑參數傳入raw_pr才執行，把remark...PR跟Noted...PR欄位複製到沒...PR的欄位
             if 'raw_pr' in context.get_variable('file_paths').keys():
                 df = self._copy_pr_result_non_pr_cols(df)
-            
+
             context.update_data(df)
             duration = time.time() - start_time
-            
+
             return StepResult(
                 step_name=self.name,
                 status=StepStatus.SUCCESS,
@@ -636,7 +652,7 @@ class PreviousWorkpaperIntegrationStep(PipelineStep):
                     'pr_integrated': previous_wp_pr is not None
                 }
             )
-            
+
         except Exception as e:
             self.logger.error(f"Previous workpaper integration failed: {str(e)}", exc_info=True)
             context.add_error(f"Previous workpaper integration failed: {str(e)}")
@@ -648,96 +664,109 @@ class PreviousWorkpaperIntegrationStep(PipelineStep):
                 duration=duration,
                 message=str(e)
             )
-    
-    def _process_previous_po(self, df: pd.DataFrame, previous_wp: pd.DataFrame, m: int) -> pd.DataFrame:
-        """處理前期 PO 底稿"""
-        # 調用父類邏輯處理基本的前期底稿整合
-        # 這裡需要實現類似 BasePOProcessor.process_previous_workpaper 的邏輯
-        try:
-            if previous_wp is None or previous_wp.empty:
-                self.logger.info("前期底稿為空，跳過處理")
-                return df
-            
-            # 重命名前期底稿中的列
-            previous_wp_renamed = previous_wp.rename(
-                columns={
-                    'Remarked by FN': 'Remarked by FN_l',
-                    'Remarked by Procurement': 'Remark by PR Team_l',
-                    # 標準化後欄位名稱，for new previous
-                    'remarked_by_fn': 'Remarked by FN_l',
-                    'remarked_by_procurement': 'Remark by PR Team_l'
-                }
-            )
 
-            # 獲取前期FN備註
-            if 'PO Line' in df.columns:
-                fn_mapping = create_mapping_dict(previous_wp_renamed.rename(columns={'po_line': 'PO Line'}), 
-                                                 'PO Line', 'Remarked by FN_l')
-                df['Remarked by 上月 FN'] = df['PO Line'].map(fn_mapping).fillna(pd.NA)
-                
-                # 獲取前期採購備註
-                procurement_mapping = create_mapping_dict(
-                    previous_wp_renamed.rename(columns={'po_line': 'PO Line'}), 
-                    'PO Line', 'Remark by PR Team_l'
-                )
-                df['Remarked by 上月 Procurement'] = \
-                    df['PO Line'].map(procurement_mapping).fillna(pd.NA)
-            
-            # 處理 累計至本期驗收數量/金額 欄位; 
-            
-            """
-            這邊會先直接用上期的"累計至本期驗收數量"取代本期，
-            在ValidationDataProcessingStep時會複製整欄變成上期，
-                - Refer to _update_cumulative_qty_for_ppe()
-            """
-            if '累計至本期驗收數量/金額' in previous_wp.columns and 'PO Line' in df.columns:
-                if 'PO Line' in previous_wp.columns:
-                    ppe_qty_mapping = dict(zip(previous_wp['PO Line'], previous_wp['累計至本期驗收數量/金額']))
-                else:
-                    ppe_qty_mapping = dict(zip(previous_wp['po_line'], previous_wp['累計至本期驗收數量/金額']))
-                df['累計至本期驗收數量/金額'] = df['PO Line'].map(ppe_qty_mapping).fillna(pd.NA)
+    # ========== 通用映射方法 (配置驅動) ==========
 
-            # 特殊會計備註
-            if 'noted_by_fn' in previous_wp.columns:
-                note_mapping = dict(zip(previous_wp['po_line'], previous_wp['noted_by_fn']))
-                df['Noted by FN'] = df['PO Line'].map(note_mapping).fillna(pd.NA)
-            
-            # 處理前期 FN 備註
-            if 'Remarked by FN' in previous_wp.columns:
-                col_po_line: str = previous_wp.filter(regex=r'(?i)po\sline').columns[0]
-                fn_mapping = dict(zip(previous_wp[col_po_line], previous_wp['Remarked by FN']))
-            if 'remarked_by_fn' in previous_wp.columns:
-                fn_mapping = dict(zip(previous_wp['po_line'], previous_wp['remarked_by_fn']))
-            df['Remarked by 上月 FN'] = df['PO Line'].map(fn_mapping).fillna(pd.NA)
+    def _apply_field_mappings(
+        self,
+        df: pd.DataFrame,
+        source_df: pd.DataFrame,
+        mappings: List[Dict],
+        key_type: str,  # 'po' or 'pr'
+        entity: str | None = None  # 新增參數
+    ) -> pd.DataFrame:
+        """
+        通用欄位映射應用
+
+        Args:
+            df: 目標 DataFrame
+            source_df: 來源 DataFrame (前期底稿)
+            mappings: 映射配置列表
+            key_type: 'po' 或 'pr'，用於決定鍵值欄位
+
+        Returns:
+            更新後的 DataFrame
+        """
+        from accrual_bot.utils.helpers.column_utils import ColumnResolver
+
+        # 一次性解析鍵值欄位
+        key_col_canonical = f'{key_type}_line'
+        df_key = ColumnResolver.resolve(df, key_col_canonical)
+        source_key = ColumnResolver.resolve(source_df, key_col_canonical)
+
+        if df_key is None or source_key is None:
+            self.logger.warning(f"Cannot resolve key column for {key_type}")
             return df
-    
-        except Exception as e:
-            self.logger.error(f"處理前期底稿時出錯: {str(e)}", exc_info=True)
-            raise ValueError("處理前期底稿時出錯")
-    
-    def _process_previous_pr(self, df: pd.DataFrame, previous_wp_pr: pd.DataFrame) -> pd.DataFrame:
-        """處理前期 PR 底稿"""
-        # 重命名前期 PR 底稿中的列
-        if 'Remarked by FN' in previous_wp_pr.columns or 'remarked_by_fn' in previous_wp_pr.columns:
-            previous_wp_pr = previous_wp_pr.rename(
-                columns={'Remarked by FN': 'Remarked by FN_l',
-                         'remarked_by_fn': 'Remarked by FN_l',
-                         'pr_line': 'PR Line'}  # 標準化後欄位名稱，for new previous
-            )
-        
-        # 獲取前期 PR FN 備註
-        if 'Remarked by FN_l' in previous_wp_pr.columns and 'PR Line' in df.columns:
-            pr_fn_mapping = dict(zip(previous_wp_pr['PR Line'], previous_wp_pr['Remarked by FN_l']))
-            df['Remarked by 上月 FN PR'] = df['PR Line'].map(pr_fn_mapping)
 
-            # 特殊會計備註
-            # 跑PO pipeline時，如果PO的Noted by FN已經有match到且PR再次match到的話，會用PR的覆蓋為最後輸出，其餘不影響。
-            if 'noted_by_fn' in previous_wp_pr.columns:
-                key_col = previous_wp_pr.filter(regex='(?i)pr_line|PR Line').columns[0]
-                note_mapping = dict(zip(previous_wp_pr[key_col], previous_wp_pr['noted_by_fn']))
-                df['Noted by FN'] = df[key_col].map(note_mapping).fillna(df['Noted by FN'])
-        
+        # 應用所有映射
+        for mapping in mappings:
+            # 檢查 Entity 限制
+            allowed_entities = mapping.get('entities', [])
+            if allowed_entities and entity and entity not in allowed_entities:
+                self.logger.debug(f"Skipping '{mapping['target']}' - not applicable for {entity}")
+                continue
+
+            df = self._apply_single_mapping(
+                df, source_df, mapping, df_key, source_key
+            )
+
         return df
+
+    def _apply_single_mapping(
+        self,
+        df: pd.DataFrame,
+        source_df: pd.DataFrame,
+        mapping: Dict,
+        df_key: str,
+        source_key: str
+    ) -> pd.DataFrame:
+        """應用單一欄位映射"""
+        from accrual_bot.utils.helpers.column_utils import ColumnResolver
+
+        source_col = ColumnResolver.resolve(source_df, mapping['source'])
+        if source_col is None:
+            self.logger.debug(f"Source column '{mapping['source']}' not found, skipping")
+            return df
+
+        target_col = mapping['target']
+        fill_na = mapping.get('fill_na', True)
+
+        # 建立映射字典
+        mapping_dict = create_mapping_dict(source_df, source_key, source_col)
+
+        if fill_na:
+            df[target_col] = df[df_key].map(mapping_dict).fillna(pd.NA)
+        else:
+            # 允許覆蓋 - 先映射，然後用原值填充空值
+            mapped = df[df_key].map(mapping_dict)
+            if target_col in df.columns:
+                df[target_col] = mapped.fillna(df[target_col])
+            else:
+                df[target_col] = mapped
+
+        return df
+
+    # ========== 重構後的處理方法 ==========
+
+    def _process_previous_po(self, df: pd.DataFrame, 
+                             previous_wp: pd.DataFrame, 
+                             m: int, 
+                             entity: str | None = None) -> pd.DataFrame:
+        """處理前期 PO 底稿 - 使用配置驅動映射"""
+        if previous_wp is None or previous_wp.empty:
+            self.logger.info("前期底稿為空，跳過處理")
+            return df
+
+        return self._apply_field_mappings(df, previous_wp, self.po_mappings, 'po', entity)
+    
+    def _process_previous_pr(self, df: pd.DataFrame, 
+                             previous_wp_pr: pd.DataFrame,
+                             entity: str | None = None) -> pd.DataFrame:
+        """處理前期 PR 底稿 - 使用配置驅動映射"""
+        if previous_wp_pr is None or previous_wp_pr.empty:
+            return df
+
+        return self._apply_field_mappings(df, previous_wp_pr, self.pr_mappings, 'pr', entity)
     
     def _copy_pr_result_non_pr_cols(self, df, col_remark_fn: str = 'Remarked by 上月 FN'):
         df_copy = df.copy()
@@ -747,38 +776,47 @@ class PreviousWorkpaperIntegrationStep(PipelineStep):
 
         return df_copy
     
-    def _process_reviewer_info(self, 
-                               df: pd.DataFrame, 
-                               df_ref: pd.DataFrame) -> pd.DataFrame:
-        col_po_line_count = len(df.filter(regex='(?i)po_line|po line').columns)
-        col_pr_line_count = len(df.filter(regex='(?i)pr_line|pr line').columns)
-        col_ref_po_line_count = len(df_ref.filter(regex='(?i)po_line|po line').columns)
-        col_ref_pr_line_count = len(df_ref.filter(regex='(?i)pr_line|pr line').columns)
-        col_reviewer_count = len(df_ref.filter(regex='(?i)Current month Reviewed by|current_month_reviewed_by').columns)
-        if col_po_line_count == 1 and col_ref_po_line_count == 1:
-            if col_reviewer_count == 1:
-                col_reviewer = df_ref.filter(regex='(?i)Current month Reviewed by|current_month_reviewed_by').columns[0]
-                col_key = df_ref.filter(regex='(?i)po_line|po line').columns[0]
-                map_dict = df_ref.loc[:, [col_reviewer, col_key]].set_index(col_key).to_dict()[col_reviewer]
-                df['previous_month_reviewed_by'] = df[df.filter(regex='(?i)po_line|po line').columns[0]].map(map_dict)
-                df['current_month_reviewed_by'] = df['previous_month_reviewed_by']
-                return df
-            self.logger.warning("搜尋Reviewer欄位發生錯誤，跳過該步驟")
-            return df
-        
-        elif col_pr_line_count == 1 and col_ref_pr_line_count == 1:
-            if col_reviewer_count == 1:
-                col_reviewer = df_ref.filter(regex='(?i)Current month Reviewed by|current_month_reviewed_by').columns[0]
-                col_key = df_ref.filter(regex='(?i)pr_line|pr line').columns[0]
-                map_dict = df_ref.loc[:, [col_reviewer, col_key]].set_index(col_key).to_dict()[col_reviewer]
-                df['previous_month_reviewed_by'] = df[df.filter(regex='(?i)pr_line|pr line').columns[0]].map(map_dict)
-                df['current_month_reviewed_by'] = df['previous_month_reviewed_by']
-                return df
-            self.logger.warning("搜尋Reviewer欄位發生錯誤，跳過該步驟")
-            return df
-        else:
+    def _process_reviewer_info(self, df: pd.DataFrame, df_ref: pd.DataFrame) -> pd.DataFrame:
+        """處理 Reviewer 資訊 - 統一 PO/PR 邏輯"""
+        from accrual_bot.utils.helpers.column_utils import ColumnResolver
+
+        # 判斷使用 PO 或 PR 作為鍵值類型
+        key_type = self._determine_key_type(df, df_ref)
+        if key_type is None:
             self.logger.warning("搜尋po_line/pr_line欄位發生錯誤，跳過該步驟")
             return df
+
+        # 解析欄位
+        reviewer_col = ColumnResolver.resolve(df_ref, 'current_month_reviewed_by')
+        key_col = ColumnResolver.resolve(df_ref, f'{key_type}_line')
+        df_key_col = ColumnResolver.resolve(df, f'{key_type}_line')
+
+        if not all([reviewer_col, key_col, df_key_col]):
+            self.logger.warning("搜尋Reviewer欄位發生錯誤，跳過該步驟")
+            return df
+
+        # 建立映射並應用到目標欄位
+        map_dict = df_ref[[reviewer_col, key_col]].set_index(key_col).to_dict()[reviewer_col]
+
+        for target in self.reviewer_config.get('targets', []):
+            df[target] = df[df_key_col].map(map_dict)
+
+        return df
+
+    def _determine_key_type(self, df: pd.DataFrame, df_ref: pd.DataFrame) -> Optional[str]:
+        """判斷使用 PO 或 PR 作為鍵值類型"""
+        from accrual_bot.utils.helpers.column_utils import ColumnResolver
+
+        has_po = (ColumnResolver.has_column(df, 'po_line') and
+                  ColumnResolver.has_column(df_ref, 'po_line'))
+        has_pr = (ColumnResolver.has_column(df, 'pr_line') and
+                  ColumnResolver.has_column(df_ref, 'pr_line'))
+
+        if has_po and has_pr:
+            return 'po'
+        elif has_pr and not has_po:
+            return 'pr'
+        return None
     
     async def validate_input(self, context: ProcessingContext) -> bool:
         """驗證輸入"""

@@ -42,6 +42,10 @@ from .data_utils import (
     get_ref_on_colab
 )
 
+from .column_utils import (
+    ColumnResolver
+)
+
 __all__ = [
     # file_utils
     'get_resource_path',
@@ -60,7 +64,7 @@ __all__ = [
     'cleanup_temp_files',
     'find_files_by_pattern',
     'get_directory_size',
-    
+
     # data_utils
     'clean_nan_values',
     'safe_string_operation',
@@ -79,5 +83,8 @@ __all__ = [
     'memory_efficient_operation',
     'classify_description',
     'give_account_by_keyword',
-    'get_ref_on_colab'
+    'get_ref_on_colab',
+
+    # column_utils
+    'ColumnResolver'
 ]
