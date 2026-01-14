@@ -159,6 +159,7 @@ def _print_result_summary(result: Dict[str, Any]):
 
     if "successful_steps" in result:
         print(f"成功步驟: {result['successful_steps']}")
+        print(f"跳過步驟: {result['skipped_steps']}")
         print(f"失敗步驟: {result['failed_steps']}")
 
     if result.get("errors"):

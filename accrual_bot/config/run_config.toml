@@ -8,7 +8,7 @@
 entity = "SPX"
 
 # 處理類型: PO, PR, PPE
-processing_type = "PPE"
+processing_type = "PR"
 
 # 處理日期 (YYYYMM 格式)
 processing_date = 202512
@@ -30,7 +30,7 @@ verbose = false
 enabled = false
 
 # checkpoint 名稱 (例如: "SPX_PO_202512_after_Load_All_Data、SPX_PO_202512_after_SPXDataLoading")
-checkpoint_name = "SPX_PO_202512_after_Load_All_Data"
+checkpoint_name = "SPT_PO_202512_after_Load_All_Data"
 
 # 從哪個步驟開始 (例如: "ProductFilter")
 # Orchestrator定義的step name

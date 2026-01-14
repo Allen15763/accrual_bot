@@ -441,6 +441,7 @@ output_columns_before_nlp = [
     "po_line","remarked_by_procurement","noted_by_procurement",
     "remarked_by_procurement_pr","noted_by_procurement_pr","remarked_by_上月_fn",
     "remarked_by_上月_fn_pr","noted_by_fn","remarked_by_上月_procurement",
+    "previ_liability",
     "po狀態","remarked_by_fn","是否估計入帳",
     "是否為fa","是否為s&m","account_code",
     "account_name","product_code_c","region_c",
@@ -463,7 +464,7 @@ output_columns_before_nlp_pr = [
     "是否結案","結案是否有差異數量","check_with_entry_invoice",
     "pr_line","remarked_by_procurement","noted_by_procurement",
     "remarked_by_fn","remarked_by_上月_fn","noted_by_fn",
-    "remarked_by_上月_procurement","pr狀態","是否估計入帳",
+    "remarked_by_上月_procurement", "previ_liability", "pr狀態","是否估計入帳",
     "是否為fa","是否為s&m","account_code",
     "account_name","product_code_c","region_c",
     "dep.","currency_c","accr._amount",
@@ -510,3 +511,87 @@ scopes = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
 "610110" = 'SPX門市發票代傳至財政部及營業稅申報檔相關服務'
 "630001" = 'Dispatcher fare'
 "650005" = 'shipping fee|Logistics Fee'
+
+# ============================================================================
+# Previous Workpaper Integration Configuration
+# ============================================================================
+
+[previous_workpaper_integration]
+# 前期底稿整合步驟的配置
+
+[previous_workpaper_integration.column_patterns]
+# 欄位名稱的正則表達式模式 (支援大小寫不敏感)
+po_line = '(?i)^(po[_\s]?line)$'
+pr_line = '(?i)^(pr[_\s]?line)$'
+remarked_by_fn = '(?i)^(remarked[_\s]?by[_\s]?fn)$'
+remarked_by_procurement = '(?i)^(remarked?[_\s]?by[_\s]?(procurement|pr[_\s]?team))$'
+noted_by_fn = '(?i)^(noted[_\s]?by[_\s]?fn)$'
+noted_by_procurement = '(?i)^(noted[_\s]?by[_\s]?(procurement|pr))$'
+liability = '(?i)^(liability)$'
+current_month_reviewed_by = '(?i)^(current[_\s]?month[_\s]?reviewed[_\s]?by)$'
+cumulative_qty = '(?i)^(累計至本期驗收數量/金額)$'
+
+[previous_workpaper_integration.po_mappings]
+# PO 前期底稿欄位映射配置
+# 格式: {source = "來源欄位", target = "目標欄位", fill_na = true/false}
+
+[[previous_workpaper_integration.po_mappings.fields]]
+source = "remarked_by_fn"
+target = "Remarked by 上月 FN"
+fill_na = true
+description = "前期 FN 備註"
+
+[[previous_workpaper_integration.po_mappings.fields]]
+source = "remarked_by_procurement"
+target = "Remarked by 上月 Procurement"
+fill_na = true
+description = "前期採購備註"
+
+[[previous_workpaper_integration.po_mappings.fields]]
+source = "累計至本期驗收數量/金額"
+target = "累計至本期驗收數量/金額"
+fill_na = true
+description = "累計至本期驗收數量/金額 (for PPE - SPX)"
+
+[[previous_workpaper_integration.po_mappings.fields]]
+source = "noted_by_fn"
+target = "Noted by FN"
+fill_na = true
+description = "特殊會計備註"
+
+# 新增欄位範例：liability 映射
+[[previous_workpaper_integration.po_mappings.fields]]
+source = "liability"
+target = "previ_Liability"
+fill_na = true
+description = "負債科目"
+entities = ["SPX"]  # 僅限 SPX，空陣列或省略entities表示所有 Entity 套用
+
+[previous_workpaper_integration.pr_mappings]
+# PR 前期底稿欄位映射配置
+
+[[previous_workpaper_integration.pr_mappings.fields]]
+source = "remarked_by_fn"
+target = "Remarked by 上月 FN PR"
+fill_na = true
+description = "前期 PR FN 備註"
+
+[[previous_workpaper_integration.pr_mappings.fields]]
+source = "noted_by_fn"
+target = "Noted by FN"
+fill_na = false
+description = "特殊會計備註 (PR 可覆蓋 PO 的值)"
+
+[[previous_workpaper_integration.pr_mappings.fields]]
+source = "liability"
+target = "previ_Liability"
+fill_na = true
+description = "負債科目"
+entities = ["SPX"]  # 僅限 SPX，空陣列或省略entities表示所有 Entity 套用
+
+[previous_workpaper_integration.reviewer_mapping]
+# Reviewer 資訊映射配置 (僅限 SPT)
+enabled_entities = ["SPT"]
+source = "current_month_reviewed_by"
+targets = ["previous_month_reviewed_by", "current_month_reviewed_by"]
+description = "從前期底稿取回 Reviewer 資訊"
