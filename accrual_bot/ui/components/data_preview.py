@@ -55,19 +55,23 @@ def render_data_preview(
         return
 
     # 行數限制
-    display_rows = st.slider(
-        "顯示行數",
-        min_value=10,
-        max_value=min(max_rows, len(data)),
-        value=min(50, len(data)),
-        step=10,
-        key=f"rows_{title}"
-    )
+    # 如果數據少於 10 行，直接顯示全部，不需要 slider
+    if len(data) <= 10:
+        display_rows = len(data)
+    else:
+        display_rows = st.slider(
+            "顯示行數",
+            min_value=10,
+            max_value=min(max_rows, len(data)),
+            value=min(50, len(data)),
+            step=10,
+            key=f"rows_{title}"
+        )
 
     # 顯示數據
     st.dataframe(
         data[selected_columns].head(display_rows),
-        use_container_width=True,
+        width="stretch",
         height=400
     )
 

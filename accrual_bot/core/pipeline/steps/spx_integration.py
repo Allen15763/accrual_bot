@@ -594,8 +594,20 @@ class ValidationDataProcessingStep(PipelineStep):
             processing_date = context.metadata.processing_date
             
             # 從 context 獲取驗收文件路徑
+            # 優先順序: self.validation_file_path > context variable > file_paths['ops_validation']
             validation_path = self.validation_file_path or context.get_variable('validation_file_path')
-            
+
+            # 如果還沒有路徑，嘗試從 file_paths 獲取（UI 上傳的情況）
+            if not validation_path:
+                file_paths_data = context.get_variable('file_paths')
+                if file_paths_data and 'ops_validation' in file_paths_data:
+                    ops_validation = file_paths_data['ops_validation']
+                    # 處理字符串或字典格式
+                    if isinstance(ops_validation, str):
+                        validation_path = ops_validation
+                    elif isinstance(ops_validation, dict) and 'path' in ops_validation:
+                        validation_path = ops_validation['path']
+
             if not validation_path:
                 self.logger.warning("No validation file path provided, skipping")
                 return StepResult(
@@ -616,18 +628,46 @@ class ValidationDataProcessingStep(PipelineStep):
             
             self.logger.info("Processing validation data...")
 
-            excel_params: dict = context.get_variable('file_paths').get('ops_validation').get('params')
+            # 獲取 Excel 參數，提供默認值
+            file_paths_data = context.get_variable('file_paths')
+            ops_validation_config = file_paths_data.get('ops_validation')
+
+            # 處理兩種情況：
+            # 1. ops_validation 是字符串（UI 上傳）
+            # 2. ops_validation 是字典（包含 params）
+            if isinstance(ops_validation_config, str):
+                # UI 上傳的情況，使用默認參數
+                excel_params = {}
+            elif isinstance(ops_validation_config, dict):
+                excel_params = ops_validation_config.get('params', {})
+            else:
+                excel_params = {}
+
+            # 提供默認的 Excel 讀取參數（來自 config/paths.toml）
+            default_params = {
+                'sheet_name': '智取櫃驗收明細',
+                'header': 3,
+                'usecols': 'A:AH',
+                'kiosk_sheet_name': '繳費機驗收明細',
+                'kiosk_usecols': 'A:G'
+            }
+
+            # 合併默認參數
+            for key, default_value in default_params.items():
+                if key not in excel_params or excel_params[key] is None:
+                    excel_params[key] = default_value
+
             self.df_locker = pd.read_excel(
-                validation_path, 
-                sheet_name=excel_params.get('sheet_name'), 
-                header=int(excel_params.get('header')), 
-                usecols=excel_params.get('usecols')
+                validation_path,
+                sheet_name=excel_params['sheet_name'],
+                header=excel_params['header'],
+                usecols=excel_params['usecols']
             )
 
             self.df_kiosk = pd.read_excel(
-                validation_path, 
-                sheet_name=excel_params.get('kiosk_sheet_name'), 
-                usecols=excel_params.get('kiosk_usecols')
+                validation_path,
+                sheet_name=excel_params['kiosk_sheet_name'],
+                usecols=excel_params['kiosk_usecols']
             )
             
             # 處理驗收數據
