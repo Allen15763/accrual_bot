@@ -38,8 +38,27 @@ def render_entity_selector() -> str:
                 type=button_type,
                 use_container_width=True
             ):
+                # Entity 改變時，清除所有後續狀態
                 st.session_state.pipeline_config.entity = entity
                 st.session_state.pipeline_config.processing_type = ""  # 重置 type
+                st.session_state.pipeline_config.enabled_steps = []  # 重置步驟
+                st.session_state.pipeline_config.template_name = ""  # 重置範本
+
+                # 清除檔案上傳狀態
+                st.session_state.file_upload.file_paths = {}
+                st.session_state.file_upload.uploaded_files = {}
+                st.session_state.file_upload.validation_errors = []
+                st.session_state.file_upload.required_files_complete = False
+
+                # 清除執行狀態
+                from accrual_bot.ui.models.state_models import ExecutionStatus
+                st.session_state.execution.status = ExecutionStatus.IDLE
+                st.session_state.execution.current_step = ""
+                st.session_state.execution.completed_steps = []
+                st.session_state.execution.failed_steps = []
+                st.session_state.execution.logs = []
+                st.session_state.execution.error_message = ""
+
                 st.rerun()
 
             st.caption(config['description'])
@@ -81,7 +100,26 @@ def render_processing_type_selector(entity: str) -> str:
                 type=button_type,
                 use_container_width=True
             ):
+                # Processing type 改變時，清除檔案上傳和執行狀態
                 st.session_state.pipeline_config.processing_type = proc_type
+                st.session_state.pipeline_config.enabled_steps = []  # 重置步驟
+                st.session_state.pipeline_config.template_name = ""  # 重置範本
+
+                # 清除檔案上傳狀態
+                st.session_state.file_upload.file_paths = {}
+                st.session_state.file_upload.uploaded_files = {}
+                st.session_state.file_upload.validation_errors = []
+                st.session_state.file_upload.required_files_complete = False
+
+                # 清除執行狀態
+                from accrual_bot.ui.models.state_models import ExecutionStatus
+                st.session_state.execution.status = ExecutionStatus.IDLE
+                st.session_state.execution.current_step = ""
+                st.session_state.execution.completed_steps = []
+                st.session_state.execution.failed_steps = []
+                st.session_state.execution.logs = []
+                st.session_state.execution.error_message = ""
+
                 st.rerun()
 
             st.caption(type_config['description'])

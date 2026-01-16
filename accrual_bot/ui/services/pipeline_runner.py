@@ -142,18 +142,23 @@ class StreamlitPipelineRunner:
         """
         total_steps = len(pipeline.steps)
 
+        # 預先記錄所有步驟（讓 UI 知道即將執行的步驟）
         for idx, step in enumerate(pipeline.steps, start=1):
-            step_name = step.name
-            self._log(f"[{idx}/{total_steps}] 執行步驟: {step_name}")
+            self._log(f"[{idx}/{total_steps}] 執行步驟: {step.name}")
 
-            if self.progress_callback:
-                self.progress_callback(step_name, idx, total_steps)
-
-            # 這裡實際執行步驟會由 pipeline.execute() 處理
-            # 我們只是記錄進度
-
-        # 執行 pipeline
+        # 使用 Pipeline 原生的 execute() 方法
+        # 注意：這會一次性執行所有步驟，無法實時回調每個步驟的進度
+        # 但可以避免 event loop 衝突
         result = await pipeline.execute(context)
+
+        # 執行完成後，根據結果更新進度
+        if self.progress_callback and 'results' in result:
+            for idx, step_result in enumerate(result['results'], start=1):
+                step_name = step_result.get('step', f'Step {idx}')
+                is_success = step_result.get('status') == 'success'
+                status = 'completed' if is_success else 'failed'
+                self.progress_callback(step_name, idx, total_steps, status=status)
+
         return result
 
     def _log(self, message: str):

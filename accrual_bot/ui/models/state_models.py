@@ -24,6 +24,7 @@ class PipelineConfig:
     entity: str = ""                    # SPT, SPX (MOB 隱藏)
     processing_type: str = ""           # PO, PR, PPE
     processing_date: int = 0            # YYYYMM 格式
+    template_name: str = ""             # 選擇的範本名稱
     enabled_steps: List[str] = field(default_factory=list)  # 已啟用的步驟清單
 
 

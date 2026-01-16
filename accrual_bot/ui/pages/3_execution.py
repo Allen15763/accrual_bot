@@ -92,7 +92,26 @@ if start_button and execution.status != ExecutionStatus.RUNNING:
         def log_callback(message: str):
             execution.logs.append(message)
 
+        def progress_callback(step_name: str, current: int, total: int, status: str = 'running'):
+            """進度回調：更新執行狀態"""
+            execution.current_step = step_name if status == 'running' else ""
+
+            if status == 'completed':
+                if step_name not in execution.completed_steps:
+                    execution.completed_steps.append(step_name)
+                # 從 failed_steps 移除（如果存在）
+                if step_name in execution.failed_steps:
+                    execution.failed_steps.remove(step_name)
+
+            elif status == 'failed':
+                if step_name not in execution.failed_steps:
+                    execution.failed_steps.append(step_name)
+                # 從 completed_steps 移除（如果存在）
+                if step_name in execution.completed_steps:
+                    execution.completed_steps.remove(step_name)
+
         runner.set_log_callback(log_callback)
+        runner.set_progress_callback(progress_callback)
 
         # 執行
         st.info("⏳ 正在執行 pipeline...")
