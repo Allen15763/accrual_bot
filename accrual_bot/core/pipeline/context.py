@@ -130,7 +130,27 @@ class ProcessingContext:
     def list_auxiliary_data(self) -> List[str]:
         """列出所有輔助數據名稱"""
         return list(self._auxiliary_data.keys())
-    
+
+    @property
+    def auxiliary_data(self) -> Dict[str, pd.DataFrame]:
+        """
+        獲取所有輔助數據
+
+        Returns:
+            Dict[str, pd.DataFrame]: 輔助數據字典
+        """
+        return self._auxiliary_data.copy()
+
+    def set_auxiliary_data(self, name: str, data: pd.DataFrame):
+        """
+        設置輔助數據（add_auxiliary_data 的別名，保持向後兼容）
+
+        Args:
+            name: 數據名稱
+            data: 數據內容
+        """
+        self.add_auxiliary_data(name, data)
+
     # === 變量存儲 ===
     
     def set_variable(self, key: str, value: Any):

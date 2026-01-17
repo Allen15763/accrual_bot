@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Accrual Bot is an async data processing system for PO/PR (Purchase Order/Purchase Request) accrual processing. It handles monthly financial data reconciliation for three business entities: MOB, SPT, and SPX.
+Accrual Bot is an async data processing system for PO/PR (Purchase Order/Purchase Request) accrual processing. It handles monthly financial data reconciliation for two active business entities: SPT and SPX. The system includes both a command-line pipeline execution mode and a Streamlit-based Web UI.
 
 ## Common Commands
 
@@ -16,9 +16,14 @@ Accrual Bot is an async data processing system for PO/PR (Purchase Order/Purchas
 python -m pip install -r requirements.txt
 # Or use pyproject.toml
 python -m pip install .
+# With UI dependencies
+python -m pip install ".[ui]"
 
-# Run the main pipeline
+# Run the main pipeline (CLI mode)
 python main_pipeline.py
+
+# Run Streamlit UI
+streamlit run main_streamlit.py
 
 # Run tests
 python -m pytest tests/
@@ -39,9 +44,31 @@ python -m black .
 
 ## Architecture
 
-### Three-Layer Architecture
+### Four-Layer Architecture
 
-The codebase follows a three-layer architecture pattern inspired by the SPE Bank Reconciliation reference project:
+The codebase follows a four-layer architecture pattern:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    UI Layer (Streamlit)                      │
+│  pages/ → components/ → services/ → Session State           │
+├─────────────────────────────────────────────────────────────┤
+│                    Tasks Layer (Orchestrators)               │
+│  tasks/spt/ | tasks/spx/ | tasks/mob/                       │
+├─────────────────────────────────────────────────────────────┤
+│                    Core Layer (Framework)                    │
+│  Pipeline | PipelineStep | ProcessingContext | DataSources  │
+├─────────────────────────────────────────────────────────────┤
+│                    Utils Layer (Cross-cutting)               │
+│  ConfigManager | Logger | Data Utilities                    │
+└─────────────────────────────────────────────────────────────┘
+```
+
+- **ui/**: Streamlit Web UI (see [UI Architecture](#streamlit-ui-architecture) below)
+  - `pages/`: 5-page workflow (Configuration → Upload → Execution → Results → Checkpoint)
+  - `components/`: Reusable UI components
+  - `services/`: UnifiedPipelineService, StreamlitPipelineRunner, FileHandler
+  - `models/`: Session state dataclasses
 
 - **core/**: Framework and reusable components
   - Pipeline infrastructure (Pipeline, PipelineStep, ProcessingContext)
@@ -52,7 +79,7 @@ The codebase follows a three-layer architecture pattern inspired by the SPE Bank
 - **tasks/**: Entity-specific implementations
   - `tasks/spt/`: SPT-specific steps and pipeline orchestrator
   - `tasks/spx/`: SPX-specific steps and pipeline orchestrator
-  - `tasks/mob/`: MOB-specific steps and pipeline orchestrator
+  - `tasks/mob/`: MOB-specific steps and pipeline orchestrator (inactive)
   - Each task module contains entity-specific business logic
 
 - **utils/**: Cross-cutting concerns
@@ -82,7 +109,7 @@ DataLoading → Filtering → ColumnAddition → Integration → BusinessLogic �
 
 ### Entity-Specific Processing
 
-Three entity types with configuration-driven pipeline orchestration:
+Two active entity types with configuration-driven pipeline orchestration:
 
 - **SPT** ([tasks/spt/](accrual_bot/tasks/spt/)):
   - PO Pipeline: SPTDataLoading → CommissionDataUpdate → PayrollDetection → SPTERMLogic → SPTStatusLabel → SPTAccountPrediction
@@ -92,15 +119,18 @@ Three entity types with configuration-driven pipeline orchestration:
 - **SPX** ([tasks/spx/](accrual_bot/tasks/spx/)):
   - PO Pipeline: SPXDataLoading → ColumnAddition → ClosingListIntegration → StatusStage1 → SPXERMLogic → DepositStatusUpdate → ValidationDataProcessing → SPXExport
   - PR Pipeline: SPXPRDataLoading → ColumnAddition → StatusStage1 → SPXPRERMLogic → SPXPRExport
+  - PPE Pipeline: PPEDataLoading → PPEDataCleaning → PPEDataMerge → PPEContractDateUpdate → PPEMonthDifference
   - Complex processing: 11-condition status evaluation, deposit/rental identification, locker/kiosk asset validation
-
-- **MOB** ([tasks/mob/](accrual_bot/tasks/mob/)):
-  - Standard processing with basic status determination
 
 Pipeline steps can be enabled/disabled via configuration in [config/stagging.toml](accrual_bot/config/stagging.toml):
 ```toml
 [pipeline.spt]
 enabled_po_steps = ["SPTDataLoading", "CommissionDataUpdate", ...]
+
+[pipeline.spx]
+enabled_po_steps = ["SPXDataLoading", "ColumnAddition", ...]
+enabled_pr_steps = ["SPXPRDataLoading", "ColumnAddition", ...]
+enabled_ppe_steps = ["PPEDataLoading", "PPEDataCleaning", ...]
 ```
 
 ### Data Sources (core/datasources/)
@@ -115,7 +145,22 @@ All sources implement the same interface with thread-safe operations and shared 
 
 ### Configuration
 
+Three configuration files:
+
 - **config/config.ini**: Legacy INI configuration (general settings, regex patterns, credentials)
+
+- **config/paths.toml**: File paths and read parameters per entity/type:
+  ```toml
+  [spx.po]
+  raw_po = "{resources}/{YYYYMM}/Original Data/{YYYYMM}_purchase_order_*.csv"
+  previous = "{resources}/{YYYYMM}/前期底稿/SPX/{PREV_YYYYMM}_PO_FN.xlsx"
+
+  [spx.po.params]
+  raw_po = { encoding = "utf-8", sep = ",", dtype = "str" }
+  previous = { sheet_name = 0, header = 0, dtype = "str" }
+  ops_validation = { sheet_name = "智取櫃驗收明細", header = 3, usecols = "A:AH" }
+  ```
+
 - **config/stagging.toml**: Main TOML configuration containing:
   - Pipeline configuration (enabled steps per entity)
   - Date regex patterns
@@ -130,6 +175,138 @@ Configuration is accessed via **thread-safe singleton** `ConfigManager` from `ac
 - Automatically loads configuration on first access
 
 All pipeline modules use the unified `get_logger()` function from `accrual_bot.utils.logging` for consistent log formatting.
+
+## Streamlit UI Architecture
+
+The UI provides a 5-page guided workflow for pipeline execution:
+
+```
+Page 1: Configuration    → Select Entity (SPT/SPX), Type (PO/PR/PPE), Date
+Page 2: File Upload      → Upload required/optional files with validation
+Page 3: Execution        → Run pipeline with progress tracking and logs
+Page 4: Results          → Preview data, download CSV/Excel
+Page 5: Checkpoint       → Manage saved pipeline states
+```
+
+### UI Directory Structure
+
+```
+accrual_bot/ui/
+├── app.py                      # Session state initialization
+├── config.py                   # UI configuration (ENTITY_CONFIG, REQUIRED_FILES, etc.)
+├── models/state_models.py      # Dataclass state models
+├── components/                 # Reusable UI components
+│   ├── entity_selector.py      # Entity/Type/Date selection
+│   ├── file_uploader.py        # Dynamic file upload
+│   ├── progress_tracker.py     # Execution progress
+│   └── data_preview.py         # Result preview
+├── services/                   # Service layer
+│   ├── unified_pipeline_service.py  # Pipeline service (KEY)
+│   ├── pipeline_runner.py      # Async execution wrapper
+│   └── file_handler.py         # File management
+├── pages/                      # Streamlit pages
+│   ├── 1_configuration.py
+│   ├── 2_file_upload.py
+│   ├── 3_execution.py
+│   ├── 4_results.py
+│   └── 5_checkpoint.py
+└── utils/
+    ├── async_bridge.py         # Sync/Async bridge for Streamlit
+    └── ui_helpers.py           # Formatting utilities
+```
+
+### Key UI Service: UnifiedPipelineService
+
+The service layer bridges UI and backend pipelines:
+
+```python
+from accrual_bot.ui.services import UnifiedPipelineService
+
+service = UnifiedPipelineService()
+
+# Query available entities and types
+entities = service.get_available_entities()      # ['SPT', 'SPX']
+types = service.get_entity_types('SPX')          # ['PO', 'PR', 'PPE']
+steps = service.get_enabled_steps('SPX', 'PO')   # ['SPXDataLoading', ...]
+
+# Build and execute pipeline
+pipeline = service.build_pipeline(
+    entity='SPX',
+    proc_type='PO',
+    file_paths={'raw_po': '/path/to/file.csv', ...},
+    processing_date=202512
+)
+```
+
+### UI Configuration (ui/config.py)
+
+```python
+# Entity configuration
+ENTITY_CONFIG = {
+    'SPX': {
+        'display_name': 'SPX',
+        'types': ['PO', 'PR', 'PPE'],
+        'icon': '📦',
+    },
+}
+
+# Required files per entity/type
+REQUIRED_FILES = {
+    ('SPX', 'PO'): ['raw_po'],
+    ('SPX', 'PPE'): ['contract_filing_list'],
+}
+
+# Optional files per entity/type
+OPTIONAL_FILES = {
+    ('SPX', 'PO'): ['previous', 'procurement_po', 'ap_invoice', 'ops_validation'],
+}
+```
+
+### Dual-Layer Pages Architecture
+
+To overcome Streamlit's emoji filename limitation, the project uses a dual-layer pages architecture:
+
+```
+Project Root/
+├── pages/                          # Streamlit Entry Points (emoji filenames)
+│   ├── 1_⚙️_配置.py                 # Entry point (17 lines)
+│   ├── 2_📁_檔案上傳.py             # Entry point (17 lines)
+│   ├── 3_▶️_執行.py                 # Entry point (17 lines)
+│   ├── 4_📊_結果.py                 # Entry point (17 lines)
+│   └── 5_💾_Checkpoint.py          # Entry point (17 lines)
+│         ↓ exec()
+│         ↓
+└── accrual_bot/ui/pages/           # Actual Implementation (standard filenames)
+    ├── 1_configuration.py          # Business logic (65 lines)
+    ├── 2_file_upload.py            # Business logic (80 lines)
+    ├── 3_execution.py              # Business logic (205 lines)
+    ├── 4_results.py                # Business logic (149 lines)
+    └── 5_checkpoint.py             # Business logic (142 lines)
+```
+
+**Why two layers?**
+- **Streamlit requirement**: Multi-page apps need emoji filenames in `pages/` for sidebar navigation
+- **Best practice**: Avoid emoji in actual code files (cross-platform, git compatibility)
+- **Separation of concerns**: Entry points (thin wrappers) vs business logic (testable, reusable)
+
+**Entry point example**:
+```python
+# pages/1_⚙️_配置.py
+import sys
+from pathlib import Path
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
+actual_page = project_root / "accrual_bot" / "ui" / "pages" / "1_configuration.py"
+exec(open(actual_page, encoding='utf-8').read())
+```
+
+**Navigation**: All `st.switch_page()` calls must use emoji filenames:
+```python
+st.switch_page("pages/1_⚙️_配置.py")  # ✓ Correct
+st.switch_page("pages/1_configuration.py")  # ✗ Wrong - Streamlit won't find it
+```
+
+**For detailed UI documentation, see [doc/UI_Architecture.md](doc/UI_Architecture.md)**
 
 ## Testing
 
@@ -172,6 +349,12 @@ pipeline = spt_orchestrator.build_po_pipeline(file_paths={'po_file': 'path/to/po
 # Create SPX PR pipeline
 spx_orchestrator = SPXPipelineOrchestrator()
 pipeline = spx_orchestrator.build_pr_pipeline(file_paths={'pr_file': 'path/to/pr.xlsx'})
+
+# Create SPX PPE pipeline
+pipeline = spx_orchestrator.build_ppe_pipeline(
+    file_paths={'contract_filing_list': {'path': 'path/to/file.xlsx'}},
+    processing_date=202512
+)
 
 # Get enabled steps for a processing type
 enabled_steps = spt_orchestrator.get_enabled_steps('PO')  # Returns list from config
@@ -274,6 +457,106 @@ class CustomStep(PipelineStep):
         return 'required_column' in context.data.columns
 ```
 
+## Extending the System
+
+### Adding a New Processing Type to Existing Entity
+
+Example: Adding 'INV' (Invoice) type to SPX
+
+**Files to modify:**
+
+| # | File | Changes |
+|---|------|---------|
+| 1 | `ui/config.py` | Add 'INV' to `ENTITY_CONFIG['SPX']['types']` |
+| 2 | `ui/config.py` | Add `REQUIRED_FILES[('SPX', 'INV')]` |
+| 3 | `ui/config.py` | Add `OPTIONAL_FILES[('SPX', 'INV')]` |
+| 4 | `ui/config.py` | Add file labels to `FILE_LABELS` |
+| 5 | `config/paths.toml` | Add `[spx.inv]` and `[spx.inv.params]` sections |
+| 6 | `config/stagging.toml` | Add `enabled_inv_steps` to `[pipeline.spx]` |
+| 7 | `tasks/spx/pipeline_orchestrator.py` | Add `build_inv_pipeline()` method |
+| 8 | `tasks/spx/pipeline_orchestrator.py` | Register steps in `_create_step()` |
+| 9 | `tasks/spx/pipeline_orchestrator.py` | Update `get_enabled_steps()` |
+| 10 | `ui/services/unified_pipeline_service.py` | Add elif branch in `build_pipeline()` |
+
+### Adding a New Entity
+
+Example: Adding 'MOB' entity
+
+**Additional files to create:**
+
+| # | File | Purpose |
+|---|------|---------|
+| 1 | `tasks/mob/__init__.py` | Module init, export orchestrator |
+| 2 | `tasks/mob/pipeline_orchestrator.py` | MOBPipelineOrchestrator class |
+| 3 | `tasks/mob/steps/*.py` | Entity-specific steps (if needed) |
+
+**Additional modifications:**
+
+| # | File | Changes |
+|---|------|---------|
+| 4 | `ui/services/unified_pipeline_service.py` | Register in `_get_orchestrator()` |
+
+**For detailed extension guide, see [doc/UI_Architecture.md#14-擴充指南新增-pipeline-類型](doc/UI_Architecture.md)**
+
+## File Structure Notes
+
+```
+accrual_bot/
+├── core/pipeline/              # Framework components
+│   ├── pipeline.py             # Pipeline class
+│   ├── context.py              # ProcessingContext class
+│   ├── checkpoint.py           # CheckpointManager
+│   └── steps/
+│       ├── base_loading.py     # BaseLoadingStep (~570 lines)
+│       ├── base_evaluation.py  # BaseERMEvaluationStep (~465 lines)
+│       └── *.py                # Shared steps
+├── tasks/                      # Entity-specific implementations
+│   ├── spt/
+│   │   ├── pipeline_orchestrator.py
+│   │   └── steps/
+│   ├── spx/
+│   │   ├── pipeline_orchestrator.py
+│   │   └── steps/
+│   └── mob/
+│       └── steps/
+├── ui/                         # Streamlit UI
+│   ├── config.py               # UI configuration constants
+│   ├── services/
+│   │   └── unified_pipeline_service.py  # KEY: UI-Pipeline bridge
+│   ├── pages/                  # 5 workflow pages
+│   └── components/             # Reusable UI components
+├── config/
+│   ├── config.ini              # Legacy INI config
+│   ├── paths.toml              # File paths and read params
+│   └── stagging.toml           # Pipeline steps and business rules
+├── data/                       # Importers, exporters, transformers
+└── utils/
+    ├── config/config_manager.py # Thread-safe singleton
+    └── logging/logger.py        # Unified logging
+
+# Project root
+├── main_pipeline.py            # CLI entry point
+├── main_streamlit.py           # Streamlit UI entry point
+├── checkpoints/                # Saved pipeline states (git-ignored)
+├── output/                     # Processed results (git-ignored)
+└── doc/
+    └── UI_Architecture.md      # Detailed UI documentation
+```
+
+- **main_pipeline.py**: Entry point with example pipeline executions for each entity type
+- **accrual_bot/core/pipeline/**: Framework components
+  - `pipeline.py`, `context.py`: Core pipeline infrastructure
+  - `steps/base_loading.py`: Template base class for loading steps (~570 lines)
+  - `steps/base_evaluation.py`: Template base class for ERM evaluation (~465 lines)
+  - `steps/`: Other shared pipeline steps
+- **accrual_bot/tasks/**: Entity-specific implementations
+  - `spt/pipeline_orchestrator.py`: SPT pipeline configuration and construction
+  - `spx/pipeline_orchestrator.py`: SPX pipeline configuration and construction
+  - `spt/steps/`, `spx/steps/`, `mob/steps/`: Entity-specific step implementations (re-exported from core for backward compatibility)
+- **accrual_bot/config/stagging.toml**: Configuration file with `[pipeline.spt]` and `[pipeline.spx]` sections for step enablement
+- **checkpoints/**: Saved pipeline states (excluded from git)
+- **output/**: Processed results (excluded from git)
+
 ## Architecture Improvements (January 2026)
 
 The codebase underwent significant refactoring to improve code quality and maintainability:
@@ -292,27 +575,34 @@ The codebase underwent significant refactoring to improve code quality and maint
 - **Pipeline Orchestrators**: Implemented configuration-driven step loading via `SPTPipelineOrchestrator` and `SPXPipelineOrchestrator`
 - **Backward Compatibility**: All existing imports continue to work via re-exports
 
+### Phase 4: Streamlit UI (January 2026)
+- **5-Page Workflow**: Configuration → Upload → Execution → Results → Checkpoint
+- **Service Layer**: UnifiedPipelineService decouples UI from pipeline implementation
+- **Async Bridge**: Handles sync/async conversion for Streamlit compatibility
+- **Configuration-Driven**: UI content driven by `ui/config.py` and `paths.toml`
+
+### Phase 5: UI Optimization & Cleanup (2026-01-17)
+- **Removed Deprecated Template System**: Deleted `template_picker.py` and cleaned template-related code from 7 files (~150 lines)
+- **Cleaned Duplicate Pages**: Removed 5 redundant `*_page.py` files (~400 lines)
+- **Added Log Export**: Execution page now allows downloading logs as `.txt` files
+- **Fixed Dual-Layer Pages**: Corrected Entry Point files to use `exec()` instead of imports
+- **Fixed ProcessingContext**: Added `auxiliary_data` property for UI access
+- **Impact**: Removed ~558 lines of code (~22% reduction in UI layer)
+
 ### Benefits
 - **Maintainability**: Single source of truth for shared logic reduces bug surface area
-- **Extensibility**: New entities can be added without modifying core framework
+- **Extensibility**: New entities/types can be added via configuration + orchestrator updates
 - **Testability**: Template methods enable focused unit testing of entity-specific hooks
 - **Safety**: Thread-safe configuration eliminates race conditions in concurrent environments
+- **Usability**: Web UI provides guided workflow for non-technical users
 
-## File Structure Notes
+## Documentation
 
-- **main_pipeline.py**: Entry point with example pipeline executions for each entity type
-- **accrual_bot/core/pipeline/**: Framework components
-  - `pipeline.py`, `context.py`: Core pipeline infrastructure
-  - `steps/base_loading.py`: Template base class for loading steps (~570 lines)
-  - `steps/base_evaluation.py`: Template base class for ERM evaluation (~465 lines)
-  - `steps/`: Other shared pipeline steps
-- **accrual_bot/tasks/**: Entity-specific implementations
-  - `spt/pipeline_orchestrator.py`: SPT pipeline configuration and construction
-  - `spx/pipeline_orchestrator.py`: SPX pipeline configuration and construction
-  - `spt/steps/`, `spx/steps/`, `mob/steps/`: Entity-specific step implementations (re-exported from core for backward compatibility)
-- **accrual_bot/config/stagging.toml**: Configuration file with `[pipeline.spt]` and `[pipeline.spx]` sections for step enablement
-- **checkpoints/**: Saved pipeline states (excluded from git)
-- **output/**: Processed results (excluded from git)
+| Document | Description |
+|----------|-------------|
+| `CLAUDE.md` | This file - development guidance |
+| `doc/UI_Architecture.md` | Detailed UI architecture, components, and extension guide |
+| `README.md` | Project overview and quick start |
 
 ## Language
 
