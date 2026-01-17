@@ -18,6 +18,15 @@ from accrual_bot.core.pipeline.steps.spt_evaluation_affiliate import CommissionD
 from accrual_bot.core.pipeline.steps.spt_evaluation_accountant import SPTStatusLabelStep
 from accrual_bot.core.pipeline.steps.spt_account_prediction import AccountPredictionConditions, SPTAccountPredictionStep
 
+# SPT Procurement steps (from tasks/spt/steps/)
+from .spt_procurement_loading import (
+    SPTProcurementDataLoadingStep,
+    SPTProcurementPRDataLoadingStep,
+)
+from .spt_procurement_mapping import ProcurementPreviousMappingStep
+from .spt_procurement_evaluation import SPTProcurementStatusEvaluationStep
+from .spt_column_initialization import ColumnInitializationStep
+
 __all__ = [
     'SPTDataLoadingStep',
     'SPTPRDataLoadingStep',
@@ -32,4 +41,10 @@ __all__ = [
     'SPTStatusLabelStep',
     'AccountPredictionConditions',
     'SPTAccountPredictionStep',
+    # Procurement steps
+    'SPTProcurementDataLoadingStep',
+    'SPTProcurementPRDataLoadingStep',
+    'ProcurementPreviousMappingStep',
+    'SPTProcurementStatusEvaluationStep',
+    'ColumnInitializationStep',
 ]

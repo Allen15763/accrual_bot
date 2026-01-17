@@ -75,7 +75,7 @@ class UnifiedPipelineService:
 
         Args:
             entity: Entity 名稱
-            proc_type: 處理類型 (PO, PR, PPE)
+            proc_type: 處理類型 (PO, PR, PPE, PROCUREMENT)
             file_paths: 檔案路徑字典（可能只包含路徑字符串）
             processing_date: 處理日期 (YYYYMM，PPE 必填)
 
@@ -94,6 +94,24 @@ class UnifiedPipelineService:
             return orchestrator.build_po_pipeline(enriched_file_paths)
         elif proc_type == 'PR':
             return orchestrator.build_pr_pipeline(enriched_file_paths)
+        elif proc_type == 'PROCUREMENT' and entity == 'SPT':
+            # 判斷處理模式: 根據上傳的檔案決定
+            has_po = 'raw_po' in file_paths
+            has_pr = 'raw_pr' in file_paths
+
+            if has_po and has_pr:
+                source_type = 'COMBINED'
+            elif has_po:
+                source_type = 'PO'
+            elif has_pr:
+                source_type = 'PR'
+            else:
+                raise ValueError("PROCUREMENT 需要至少提供 raw_po 或 raw_pr")
+
+            return orchestrator.build_procurement_pipeline(
+                enriched_file_paths,
+                source_type=source_type
+            )
         elif proc_type == 'PPE' and entity == 'SPX':
             if not processing_date:
                 raise ValueError("PPE 處理需要提供 processing_date")

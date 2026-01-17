@@ -108,6 +108,20 @@ media_summary = { dtype = "str", sheet_name = "2024-2025新聞總表(已用記�
 
 
 # =============================================================================
+# SPT PROCUREMENT 路徑配置
+# =============================================================================
+[spt.procurement]
+raw_po = "{resources}/{YYYYMM}/Original Data/{YYYYMM}_purchase_order_*.csv"
+raw_pr = "{resources}/{YYYYMM}/Original Data/{YYYYMM}_purchase_request_*.csv"
+procurement_previous = "{resources}/{YYYYMM}/採購底稿/{PREV_YYYYMM}_採購底稿.xlsx"
+
+[spt.procurement.params]
+raw_po = { encoding = "utf-8", sep = ",", dtype = "str", keep_default_na = false, na_values = [""] }
+raw_pr = { encoding = "utf-8", sep = ",", dtype = "str", keep_default_na = false, na_values = [""] }
+procurement_previous = { dtype = "str" }
+
+
+# =============================================================================
 # MOB 路徑配置 (待實作)
 # =============================================================================
 [mob.po]
