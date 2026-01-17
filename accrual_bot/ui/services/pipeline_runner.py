@@ -51,9 +51,7 @@ class StreamlitPipelineRunner:
         entity: str,
         proc_type: str,
         file_paths: Dict[str, str],
-        processing_date: int,
-        use_template: bool = False,
-        template_name: Optional[str] = None
+        processing_date: int
     ) -> Dict[str, Any]:
         """
         執行 pipeline 並返回結果
@@ -63,8 +61,6 @@ class StreamlitPipelineRunner:
             proc_type: 處理類型
             file_paths: 檔案路徑字典
             processing_date: 處理日期 (YYYYMM)
-            use_template: 是否使用範本
-            template_name: 範本名稱 (use_template=True 時必填)
 
         Returns:
             執行結果字典，包含:

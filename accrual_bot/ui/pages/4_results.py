@@ -36,7 +36,7 @@ nav_status = get_navigation_status()
 if not nav_status['results']:
     st.warning("⚠️ 尚未執行或執行未完成")
     if st.button("前往執行頁"):
-        st.switch_page("pages/3_execution.py")
+        st.switch_page("pages/3_▶️_執行.py")
     st.stop()
 
 # 獲取結果
@@ -141,8 +141,8 @@ with col1:
     if st.button("🔄 重新執行", type="primary", use_container_width=True):
         from accrual_bot.ui.app import reset_session_state
         reset_session_state()
-        st.switch_page("pages/1_configuration.py")
+        st.switch_page("pages/1_⚙️_配置.py")
 
 with col2:
     if st.button("📋 查看 Checkpoint", use_container_width=True):
-        st.switch_page("pages/5_checkpoint.py")
+        st.switch_page("pages/5_💾_Checkpoint.py")

@@ -2,18 +2,9 @@
 UI Pages
 
 Streamlit multi-page 應用程式的各個頁面。
+
+注意：實際頁面檔案為 1_configuration.py, 2_file_upload.py 等。
+專案根目錄的 pages/ 為 Streamlit 進入點（emoji 檔名）。
 """
 
-from . import configuration_page
-from . import file_upload_page
-from . import execution_page
-from . import results_page
-from . import checkpoint_page
-
-__all__ = [
-    "configuration_page",
-    "file_upload_page",
-    "execution_page",
-    "results_page",
-    "checkpoint_page",
-]
+__all__ = []

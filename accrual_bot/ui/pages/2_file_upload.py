@@ -34,7 +34,7 @@ nav_status = get_navigation_status()
 if not nav_status['file_upload']:
     st.warning("⚠️ 請先完成配置頁設定")
     if st.button("前往配置頁"):
-        st.switch_page("pages/1_configuration.py")
+        st.switch_page("pages/1_⚙️_配置.py")
     st.stop()
 
 # 獲取配置
@@ -66,7 +66,7 @@ if upload_state.required_files_complete:
     col1, col2 = st.columns([1, 4])
     with col1:
         if st.button("▶️ 開始執行", type="primary", use_container_width=True):
-            st.switch_page("pages/3_execution.py")
+            st.switch_page("pages/3_▶️_執行.py")
     with col2:
         if st.button("🔄 重新配置", use_container_width=True):
             # 清理暫存檔案
@@ -74,6 +74,6 @@ if upload_state.required_files_complete:
                 file_handler.cleanup()
             from accrual_bot.ui.app import reset_session_state
             reset_session_state()
-            st.switch_page("pages/1_configuration.py")
+            st.switch_page("pages/1_⚙️_配置.py")
 else:
     st.warning("⚠️ 請上傳所有必填檔案後才能開始執行")

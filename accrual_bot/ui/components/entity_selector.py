@@ -42,7 +42,6 @@ def render_entity_selector() -> str:
                 st.session_state.pipeline_config.entity = entity
                 st.session_state.pipeline_config.processing_type = ""  # 重置 type
                 st.session_state.pipeline_config.enabled_steps = []  # 重置步驟
-                st.session_state.pipeline_config.template_name = ""  # 重置範本
 
                 # 清除檔案上傳狀態
                 st.session_state.file_upload.file_paths = {}
@@ -103,7 +102,6 @@ def render_processing_type_selector(entity: str) -> str:
                 # Processing type 改變時，清除檔案上傳和執行狀態
                 st.session_state.pipeline_config.processing_type = proc_type
                 st.session_state.pipeline_config.enabled_steps = []  # 重置步驟
-                st.session_state.pipeline_config.template_name = ""  # 重置範本
 
                 # 清除檔案上傳狀態
                 st.session_state.file_upload.file_paths = {}

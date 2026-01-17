@@ -37,7 +37,7 @@ nav_status = get_navigation_status()
 if not nav_status['execution']:
     st.warning("⚠️ 請先完成檔案上傳")
     if st.button("前往檔案上傳頁"):
-        st.switch_page("pages/2_file_upload.py")
+        st.switch_page("pages/2_📁_檔案上傳.py")
     st.stop()
 
 # 獲取配置
@@ -70,7 +70,7 @@ with col3:
     if st.button("🔄 重置", use_container_width=True):
         from accrual_bot.ui.app import reset_session_state
         reset_session_state()
-        st.switch_page("pages/1_configuration.py")
+        st.switch_page("pages/1_⚙️_配置.py")
 
 st.markdown("---")
 
@@ -121,9 +121,7 @@ if start_button and execution.status != ExecutionStatus.RUNNING:
                 entity=config.entity,
                 proc_type=config.processing_type,
                 file_paths=upload.file_paths,
-                processing_date=config.processing_date,
-                use_template=bool(config.template_name),
-                template_name=config.template_name
+                processing_date=config.processing_date
             )
         )
 
@@ -137,7 +135,7 @@ if start_button and execution.status != ExecutionStatus.RUNNING:
             st.session_state.result.execution_time = result['execution_time']
             st.success("✅ 執行成功！")
             time.sleep(1)
-            st.switch_page("pages/4_results.py")
+            st.switch_page("pages/4_📊_結果.py")
         else:
             execution.status = ExecutionStatus.FAILED
             execution.error_message = result['error']
@@ -174,7 +172,21 @@ if execution.status != ExecutionStatus.IDLE:
     st.markdown("---")
 
     # 日誌 viewer
-    st.subheader("📝 執行日誌")
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.subheader("📝 執行日誌")
+    with col2:
+        if execution.logs:
+            # 日誌匯出按鈕
+            log_content = "\n".join(execution.logs)
+            st.download_button(
+                label="📥 下載日誌",
+                data=log_content,
+                file_name=f"{config.entity}_{config.processing_type}_{config.processing_date}_logs.txt",
+                mime="text/plain",
+                use_container_width=True
+            )
+
     if execution.logs:
         log_container = st.container(height=300)
         with log_container:

@@ -17,7 +17,6 @@ from accrual_bot.ui.components import (
     render_entity_selector,
     render_processing_type_selector,
     render_date_selector,
-    render_template_picker,
     render_step_preview,
 )
 
@@ -49,12 +48,7 @@ if entity:
 
         if processing_date > 0:
             st.markdown("---")
-            # 第四步：選擇範本（可選）
-            with st.expander("📋 範本選擇（可選）", expanded=True):
-                template_name = render_template_picker(entity, proc_type)
-
-            st.markdown("---")
-            # 第五步：預覽步驟
+            # 第四步：預覽步驟
             enabled_steps = render_step_preview(entity, proc_type)
 
             # 配置完成提示
@@ -68,6 +62,5 @@ if entity:
                         "entity": entity,
                         "processing_type": proc_type,
                         "processing_date": processing_date,
-                        "template_name": template_name if template_name else "使用預設配置",
                         "total_steps": len(enabled_steps),
                     })
