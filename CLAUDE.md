@@ -262,6 +262,50 @@ OPTIONAL_FILES = {
 }
 ```
 
+### Dual-Layer Pages Architecture
+
+To overcome Streamlit's emoji filename limitation, the project uses a dual-layer pages architecture:
+
+```
+Project Root/
+├── pages/                          # Streamlit Entry Points (emoji filenames)
+│   ├── 1_⚙️_配置.py                 # Entry point (17 lines)
+│   ├── 2_📁_檔案上傳.py             # Entry point (17 lines)
+│   ├── 3_▶️_執行.py                 # Entry point (17 lines)
+│   ├── 4_📊_結果.py                 # Entry point (17 lines)
+│   └── 5_💾_Checkpoint.py          # Entry point (17 lines)
+│         ↓ exec()
+│         ↓
+└── accrual_bot/ui/pages/           # Actual Implementation (standard filenames)
+    ├── 1_configuration.py          # Business logic (65 lines)
+    ├── 2_file_upload.py            # Business logic (80 lines)
+    ├── 3_execution.py              # Business logic (205 lines)
+    ├── 4_results.py                # Business logic (149 lines)
+    └── 5_checkpoint.py             # Business logic (142 lines)
+```
+
+**Why two layers?**
+- **Streamlit requirement**: Multi-page apps need emoji filenames in `pages/` for sidebar navigation
+- **Best practice**: Avoid emoji in actual code files (cross-platform, git compatibility)
+- **Separation of concerns**: Entry points (thin wrappers) vs business logic (testable, reusable)
+
+**Entry point example**:
+```python
+# pages/1_⚙️_配置.py
+import sys
+from pathlib import Path
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
+actual_page = project_root / "accrual_bot" / "ui" / "pages" / "1_configuration.py"
+exec(open(actual_page, encoding='utf-8').read())
+```
+
+**Navigation**: All `st.switch_page()` calls must use emoji filenames:
+```python
+st.switch_page("pages/1_⚙️_配置.py")  # ✓ Correct
+st.switch_page("pages/1_configuration.py")  # ✗ Wrong - Streamlit won't find it
+```
+
 **For detailed UI documentation, see [doc/UI_Architecture.md](doc/UI_Architecture.md)**
 
 ## Testing
@@ -536,6 +580,14 @@ The codebase underwent significant refactoring to improve code quality and maint
 - **Service Layer**: UnifiedPipelineService decouples UI from pipeline implementation
 - **Async Bridge**: Handles sync/async conversion for Streamlit compatibility
 - **Configuration-Driven**: UI content driven by `ui/config.py` and `paths.toml`
+
+### Phase 5: UI Optimization & Cleanup (2026-01-17)
+- **Removed Deprecated Template System**: Deleted `template_picker.py` and cleaned template-related code from 7 files (~150 lines)
+- **Cleaned Duplicate Pages**: Removed 5 redundant `*_page.py` files (~400 lines)
+- **Added Log Export**: Execution page now allows downloading logs as `.txt` files
+- **Fixed Dual-Layer Pages**: Corrected Entry Point files to use `exec()` instead of imports
+- **Fixed ProcessingContext**: Added `auxiliary_data` property for UI access
+- **Impact**: Removed ~558 lines of code (~22% reduction in UI layer)
 
 ### Benefits
 - **Maintainability**: Single source of truth for shared logic reduces bug surface area

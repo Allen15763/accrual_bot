@@ -1,9 +1,29 @@
 # Accrual Bot Streamlit UI 架構文檔
 
-> **版本**: 2.1.0
+> **版本**: 2.2.0
 > **最後更新**: 2026-01-17
 > **作者**: Architecture Review Team
 > **狀態**: Production Ready
+
+## 📋 變更日誌
+
+### v2.2.0 (2026-01-17)
+- ✅ 移除已棄用的 Template 系統（7 個檔案，~150 行代碼）
+- ✅ 清理重複頁面檔案（5 個檔案，~400 行代碼）
+- ✅ 添加日誌匯出功能到執行頁面
+- ✅ 修復雙層 Pages 架構問題（Entry Point 改用 exec）
+- ✅ 修復 ProcessingContext.auxiliary_data 屬性錯誤
+- 📖 完善雙層 Pages 架構說明文檔
+- 📊 更新檔案清單與行數統計（淨減少 ~558 行代碼）
+
+### v2.1.0 (2026-01-17)
+- 📖 添加擴充指南：新增 Pipeline 類型（Chapter 14）
+- 📖 完善 UI 與後端串接文檔
+- 📖 添加設計模式識別章節
+
+### v2.0.0 (2026-01-16)
+- 🎉 初始 UI 架構文檔完成
+- 📖 16 章節，約 2,600 行完整文檔
 
 ---
 
@@ -108,11 +128,10 @@ accrual_bot/ui/
 ├── components/                    # 可重用 UI 元件
 │   ├── __init__.py
 │   ├── entity_selector.py         # Entity/Type/日期選擇
-│   ├── template_picker.py         # 範本選擇 (已棄用)
 │   ├── step_preview.py            # 步驟預覽 (唯讀)
 │   ├── file_uploader.py           # 動態檔案上傳
 │   ├── progress_tracker.py        # 進度追蹤
-│   └── data_preview.py            # 數據預覽
+│   └── data_preview.py            # 數據預覽 (含日誌匯出)
 │
 ├── services/                      # 服務層
 │   ├── __init__.py
@@ -132,6 +151,68 @@ accrual_bot/ui/
     ├── __init__.py
     ├── async_bridge.py            # Sync/Async 橋接
     └── ui_helpers.py              # 格式化輔助
+```
+
+### 2.3 雙層 Pages 架構 🆕
+
+為了解決 Streamlit 的 emoji 檔名限制，專案採用雙層 Pages 架構：
+
+```
+專案根目錄/
+│
+├── pages/                          # ← Streamlit 識別層（Emoji 檔名）
+│   ├── 1_⚙️_配置.py                 # Entry Point (17 行)
+│   ├── 2_📁_檔案上傳.py             # Entry Point (17 行)
+│   ├── 3_▶️_執行.py                 # Entry Point (17 行)
+│   ├── 4_📊_結果.py                 # Entry Point (17 行)
+│   └── 5_💾_Checkpoint.py          # Entry Point (17 行)
+│         ↓ exec()
+│         ↓
+└── accrual_bot/ui/pages/           # ← 實際實作層（數字檔名）
+    ├── 1_configuration.py          # 真正的邏輯 (65 行)
+    ├── 2_file_upload.py            # 真正的邏輯 (80 行)
+    ├── 3_execution.py              # 真正的邏輯 (205 行)
+    ├── 4_results.py                # 真正的邏輯 (149 行)
+    └── 5_checkpoint.py             # 真正的邏輯 (142 行)
+```
+
+#### 為什麼需要兩組 Pages？
+
+| 原因 | 說明 |
+|------|------|
+| **Streamlit 限制** | Multi-page 應用必須在 `pages/` 目錄下使用 emoji 或特殊字元檔名，Sidebar 才會自動顯示導航 |
+| **跨平台相容性** | Emoji 檔名在不同 OS、文件系統、Git 上有編碼問題 |
+| **版本控制** | Emoji 在 diff、merge 時難以閱讀 |
+| **最佳實踐** | 業務邏輯應在標準命名的檔案中，方便測試和重用 |
+| **解耦設計** | Entry Point 與業務邏輯分離，符合 SRP 原則 |
+
+#### Entry Point 檔案範例
+
+```python
+# pages/1_⚙️_配置.py (Streamlit Entry Point)
+import sys
+from pathlib import Path
+
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
+
+# 直接執行實際的頁面檔案
+actual_page = project_root / "accrual_bot" / "ui" / "pages" / "1_configuration.py"
+exec(open(actual_page, encoding='utf-8').read())
+```
+
+#### 頁面導航路徑
+
+所有 `st.switch_page()` **必須指向 emoji 版本**（Streamlit 識別的頁面）：
+
+```python
+# ✅ 正確
+st.switch_page("pages/1_⚙️_配置.py")
+st.switch_page("pages/3_▶️_執行.py")
+
+# ❌ 錯誤
+st.switch_page("pages/1_configuration.py")  # Streamlit 找不到此頁面
+st.switch_page("accrual_bot/ui/pages/1_configuration.py")  # 不在 pages/ 目錄
 ```
 
 ---
@@ -2372,16 +2453,147 @@ def _create_step(self, step_name, file_paths, processing_type):
 
 ### 15.1 已知限制
 
-| 類別 | 限制 | 影響 |
-|------|------|------|
-| **功能** | Checkpoint 載入未實作 | 無法從中間步驟繼續執行 |
-| **功能** | Pipeline 無法取消 | 長時間執行無法中斷 |
-| **功能** | 日誌無法匯出 | 調試不便 |
-| **效能** | 進度更新非實時 | 執行完成後才批量更新 |
-| **架構** | 重複頁面檔案 | v1 和 v2 版本並存 |
-| **配置** | Template 系統已棄用 | 代碼冗餘 |
+| 類別 | 限制 | 影響 | 狀態 |
+|------|------|------|------|
+| **功能** | Checkpoint 載入未實作 | 無法從中間步驟繼續執行 | ⚠️ 待處理 |
+| **功能** | Pipeline 無法取消 | 長時間執行無法中斷 | ⚠️ 待處理 |
+| **效能** | 進度更新非實時 | 執行完成後才批量更新 | ⚠️ 待處理 |
+| ~~**功能**~~ | ~~日誌無法匯出~~ | ~~調試不便~~ | ✅ **已修復** (2026-01-17) |
+| ~~**架構**~~ | ~~重複頁面檔案~~ | ~~v1 和 v2 版本並存~~ | ✅ **已修復** (2026-01-17) |
+| ~~**配置**~~ | ~~Template 系統已棄用~~ | ~~代碼冗餘~~ | ✅ **已移除** (2026-01-17) |
 
 ### 15.2 改進建議
+
+#### ✅ 已完成 (2026-01-17)
+
+<details>
+<summary><b>1. 清理重複頁面</b> ✅ 完成</summary>
+
+**問題**: `accrual_bot/ui/pages/` 同時存在兩組頁面檔案
+- 數字版本: `1_configuration.py`, `2_file_upload.py` 等
+- 模組化版本: `configuration_page.py`, `file_upload_page.py` 等
+
+**解決方案**:
+```bash
+# 刪除重複的模組化版本
+rm accrual_bot/ui/pages/configuration_page.py
+rm accrual_bot/ui/pages/file_upload_page.py
+rm accrual_bot/ui/pages/execution_page.py
+rm accrual_bot/ui/pages/results_page.py
+rm accrual_bot/ui/pages/checkpoint_page.py
+```
+
+**成果**:
+- 刪除 5 個冗餘檔案
+- 減少約 20KB 代碼
+- 維護更簡單
+
+</details>
+
+<details>
+<summary><b>2. 移除已棄用的 Template 系統</b> ✅ 完成</summary>
+
+**移除的檔案**:
+- `accrual_bot/ui/components/template_picker.py`
+
+**修改的檔案** (7 個):
+- `ui/components/__init__.py` - 移除導入
+- `ui/pages/1_configuration.py` - 移除範本選擇
+- `ui/services/unified_pipeline_service.py` - 刪除 `get_templates()`, `build_pipeline_from_template()` 方法
+- `ui/services/pipeline_runner.py` - 移除 `use_template`, `template_name` 參數
+- `ui/pages/3_execution.py` - 清理 execute 呼叫
+- `ui/models/state_models.py` - 刪除 `template_name` 欄位
+- `ui/components/entity_selector.py` - 移除重置邏輯
+
+**成果**:
+- 刪除約 150 行已棄用代碼
+- API 介面更簡潔
+- 減少使用者困惑
+
+</details>
+
+<details>
+<summary><b>3. 添加日誌匯出功能</b> ✅ 完成</summary>
+
+**位置**: `ui/pages/3_execution.py`
+
+**實作**:
+```python
+col1, col2 = st.columns([3, 1])
+with col1:
+    st.subheader("📝 執行日誌")
+with col2:
+    if execution.logs:
+        log_content = "\n".join(execution.logs)
+        st.download_button(
+            label="📥 下載日誌",
+            data=log_content,
+            file_name=f"{entity}_{proc_type}_{date}_logs.txt",
+            mime="text/plain"
+        )
+```
+
+**成果**:
+- 支援日誌匯出為 `.txt` 檔案
+- 檔名格式: `SPX_PO_202512_logs.txt`
+- 方便離線分析和問題排查
+
+</details>
+
+<details>
+<summary><b>4. 修復雙層 Pages 架構</b> ✅ 完成</summary>
+
+**問題**: 專案使用雙層 Pages 目錄，但 Entry Point 檔案導入方式錯誤
+
+**架構說明**:
+```
+專案根目錄/pages/           ← Streamlit 識別層（emoji 檔名）
+└─ 1_⚙️_配置.py              Entry Point (17 行)
+   ↓ exec()
+   └─ accrual_bot/ui/pages/  ← 實際實作層（數字檔名）
+      └─ 1_configuration.py  真正的邏輯 (73 行)
+```
+
+**為什麼需要兩組**:
+1. **Streamlit 限制**: Multi-page 需要 emoji 檔名才能在 sidebar 顯示
+2. **最佳實踐**: 不在檔名使用 emoji（跨平台、版本控制問題）
+3. **解耦設計**: 進入點與業務邏輯分離
+
+**修復內容**:
+- 修改 5 個 emoji Entry Point 檔案，改用 `exec()` 執行實際頁面
+- 修正所有 `st.switch_page()` 路徑指向 emoji 版本
+- 清理 `accrual_bot/ui/pages/__init__.py` 的錯誤導入
+
+**成果**:
+- 頁面導航正常運作
+- 無 import 錯誤
+- 保持代碼整潔
+
+</details>
+
+<details>
+<summary><b>5. 修復 ProcessingContext.auxiliary_data 屬性</b> ✅ 完成</summary>
+
+**問題**: `ProcessingContext` 將輔助數據存儲在私有屬性 `_auxiliary_data`，但 UI 層試圖直接訪問不存在的公開屬性 `auxiliary_data`
+
+**修復**: 在 `core/pipeline/context.py` 添加 property：
+```python
+@property
+def auxiliary_data(self) -> Dict[str, pd.DataFrame]:
+    """獲取所有輔助數據"""
+    return self._auxiliary_data.copy()
+
+def set_auxiliary_data(self, name: str, data: pd.DataFrame):
+    """設置輔助數據（add_auxiliary_data 的別名）"""
+    self.add_auxiliary_data(name, data)
+```
+
+**成果**:
+- UI 可正常訪問輔助數據
+- 提供一致的 getter/setter 介面
+- 保持向後兼容
+
+</details>
 
 #### High Priority
 
@@ -2393,20 +2605,9 @@ def _create_step(self, step_name, file_paths, processing_type):
        # 跳轉到執行頁，從下一個步驟繼續
    ```
 
-2. **清理重複頁面**
-   ```bash
-   # 保留 v1 版本 (數字前綴)，刪除 v2 版本
-   rm accrual_bot/ui/pages/*_page.py
-   ```
-
-3. **移除已棄用的 Template 系統**
-   ```bash
-   rm accrual_bot/ui/components/template_picker.py
-   ```
-
 #### Medium Priority
 
-4. **實作 Pipeline 取消功能**
+2. **實作 Pipeline 取消功能**
    ```python
    # 使用 asyncio.Task.cancel()
    if st.button("停止"):
@@ -2414,16 +2615,7 @@ def _create_step(self, step_name, file_paths, processing_type):
            st.session_state.pipeline_task.cancel()
    ```
 
-5. **添加日誌匯出功能**
-   ```python
-   st.download_button(
-       "下載日誌",
-       "\n".join(execution.logs),
-       file_name=f"{entity}_{proc_type}_{date}_logs.txt"
-   )
-   ```
-
-6. **修復 DataSourcePool 資源清理**
+3. **修復 DataSourcePool 資源清理**
    ```python
    # 在 Pipeline 執行完成後確保正確關閉
    finally:
@@ -2432,15 +2624,15 @@ def _create_step(self, step_name, file_paths, processing_type):
 
 #### Low Priority
 
-7. **Session 持久化**
+4. **Session 持久化**
    - 瀏覽器刷新後保留狀態
    - 使用 `st.cache_data` 或外部儲存
 
-8. **添加 UI 元件測試**
+5. **添加 UI 元件測試**
    - 使用 `streamlit.testing` 模組
    - Mock Session State
 
-9. **修復 Pandas 警告**
+6. **修復 Pandas 警告**
    ```python
    # SettingWithCopyWarning
    df = df.copy()
@@ -2456,35 +2648,47 @@ def _create_step(self, step_name, file_paths, processing_type):
 
 ### 16.1 檔案清單與行數
 
-| 檔案 | 行數 | 職責 |
-|------|------|------|
-| **根目錄** | | |
-| `__init__.py` | 8 | 模組版本 |
-| `app.py` | 71 | Session State 初始化 |
-| `config.py` | 126 | UI 配置常數 |
-| **models/** | | |
-| `state_models.py` | 63 | 狀態 Dataclass |
-| **components/** | | |
-| `entity_selector.py` | 179 | Entity/Type 選擇 |
-| `template_picker.py` | 93 | 範本選擇 (棄用) |
-| `step_preview.py` | 73 | 步驟預覽 |
-| `file_uploader.py` | 143 | 檔案上傳 |
-| `progress_tracker.py` | 111 | 進度追蹤 |
-| `data_preview.py` | 145 | 數據預覽 |
-| **services/** | | |
-| `unified_pipeline_service.py` | 270 | Pipeline 服務 (核心) |
-| `pipeline_runner.py` | 168 | Pipeline 執行器 |
-| `file_handler.py` | 157 | 檔案處理 |
-| **pages/** | | |
-| `1_configuration.py` | 73 | 配置頁 |
-| `2_file_upload.py` | 80 | 上傳頁 |
-| `3_execution.py` | 191 | 執行頁 |
-| `4_results.py` | 149 | 結果頁 |
-| `5_checkpoint.py` | 142 | Checkpoint 頁 |
-| **utils/** | | |
-| `async_bridge.py` | 95 | Async 橋接 |
-| `ui_helpers.py` | 112 | 輔助函數 |
-| **總計** | **~2,450** | |
+| 檔案 | 行數 | 職責 | 狀態 |
+|------|------|------|------|
+| **根目錄** | | | |
+| `__init__.py` | 8 | 模組版本 | ✅ |
+| `app.py` | 71 | Session State 初始化 | ✅ |
+| `config.py` | 126 | UI 配置常數 | ✅ |
+| **models/** | | | |
+| `state_models.py` | 62 | 狀態 Dataclass | ✅ 已更新 |
+| **components/** | | | |
+| `entity_selector.py` | 177 | Entity/Type 選擇 | ✅ 已更新 |
+| `step_preview.py` | 73 | 步驟預覽 | ✅ |
+| `file_uploader.py` | 143 | 檔案上傳 | ✅ |
+| `progress_tracker.py` | 111 | 進度追蹤 | ✅ |
+| `data_preview.py` | 145 | 數據預覽 | ✅ |
+| **services/** | | | |
+| `unified_pipeline_service.py` | 210 | Pipeline 服務 (核心) | ✅ 已精簡 |
+| `pipeline_runner.py` | 162 | Pipeline 執行器 | ✅ 已精簡 |
+| `file_handler.py` | 157 | 檔案處理 | ✅ |
+| **pages/** | | | |
+| `1_configuration.py` | 65 | 配置頁 | ✅ 已精簡 |
+| `2_file_upload.py` | 80 | 上傳頁 | ✅ 已更新 |
+| `3_execution.py` | 205 | 執行頁 | ✅ 已更新 |
+| `4_results.py` | 149 | 結果頁 | ✅ 已更新 |
+| `5_checkpoint.py` | 142 | Checkpoint 頁 | ✅ |
+| **utils/** | | | |
+| `async_bridge.py` | 95 | Async 橋接 | ✅ |
+| `ui_helpers.py` | 112 | 輔助函數 | ✅ |
+| **Entry Points (根目錄 pages/)** | | | |
+| `1_⚙️_配置.py` | 17 | Streamlit Entry Point | ✅ 已重構 |
+| `2_📁_檔案上傳.py` | 17 | Streamlit Entry Point | ✅ 已重構 |
+| `3_▶️_執行.py` | 17 | Streamlit Entry Point | ✅ 已重構 |
+| `4_📊_結果.py` | 17 | Streamlit Entry Point | ✅ 已重構 |
+| `5_💾_Checkpoint.py` | 17 | Streamlit Entry Point | ✅ 已重構 |
+| **總計** | **~2,210** | | |
+
+**變更摘要 (2026-01-17)**:
+- ❌ 刪除 `template_picker.py` (93 行)
+- ❌ 刪除 5 個重複頁面檔案 (~400 行)
+- ➕ 添加 5 個 Entry Point 檔案 (85 行)
+- ✂️ 精簡多個檔案的 template 相關代碼 (~150 行)
+- **淨減少**: ~558 行代碼 (~22% 減少)
 
 ### 16.2 依賴關係圖
 
