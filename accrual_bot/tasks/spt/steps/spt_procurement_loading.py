@@ -42,6 +42,10 @@ class SPTProcurementDataLoadingStep(BaseLoadingStep):
 
     async def _load_reference_data(self, context: ProcessingContext) -> int:
         """
+        暫時棄用:
+        配置載入的字典已有採購前期底稿路徑，透過_load_single_file方法已自動導入，
+        故不更新在此重工。
+
         載入參考資料：採購前期底稿 (PO sheet)
 
         Returns:
@@ -49,25 +53,25 @@ class SPTProcurementDataLoadingStep(BaseLoadingStep):
         """
         count = 0
 
-        # 載入採購前期底稿 (PO sheet)
-        if 'procurement_previous' in self.file_paths:
-            self.logger.info("Loading procurement previous workpaper (PO sheet)...")
+        # # 載入採購前期底稿 (PO sheet)
+        # if 'procurement_previous' in self.file_configs:
+        #     self.logger.info("Loading procurement previous workpaper (PO sheet)...")
 
-            file_config = self.file_paths['procurement_previous']
-            params = file_config.get('params', {}).copy() if isinstance(file_config, dict) else {}
-            params['sheet_name'] = 'PO'  # 指定 PO sheet
+        #     file_config = self.file_configs['procurement_previous']
+        #     params = file_config.get('params', {}).copy() if isinstance(file_config, dict) else {}
+        #     params['sheet_name'] = 'PO'  # 指定 PO sheet
 
-            procurement_prev = await self._load_reference_file_with_params(
-                'procurement_previous',
-                params
-            )
+        #     procurement_prev = await self._load_single_file(
+        #         file_config,
+        #         params
+        #     )
 
-            if procurement_prev is not None and not procurement_prev.empty:
-                context.set_auxiliary_data('procurement_previous', procurement_prev)
-                self.logger.info(f"Loaded procurement previous PO: {len(procurement_prev)} rows")
-                count += 1
-            else:
-                self.logger.warning("Procurement previous PO workpaper is empty")
+        #     if procurement_prev is not None and not procurement_prev.empty:
+        #         context.set_auxiliary_data('procurement_previous', procurement_prev)
+        #         self.logger.info(f"Loaded procurement previous PO: {len(procurement_prev)} rows")
+        #         count += 1
+        #     else:
+        #         self.logger.warning("Procurement previous PO workpaper is empty")
 
         return count
 
@@ -103,6 +107,10 @@ class SPTProcurementPRDataLoadingStep(BaseLoadingStep):
 
     async def _load_reference_data(self, context: ProcessingContext) -> int:
         """
+        暫時棄用:
+        配置載入的字典已有採購前期底稿路徑，透過_load_single_file方法已自動導入，
+        故不更新在此重工。
+
         載入參考資料：採購前期底稿 (PR sheet)
 
         Returns:
@@ -110,24 +118,24 @@ class SPTProcurementPRDataLoadingStep(BaseLoadingStep):
         """
         count = 0
 
-        # 載入採購前期底稿 (PR sheet)
-        if 'procurement_previous' in self.file_paths:
-            self.logger.info("Loading procurement previous workpaper (PR sheet)...")
+        # # 載入採購前期底稿 (PR sheet)
+        # if 'procurement_previous' in self.file_configs:
+        #     self.logger.info("Loading procurement previous workpaper (PR sheet)...")
 
-            file_config = self.file_paths['procurement_previous']
-            params = file_config.get('params', {}).copy() if isinstance(file_config, dict) else {}
-            params['sheet_name'] = 'PR'  # 指定 PR sheet
+        #     file_config = self.file_configs['procurement_previous']
+        #     params = file_config.get('params', {}).copy() if isinstance(file_config, dict) else {}
+        #     params['sheet_name'] = 'PR'  # 指定 PR sheet
 
-            procurement_prev = await self._load_reference_file_with_params(
-                'procurement_previous',
-                params
-            )
+        #     procurement_prev = await self._load_reference_file_with_params(
+        #         'procurement_previous',
+        #         params
+        #     )
 
-            if procurement_prev is not None and not procurement_prev.empty:
-                context.set_auxiliary_data('procurement_previous', procurement_prev)
-                self.logger.info(f"Loaded procurement previous PR: {len(procurement_prev)} rows")
-                count += 1
-            else:
-                self.logger.warning("Procurement previous PR workpaper is empty")
+        #     if procurement_prev is not None and not procurement_prev.empty:
+        #         context.set_auxiliary_data('procurement_previous', procurement_prev)
+        #         self.logger.info(f"Loaded procurement previous PR: {len(procurement_prev)} rows")
+        #         count += 1
+        #     else:
+        #         self.logger.warning("Procurement previous PR workpaper is empty")
 
         return count

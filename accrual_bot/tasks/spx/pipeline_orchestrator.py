@@ -186,7 +186,7 @@ class SPXPipelineOrchestrator:
         pipeline = Pipeline(pipeline_config)
 
         # PPE 管道的固定步驟順序
-        contract_filing_list_path = file_paths.get('contract_filing_list', {}).get('path')
+        contract_filing_list_path = file_paths.get('contract_filing_list', {})
 
         # 1. PPE Data Loading
         pipeline.add_step(PPEDataLoadingStep(

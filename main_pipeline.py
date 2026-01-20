@@ -333,6 +333,59 @@ async def run_spt_pr_full_pipeline() -> Dict[str, Any]:
     result["context"] = context
     return result
 
+async def run_spt_procurement(source_type: str, processing_period: int) -> Dict:
+    # 建立 orchestrator
+    orchestrator = SPTPipelineOrchestrator()
+    file_paths = load_file_paths("SPT", "procurement", processing_period)
+
+    if 'raw_po' in file_paths and source_type != 'PO':
+        # 只處理PR，排除配置PO資訊避免使用get_variable判斷種類時錯誤
+        file_paths.pop('raw_po')
+        file_paths.pop('procurement_previous_po')
+        prev = file_paths.pop('procurement_previous_pr')
+        file_paths['procurement_previous'] = prev
+    elif 'raw_pr' in file_paths and source_type != 'PR':
+        # 只處理PO，排除配置PR資訊避免使用get_variable判斷種類時錯誤
+        file_paths.pop('raw_pr')
+        file_paths.pop('procurement_previous_pr')
+        prev = file_paths.pop('procurement_previous_po')
+        file_paths['procurement_previous'] = prev
+    else:
+        # 合併讀取
+        """TBC
+        待測試
+        """
+        pass
+
+    # 建構 pipeline
+    pipeline = orchestrator.build_procurement_pipeline(
+        file_paths=file_paths,
+        source_type=source_type
+    )
+
+    # 建立 context
+    context = ProcessingContext(
+        data=pd.DataFrame(),
+        entity_type="SPT",
+        processing_date=processing_period,
+        processing_type=source_type
+    )
+
+    # 執行 pipeline
+    result = await pipeline.execute(context)
+
+    # 查看結果
+    if result.get("success"):
+        print(f"Pipeline 執行成功: {result.get('pipeline')}")
+        print(f"Total steps: {result.get('total_steps')}")
+        print(f"Successful steps: {result.get('successful_steps')}")
+        print(f"Skipped steps: {result.get('skipped_steps')}")
+        print(f"處理了 {len(context.data)} 筆資料")
+        return {'result': result, 'context': context}
+    else:
+        print(f"Pipeline 執行失敗: {result.error}")
+        return {'result': result, 'context': context}
+
 
 # =============================================================================
 # 入口點
@@ -340,6 +393,8 @@ async def run_spt_pr_full_pipeline() -> Dict[str, Any]:
 
 if __name__ == "__main__":
     warnings.filterwarnings("ignore")
+    
+    result = asyncio.run(run_spt_procurement(source_type='PO', processing_period=202512))
 
     # 執行 main 函數
     result = asyncio.run(main())

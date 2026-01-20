@@ -113,12 +113,14 @@ media_summary = { dtype = "str", sheet_name = "2024-2025新聞總表(已用記�
 [spt.procurement]
 raw_po = "{resources}/{YYYYMM}/Original Data/{YYYYMM}_purchase_order_*.csv"
 raw_pr = "{resources}/{YYYYMM}/Original Data/{YYYYMM}_purchase_request_*.csv"
-procurement_previous = "{resources}/{YYYYMM}/採購底稿/{PREV_YYYYMM}_採購底稿.xlsx"
+procurement_previous_pr = "{resources}/{YYYYMM}/採購底稿/未結PO {PREV_YYYYMM} SPTTW.xlsx"
+procurement_previous_po = "{resources}/{YYYYMM}/採購底稿/未結PO {PREV_YYYYMM} SPTTW.xlsx"
 
 [spt.procurement.params]
 raw_po = { encoding = "utf-8", sep = ",", dtype = "str", keep_default_na = false, na_values = [""] }
 raw_pr = { encoding = "utf-8", sep = ",", dtype = "str", keep_default_na = false, na_values = [""] }
-procurement_previous = { dtype = "str" }
+procurement_previous_pr = { dtype = "str", sheet_name = "PR"}
+procurement_previous_po = { dtype = "str", sheet_name = "PO"}
 
 
 # =============================================================================

@@ -26,6 +26,10 @@ from .spt_procurement_loading import (
 from .spt_procurement_mapping import ProcurementPreviousMappingStep
 from .spt_procurement_evaluation import SPTProcurementStatusEvaluationStep
 from .spt_column_initialization import ColumnInitializationStep
+from .spt_procurement_validation import ProcurementPreviousValidationStep
+from .spt_combined_procurement_loading import CombinedProcurementDataLoadingStep
+from .spt_combined_procurement_processing import CombinedProcurementProcessingStep
+from .spt_combined_procurement_export import CombinedProcurementExportStep
 
 __all__ = [
     'SPTDataLoadingStep',
@@ -47,4 +51,9 @@ __all__ = [
     'ProcurementPreviousMappingStep',
     'SPTProcurementStatusEvaluationStep',
     'ColumnInitializationStep',
+    'ProcurementPreviousValidationStep',
+    # COMBINED Procurement steps
+    'CombinedProcurementDataLoadingStep',
+    'CombinedProcurementProcessingStep',
+    'CombinedProcurementExportStep',
 ]

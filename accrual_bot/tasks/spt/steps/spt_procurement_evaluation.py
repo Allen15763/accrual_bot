@@ -34,7 +34,7 @@ class SPTProcurementStatusEvaluationStep(PipelineStep):
     """
 
     def __init__(self, status_column: str = "PO狀態", **kwargs):
-        super().__init__(name="SPTProcurementStatusEvaluation", **kwargs)
+        super().__init__(**kwargs)
         self.status_column = status_column
         self._load_conditions_from_config()
 
@@ -55,7 +55,7 @@ class SPTProcurementStatusEvaluationStep(PipelineStep):
 
         try:
             df = context.data.copy()
-            file_date = context.get_variable('file_date')  # 結帳月份 YYYYMM
+            file_date = context.metadata.processing_date  # 結帳月份 YYYYMM
 
             self.logger.info(f"Evaluating procurement status with {len(self.conditions)} conditions...")
             self.logger.info(f"Status column: {self.status_column}, Closing date: {file_date}")
@@ -64,6 +64,9 @@ class SPTProcurementStatusEvaluationStep(PipelineStep):
             if self.status_column not in df.columns:
                 self.logger.warning(f"Status column '{self.status_column}' not found, creating it")
                 df[self.status_column] = pd.NA
+
+            # 重置狀態欄位，common的DateLogicStep有預先給狀態，採購端不看該條件。
+            df[self.status_column] = pd.NA
 
             # 準備 ERM 相關欄位
             erm_data = self._prepare_erm_data(df)
@@ -90,6 +93,7 @@ class SPTProcurementStatusEvaluationStep(PipelineStep):
                     stats['conditions_applied'] += 1
                     stats['rows_updated'] += rows_updated_by_condition
 
+            df = self._simple_clean(df)
             context.update_data(df)
             duration = time.time() - start_time
 
@@ -182,6 +186,7 @@ class SPTProcurementStatusEvaluationStep(PipelineStep):
         combine = condition.get('combine', 'and')
         status_value = condition.get('status_value')
         priority = condition.get('priority')
+        note = condition.get('note')
 
         if not checks or not status_value:
             return df
@@ -209,8 +214,11 @@ class SPTProcurementStatusEvaluationStep(PipelineStep):
             for m in check_masks[1:]:
                 final_mask = final_mask | m
 
-        # 應用狀態值
+        # 新增狀態值
         df.loc[mask_no_status & final_mask, self.status_column] = status_value
+
+        # 新增條件備註欄
+        df.loc[mask_no_status & final_mask, 'condition_note'] = note
 
         return df
 
@@ -244,6 +252,12 @@ class SPTProcurementStatusEvaluationStep(PipelineStep):
                 self.logger.warning(f"Field '{field}' not found for contains check")
                 return None
             return df[field].str.contains(pattern, na=False, regex=True)
+        
+        elif check_type == 'not_contains':
+            if field not in df.columns:
+                self.logger.warning(f"Field '{field}' not found for contains check")
+                return None
+            return ~df[field].str.contains(pattern, na=False, regex=True)
 
         elif check_type == 'equals':
             if field not in df.columns:
@@ -268,7 +282,7 @@ class SPTProcurementStatusEvaluationStep(PipelineStep):
         elif check_type == 'erm_le_closing':
             if not erm_data:
                 return pd.Series([False] * len(df))
-            return erm_data['erm'] <= file_date
+            return erm_data['erm'] <= (file_date)
 
         elif check_type == 'erm_gt_closing':
             if not erm_data:
@@ -293,9 +307,23 @@ class SPTProcurementStatusEvaluationStep(PipelineStep):
             return False
 
         # 檢查 file_date 變數
-        file_date = context.get_variable('file_date')
+        file_date = context.metadata.processing_date
         if file_date is None:
             self.logger.error("Missing file_date variable")
             return False
 
         return True
+
+    def _simple_clean(self, df) -> pd.DataFrame:
+        df_copy = df.copy()
+        remove_cols = [
+            'Supplier', 
+            'Expected Received Month_轉換格式', 
+            'YMs of Item Description',
+            '是否估計入帳'
+        ]
+        for col in remove_cols:
+            if col in df_copy.columns:
+                df_copy.pop(col)
+        return df_copy
+

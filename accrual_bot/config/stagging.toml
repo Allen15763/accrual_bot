@@ -68,6 +68,12 @@ enabled_procurement_pr_steps = [
     "SPTProcurementStatusEvaluation",
     "SPTProcurementExport",
 ]
+enabled_procurement_combined_steps = [
+    "CombinedProcurementDataLoading",
+    "ProcurementPreviousValidation",
+    "CombinedProcurementProcessing",
+    "CombinedProcurementExport",
+]
 
 [pipeline.spx]
 enabled_po_steps = [
@@ -656,15 +662,42 @@ description = "前期採購備註"
 
 [[spt_procurement_status_rules.conditions]]
 priority = 1
-status_value = "Affiliate"
-note = "Item Description 包含 Affiliate"
+status_value = "需求取消"
+note = "前期備註為需求取消|close|關單"
 [[spt_procurement_status_rules.conditions.checks]]
-field = "Item Description"
+field = "prev_remarked_procurement"
 type = "contains"
-pattern = "(?i)affiliate"
+pattern = "(?i)需求取消|close|關單"
 
 [[spt_procurement_status_rules.conditions]]
 priority = 2
+status_value = "前期已完成"
+note = "前期採購備註為已完成"
+[[spt_procurement_status_rules.conditions.checks]]
+field = "prev_remarked_procurement"
+type = "equals"
+value = "已完成"
+
+[[spt_procurement_status_rules.conditions]]
+priority = 3
+status_value = "Affiliate"
+note = "Item Description 包含 Affiliate 或 分潤"
+[[spt_procurement_status_rules.conditions.checks]]
+field = "Item Description"
+type = "contains"
+pattern = "(?i)affiliate|分潤"
+
+[[spt_procurement_status_rules.conditions]]
+priority = 4
+status_value = "勞報"
+note = "Item Description 包含 AMS commission、Shopee commission、LiveStream and KOL"
+[[spt_procurement_status_rules.conditions.checks]]
+field = "Item Description"
+type = "contains"
+pattern = "(?i)AMS\\s+commission|Shopee\\s+commission|(?=.*livestream)(?=.*kol)"
+
+[[spt_procurement_status_rules.conditions]]
+priority = 5
 status_value = "FN Payroll"
 note = "Item Description 包含 Employee Bonus"
 [[spt_procurement_status_rules.conditions.checks]]
@@ -673,7 +706,16 @@ type = "contains"
 pattern = "(?i)employee\\s*bonus"
 
 [[spt_procurement_status_rules.conditions]]
-priority = 3
+priority = 6
+status_value = "FN Payroll"
+note = "Supplier是勤業眾信"
+[[spt_procurement_status_rules.conditions.checks]]
+field = "Supplier"
+type = "contains"
+pattern = "勤業眾信"
+
+[[spt_procurement_status_rules.conditions]]
+priority = 7
 status_value = "Svp Rental"
 note = "Item Description 同時包含 SVP 和 租金/rent"
 combine = "and"
@@ -687,16 +729,21 @@ type = "contains"
 pattern = "(?i)租金|rent"
 
 [[spt_procurement_status_rules.conditions]]
-priority = 4
-status_value = "前期已完成"
-note = "前期採購備註為已完成"
+priority = 8
+status_value = "Svp Rental"
+note = "Item Description 包含 ^Leased^ 的特殊格式摘要 且Supplier非聯合大於大樓|臺北文創大樓|高力國際公寓大廈"
+combine = "and"
 [[spt_procurement_status_rules.conditions.checks]]
-field = "prev_remarked_procurement"
-type = "equals"
-value = "已完成"
+field = "Item Description"
+type = "contains"
+pattern = "(?i)\\^Leased\\^S\\d{1}-kwh\\^|(?=.*leased)(?=.*kwh)"
+[[spt_procurement_status_rules.conditions.checks]]
+field = "Supplier"
+type = "not_contains"
+pattern = "聯合大於大樓|臺北文創大樓|高力國際公寓大廈"
 
 [[spt_procurement_status_rules.conditions]]
-priority = 5
+priority = 9
 status_value = "已完成"
 note = "前期非已完成，且 ERM 在範圍內且 ≤ 結帳月"
 combine = "and"
@@ -708,9 +755,29 @@ value = "已完成"
 type = "erm_in_range"
 [[spt_procurement_status_rules.conditions.checks]]
 type = "erm_le_closing"
+[[spt_procurement_status_rules.conditions.checks]]
+field = "YMs of Item Description"
+type = "not_equals"
+value = "100001,100002"
 
 [[spt_procurement_status_rules.conditions]]
-priority = 6
+priority = 10
+status_value = "已完成"
+note = "前期非已完成，且 ERM ≤ 結帳月"
+combine = "and"
+[[spt_procurement_status_rules.conditions.checks]]
+field = "prev_remarked_procurement"
+type = "not_equals"
+value = "已完成"
+[[spt_procurement_status_rules.conditions.checks]]
+type = "erm_le_closing"
+[[spt_procurement_status_rules.conditions.checks]]
+field = "YMs of Item Description"
+type = "not_equals"
+value = "100001,100002"
+
+[[spt_procurement_status_rules.conditions]]
+priority = 11
 status_value = "未完成"
 note = "ERM 在範圍內且 > 結帳月"
 combine = "and"
@@ -718,3 +785,33 @@ combine = "and"
 type = "erm_in_range"
 [[spt_procurement_status_rules.conditions.checks]]
 type = "erm_gt_closing"
+[[spt_procurement_status_rules.conditions.checks]]
+field = "YMs of Item Description"
+type = "not_equals"
+value = "100001,100002"
+
+[[spt_procurement_status_rules.conditions]]
+priority = 12
+status_value = "未完成"
+note = "ERM > 結帳月"
+combine = "and"
+[[spt_procurement_status_rules.conditions.checks]]
+type = "erm_gt_closing"
+[[spt_procurement_status_rules.conditions.checks]]
+field = "YMs of Item Description"
+type = "not_equals"
+value = "100001,100002"
+
+[[spt_procurement_status_rules.conditions]]
+priority = 13
+status_value = "格式錯誤"
+note = "非標準格式，解析摘要區間失敗"
+combine = "and"
+[[spt_procurement_status_rules.conditions.checks]]
+field = "YMs of Item Description"
+type = "equals"
+value = "100001,100002"
+[[spt_procurement_status_rules.conditions.checks]]
+field = "prev_remarked_procurement"
+type = "not_equals"
+value = "已完成"

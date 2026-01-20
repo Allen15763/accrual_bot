@@ -25,6 +25,11 @@ from accrual_bot.tasks.spt.steps import (
     ProcurementPreviousMappingStep,
     SPTProcurementStatusEvaluationStep,
     ColumnInitializationStep,
+    ProcurementPreviousValidationStep,
+    # COMBINED Procurement steps
+    CombinedProcurementDataLoadingStep,
+    CombinedProcurementProcessingStep,
+    CombinedProcurementExportStep,
 )
 
 from accrual_bot.tasks.spx.steps import (
@@ -191,12 +196,35 @@ class SPTPipelineOrchestrator:
         pipeline = Pipeline(pipeline_config)
 
         if source_type == 'COMBINED':
-            # TODO: 合併處理模式尚未實作
-            # 需要實作 CombinedProcurementProcessingStep
-            raise NotImplementedError(
-                "COMBINED procurement processing mode is not yet implemented. "
-                "Please use 'PO' or 'PR' mode separately."
-            )
+            # COMBINED 模式: 同時處理 PO 和 PR
+            enabled_steps = self.config.get('enabled_procurement_combined_steps', [])
+
+            if not enabled_steps:
+                # 默認步驟順序
+                enabled_steps = [
+                    "CombinedProcurementDataLoading",
+                    "ProcurementPreviousValidation",
+                    "CombinedProcurementProcessing",
+                    "CombinedProcurementExport",
+                ]
+
+            # 動態添加步驟
+            for step_name in enabled_steps:
+                step = self._create_step(
+                    step_name,
+                    file_paths,
+                    processing_type='PROCUREMENT',
+                    source_type='COMBINED'
+                )
+                if step:
+                    pipeline.add_step(step)
+
+            # 添加自定義步驟
+            if custom_steps:
+                for step in custom_steps:
+                    pipeline.add_step(step)
+
+            return pipeline
 
         # 單一類型處理 (PO 或 PR)
         if source_type == 'PO':
@@ -373,6 +401,26 @@ class SPTPipelineOrchestrator:
                 include_index=False,
                 required=True,
                 retry_count=0
+            ),
+
+            # COMBINED PROCUREMENT 步驟
+            'CombinedProcurementDataLoading': lambda: CombinedProcurementDataLoadingStep(
+                name="CombinedProcurementDataLoading",
+                file_paths=file_paths
+            ),
+            'ProcurementPreviousValidation': lambda: ProcurementPreviousValidationStep(
+                name="ProcurementPreviousValidation",
+                strict_mode=False  # 寬鬆模式，驗證失敗不中斷 pipeline
+            ),
+            'CombinedProcurementProcessing': lambda: CombinedProcurementProcessingStep(
+                name="CombinedProcurementProcessing"
+            ),
+            'CombinedProcurementExport': lambda: CombinedProcurementExportStep(
+                name="CombinedProcurementExport",
+                output_dir="output",
+                filename_template="{YYYYMM}_PROCUREMENT_COMBINED.xlsx",
+                include_index=False,
+                retry_count=3
             ),
         }
 
