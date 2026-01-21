@@ -49,18 +49,24 @@ class UnifiedPipelineService:
         """
         return ENTITY_CONFIG.get(entity, {}).get('types', [])
 
-    def get_enabled_steps(self, entity: str, proc_type: str) -> List[str]:
+    def get_enabled_steps(self, entity: str, proc_type: str, source_type: Optional[str] = None) -> List[str]:
         """
         獲取已啟用的步驟清單 (唯讀，從配置檔讀取)
 
         Args:
             entity: Entity 名稱
             proc_type: 處理類型
+            source_type: 子類型 (僅 PROCUREMENT 使用: PO/PR/COMBINED)
 
         Returns:
             步驟名稱清單
         """
         orchestrator = self._get_orchestrator(entity)
+
+        # 如果是 PROCUREMENT 且有 source_type，傳入 source_type
+        if proc_type == 'PROCUREMENT' and source_type and hasattr(orchestrator, 'get_enabled_steps'):
+            return orchestrator.get_enabled_steps(proc_type, source_type=source_type)
+
         return orchestrator.get_enabled_steps(proc_type)
 
     def build_pipeline(
@@ -68,7 +74,8 @@ class UnifiedPipelineService:
         entity: str,
         proc_type: str,
         file_paths: Dict[str, str],
-        processing_date: Optional[int] = None
+        processing_date: Optional[int] = None,
+        source_type: Optional[str] = None
     ) -> Pipeline:
         """
         建立 pipeline
@@ -78,6 +85,7 @@ class UnifiedPipelineService:
             proc_type: 處理類型 (PO, PR, PPE, PROCUREMENT)
             file_paths: 檔案路徑字典（可能只包含路徑字符串）
             processing_date: 處理日期 (YYYYMM，PPE 必填)
+            source_type: 子類型 (僅 PROCUREMENT 使用: PO/PR/COMBINED)
 
         Returns:
             Pipeline 物件
@@ -95,18 +103,9 @@ class UnifiedPipelineService:
         elif proc_type == 'PR':
             return orchestrator.build_pr_pipeline(enriched_file_paths)
         elif proc_type == 'PROCUREMENT' and entity == 'SPT':
-            # 判斷處理模式: 根據上傳的檔案決定
-            has_po = 'raw_po' in file_paths
-            has_pr = 'raw_pr' in file_paths
-
-            if has_po and has_pr:
-                source_type = 'COMBINED'
-            elif has_po:
-                source_type = 'PO'
-            elif has_pr:
-                source_type = 'PR'
-            else:
-                raise ValueError("PROCUREMENT 需要至少提供 raw_po 或 raw_pr")
+            # 使用明確傳入的 source_type，不再自動推測
+            if not source_type:
+                raise ValueError("PROCUREMENT 需要指定 source_type (PO/PR/COMBINED)")
 
             return orchestrator.build_procurement_pipeline(
                 enriched_file_paths,
@@ -168,61 +167,31 @@ class UnifiedPipelineService:
             Output: {'ops_validation': {'path': '/path/to/file.xlsx', 'params': {...}}}
         """
         try:
-            # 獲取 ConfigManager 實例
             config_manager = ConfigManager()
 
-            # 從 paths.toml 讀取參數
-            # 配置路徑: [entity.proc_type.params]
-            # 例如: [spx.po.params]
-            config_section = f"{entity.lower()}.{proc_type.lower()}.params"
+            # 使用公開 API 獲取參數配置
+            # 路徑: [entity.proc_type.params]
+            params_config = config_manager.get_paths_config(
+                entity.lower(),
+                proc_type.lower(),
+                'params'
+            )
 
-            print(f"[DEBUG] Enriching file_paths for: {config_section}")
-            print(f"[DEBUG] Has _config_toml: {hasattr(config_manager, '_config_toml')}")
-
-            # 訪問 TOML 配置（雖然是私有屬性，但暫時沒有公開 API）
-            if hasattr(config_manager, '_config_toml'):
-                toml_config = config_manager._config_toml
-                print(f"[DEBUG] TOML keys: {list(toml_config.keys()) if isinstance(toml_config, dict) else 'not a dict'}")
-
-                # 嘗試從配置中獲取參數
-                params_config = toml_config
-                for key in config_section.split('.'):
-                    if isinstance(params_config, dict) and key in params_config:
-                        params_config = params_config[key]
-                        print(f"[DEBUG] Found key '{key}', type: {type(params_config)}")
+            if params_config and isinstance(params_config, dict):
+                enriched_paths = {}
+                for file_key, file_path in file_paths.items():
+                    if file_key in params_config:
+                        enriched_paths[file_key] = {
+                            'path': file_path,
+                            'params': params_config[file_key]
+                        }
                     else:
-                        print(f"[DEBUG] Key '{key}' not found or not a dict")
-                        params_config = None
-                        break
-
-                # 如果成功獲取配置，整合到 file_paths
-                if isinstance(params_config, dict):
-                    print(f"[DEBUG] Params config keys: {list(params_config.keys())}")
-                    enriched_paths = {}
-                    for file_key, file_path in file_paths.items():
-                        # 如果配置中有此檔案的參數，則整合
-                        if file_key in params_config:
-                            print(f"[DEBUG] Enriching '{file_key}' with params: {params_config[file_key]}")
-                            enriched_paths[file_key] = {
-                                'path': file_path,
-                                'params': params_config[file_key]
-                            }
-                        else:
-                            print(f"[DEBUG] No params for '{file_key}', keeping as string")
-                            # 沒有參數，保持原樣
-                            enriched_paths[file_key] = file_path
-
-                    print(f"[DEBUG] Enriched paths: {enriched_paths}")
-                    return enriched_paths
-                else:
-                    print(f"[DEBUG] params_config is not a dict: {type(params_config)}")
+                        enriched_paths[file_key] = file_path
+                return enriched_paths
 
         except Exception as e:
-            # 讀取配置失敗，返回原始 file_paths
             import traceback
-            print(f"[ERROR] Failed to enrich file_paths from config: {e}")
+            print(f"[ERROR] Failed to enrich file_paths: {e}")
             traceback.print_exc()
 
-        # 如果無法讀取配置，返回原始 file_paths
-        print(f"[DEBUG] Returning original file_paths (enrich failed)")
         return file_paths

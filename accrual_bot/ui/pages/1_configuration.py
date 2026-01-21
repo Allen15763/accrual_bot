@@ -16,6 +16,7 @@ from accrual_bot.ui.app import init_session_state
 from accrual_bot.ui.components import (
     render_entity_selector,
     render_processing_type_selector,
+    render_procurement_source_type_selector,
     render_date_selector,
     render_step_preview,
 )
@@ -42,6 +43,15 @@ if entity:
     proc_type = render_processing_type_selector(entity)
 
     if proc_type:
+        # 如果是 PROCUREMENT，顯示子類型選擇器
+        source_type = ""
+        if proc_type == 'PROCUREMENT':
+            st.markdown("---")
+            source_type = render_procurement_source_type_selector()
+            if not source_type:
+                st.info("📌 請選擇處理來源類型 (PO / PR)")
+                st.stop()
+
         st.markdown("---")
         # 第三步：選擇日期
         processing_date = render_date_selector()
@@ -57,10 +67,14 @@ if entity:
                 st.success("✅ 配置完成！請前往「檔案上傳」頁面上傳所需檔案。")
 
                 # 顯示配置摘要
+                config_summary = {
+                    "entity": entity,
+                    "processing_type": proc_type,
+                    "processing_date": processing_date,
+                    "total_steps": len(enabled_steps),
+                }
+                if source_type:
+                    config_summary["procurement_source_type"] = source_type
+
                 with st.expander("📝 配置摘要", expanded=False):
-                    st.json({
-                        "entity": entity,
-                        "processing_type": proc_type,
-                        "processing_date": processing_date,
-                        "total_steps": len(enabled_steps),
-                    })
+                    st.json(config_summary)

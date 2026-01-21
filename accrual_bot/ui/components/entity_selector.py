@@ -41,6 +41,7 @@ def render_entity_selector() -> str:
                 # Entity 改變時，清除所有後續狀態
                 st.session_state.pipeline_config.entity = entity
                 st.session_state.pipeline_config.processing_type = ""  # 重置 type
+                st.session_state.pipeline_config.procurement_source_type = ""  # 重置 PROCUREMENT 子類型
                 st.session_state.pipeline_config.enabled_steps = []  # 重置步驟
 
                 # 清除檔案上傳狀態
@@ -101,6 +102,7 @@ def render_processing_type_selector(entity: str) -> str:
             ):
                 # Processing type 改變時，清除檔案上傳和執行狀態
                 st.session_state.pipeline_config.processing_type = proc_type
+                st.session_state.pipeline_config.procurement_source_type = ""  # 重置 PROCUREMENT 子類型
                 st.session_state.pipeline_config.enabled_steps = []  # 重置步驟
 
                 # 清除檔案上傳狀態
@@ -123,6 +125,60 @@ def render_processing_type_selector(entity: str) -> str:
             st.caption(type_config['description'])
 
     return st.session_state.pipeline_config.processing_type
+
+
+def render_procurement_source_type_selector() -> str:
+    """
+    渲染 PROCUREMENT 子類型選擇器
+
+    僅在 processing_type == 'PROCUREMENT' 時使用
+
+    Returns:
+        選擇的子類型 ('PO', 'PR', 或 'COMBINED')
+    """
+    from accrual_bot.ui.config import PROCUREMENT_SOURCE_TYPES
+
+    st.subheader("📂 選擇處理來源")
+    st.caption("採購審核支援 PO、PR 單獨處理")
+
+    source_types = list(PROCUREMENT_SOURCE_TYPES.keys())
+    cols = st.columns(len(source_types))
+
+    selected = st.session_state.pipeline_config.procurement_source_type
+
+    for idx, source_type in enumerate(source_types):
+        config = PROCUREMENT_SOURCE_TYPES[source_type]
+        with cols[idx]:
+            button_type = "primary" if selected == source_type else "secondary"
+            if st.button(
+                f"{config['icon']} {config['display_name']}",
+                key=f"source_type_{source_type}",
+                type=button_type,
+                use_container_width=True
+            ):
+                st.session_state.pipeline_config.procurement_source_type = source_type
+                st.session_state.pipeline_config.enabled_steps = []
+
+                # 清除檔案上傳狀態
+                st.session_state.file_upload.file_paths = {}
+                st.session_state.file_upload.uploaded_files = {}
+                st.session_state.file_upload.validation_errors = []
+                st.session_state.file_upload.required_files_complete = False
+
+                # 清除執行狀態
+                from accrual_bot.ui.models.state_models import ExecutionStatus
+                st.session_state.execution.status = ExecutionStatus.IDLE
+                st.session_state.execution.current_step = ""
+                st.session_state.execution.completed_steps = []
+                st.session_state.execution.failed_steps = []
+                st.session_state.execution.logs = []
+                st.session_state.execution.error_message = ""
+
+                st.rerun()
+
+            st.caption(config['description'])
+
+    return st.session_state.pipeline_config.procurement_source_type
 
 
 def render_date_selector() -> int:

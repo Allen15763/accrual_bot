@@ -116,14 +116,19 @@ if start_button and execution.status != ExecutionStatus.RUNNING:
         # 執行
         st.info("⏳ 正在執行 pipeline...")
 
-        result = AsyncBridge.run_async(
-            runner.execute(
-                entity=config.entity,
-                proc_type=config.processing_type,
-                file_paths=upload.file_paths,
-                processing_date=config.processing_date
-            )
-        )
+        # 準備參數
+        execute_params = {
+            'entity': config.entity,
+            'proc_type': config.processing_type,
+            'file_paths': upload.file_paths,
+            'processing_date': config.processing_date,
+        }
+
+        # 如果是 PROCUREMENT，傳入 source_type
+        if config.processing_type == 'PROCUREMENT':
+            execute_params['source_type'] = config.procurement_source_type
+
+        result = AsyncBridge.run_async(runner.execute(**execute_params))
 
         execution.end_time = time.time()
 

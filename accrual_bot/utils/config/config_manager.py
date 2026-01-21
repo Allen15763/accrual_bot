@@ -119,9 +119,11 @@ class ConfigManager:
     def __init__(self):
         if self._initialized:
             return
-            
+
         self._config = configparser.ConfigParser()
         self._config_data = {}
+        self._config_toml = {}      # 存放 stagging.toml 內容
+        self._paths_toml = {}       # 存放 paths.toml 內容
         self._simple_logger = None  # 簡單日誌記錄器
         self._setup_simple_logger()  # 先設置簡單日誌
         self._load_config()
@@ -350,8 +352,8 @@ class ConfigManager:
             # 轉為字典方面使用; self._config_data
             self._convert_to_dict()
 
-            def get_default_toml_path() -> str:
-                file_path = 'stagging.toml'
+            def get_toml_path(file_name: str) -> Path:
+                """取得 config 目錄下的 TOML 檔案路徑"""
                 current_dir = Path(__file__).parent  # utils/config/
 
                 # 拆解每層路徑
@@ -362,8 +364,8 @@ class ConfigManager:
                 try:
                     # 找到 'utils' 的索引
                     index = parts.index(parts_to_remove[0])
-                    
-                    # 確認 'utils' 的下一個就是 'helpers'
+
+                    # 確認 'utils' 的下一個就是 'config'
                     if parts[index:index + len(parts_to_remove)] == parts_to_remove:
                         # 從列表中移除這兩個元素
                         del parts[index:index + len(parts_to_remove)]
@@ -380,11 +382,23 @@ class ConfigManager:
 
                 # 構建配置文件的絕對路徑
                 config_dir = new_path / 'config'  # accrual_bot/accrual_bot/config/
-                file_path = config_dir / file_path
-                self._log_info(f"config manager載入的toml路徑: {file_path}")
-                return file_path
-            with open(get_default_toml_path(), 'rb') as f:
+                toml_path = config_dir / file_name
+                self._log_info(f"config manager載入的toml路徑: {toml_path}")
+                return toml_path
+
+            # 加載 stagging.toml
+            with open(get_toml_path('stagging.toml'), 'rb') as f:
                 self._config_toml = tomllib.load(f)
+
+            # 加載 paths.toml
+            paths_toml_file = get_toml_path('paths.toml')
+            if paths_toml_file.exists():
+                with open(paths_toml_file, 'rb') as f:
+                    self._paths_toml = tomllib.load(f)
+                self._log_info("成功載入 paths.toml 配置")
+            else:
+                self._log_warning(f"paths.toml 不存在: {paths_toml_file}")
+                self._paths_toml = {}
             
             # 記錄成功載入 - 改進的日誌記錄
             self._log_info(f"成功載入配置檔案: {config_path}")
@@ -698,7 +712,29 @@ class ConfigManager:
         # 使用彈性路徑解析
         resolved_path = resolve_flexible_path(path_config, __file__)
         return resolved_path or path_config
-    
+
+    def get_paths_config(self, *keys: str):
+        """
+        獲取 paths.toml 的配置值
+
+        Args:
+            *keys: 配置路徑鍵值 (如 'spt', 'procurement', 'params')
+
+        Returns:
+            配置值，如果鍵值不存在則返回 None
+
+        Example:
+            # 獲取 [spt.procurement.params] 區段
+            config_manager.get_paths_config('spt', 'procurement', 'params')
+        """
+        result = self._paths_toml
+        for key in keys:
+            if isinstance(result, dict) and key in result:
+                result = result[key]
+            else:
+                return None
+        return result
+
     def reload_config(self) -> None:
         """重新加載配置"""
         self._initialized = False

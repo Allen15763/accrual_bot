@@ -22,9 +22,10 @@ class ExecutionStatus(Enum):
 class PipelineConfig:
     """Pipeline 配置狀態"""
     entity: str = ""                    # SPT, SPX (MOB 隱藏)
-    processing_type: str = ""           # PO, PR, PPE
+    processing_type: str = ""           # PO, PR, PPE, PROCUREMENT
     processing_date: int = 0            # YYYYMM 格式
     enabled_steps: List[str] = field(default_factory=list)  # 已啟用的步驟清單
+    procurement_source_type: str = ""   # PROCUREMENT 子類型 (PO/PR/COMBINED)
 
 
 @dataclass

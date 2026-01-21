@@ -51,7 +51,8 @@ class StreamlitPipelineRunner:
         entity: str,
         proc_type: str,
         file_paths: Dict[str, str],
-        processing_date: int
+        processing_date: int,
+        source_type: str = None
     ) -> Dict[str, Any]:
         """
         執行 pipeline 並返回結果
@@ -61,6 +62,7 @@ class StreamlitPipelineRunner:
             proc_type: 處理類型
             file_paths: 檔案路徑字典
             processing_date: 處理日期 (YYYYMM)
+            source_type: 子類型 (僅 PROCUREMENT 使用)
 
         Returns:
             執行結果字典，包含:
@@ -81,7 +83,8 @@ class StreamlitPipelineRunner:
                 entity=entity,
                 proc_type=proc_type,
                 file_paths=file_paths,
-                processing_date=processing_date
+                processing_date=processing_date,
+                source_type=source_type
             )
 
             self._log(f"Pipeline 建立完成，共 {len(pipeline.steps)} 個步驟")

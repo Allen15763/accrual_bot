@@ -30,7 +30,12 @@ def render_step_preview(entity: str, proc_type: str) -> List[str]:
     service = UnifiedPipelineService()
 
     try:
-        enabled_steps = service.get_enabled_steps(entity, proc_type)
+        # 獲取 source_type (僅 PROCUREMENT 使用)
+        source_type = None
+        if proc_type == 'PROCUREMENT':
+            source_type = st.session_state.pipeline_config.procurement_source_type
+
+        enabled_steps = service.get_enabled_steps(entity, proc_type, source_type=source_type)
 
         if not enabled_steps:
             st.warning("此組合沒有已啟用的步驟")

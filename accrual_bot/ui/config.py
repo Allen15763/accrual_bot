@@ -46,6 +46,25 @@ PROCESSING_TYPE_CONFIG: Dict[str, Dict] = {
     },
 }
 
+# PROCUREMENT 子類型配置 (COMBINED 暫時隱藏)
+PROCUREMENT_SOURCE_TYPES: Dict[str, Dict] = {
+    'PO': {
+        'display_name': '僅 PO',
+        'description': '僅處理採購單',
+        'icon': '📋',
+    },
+    'PR': {
+        'display_name': '僅 PR',
+        'description': '僅處理請購單',
+        'icon': '📝',
+    },
+    # 'COMBINED': {  # TODO: 待測試完成後啟用
+    #     'display_name': 'PO + PR',
+    #     'description': '同時處理採購單與請購單',
+    #     'icon': '📑',
+    # },
+}
+
 # 檔案標籤對照
 FILE_LABELS: Dict[str, str] = {
     'raw_po': '採購單原始資料 (必填)',
@@ -64,17 +83,22 @@ FILE_LABELS: Dict[str, str] = {
 }
 
 # 各 entity/type 的必要檔案
-REQUIRED_FILES: Dict[Tuple[str, str], List[str]] = {
+REQUIRED_FILES: Dict[Tuple, List[str]] = {
+    # 2-tuple keys (標準處理類型)
     ('SPT', 'PO'): ['raw_po'],
     ('SPT', 'PR'): ['raw_pr'],
-    ('SPT', 'PROCUREMENT'): [],  # 至少需要 raw_po 或 raw_pr (彈性檢查)
     ('SPX', 'PO'): ['raw_po'],
     ('SPX', 'PR'): ['raw_pr'],
     ('SPX', 'PPE'): ['contract_filing_list'],
+    # 3-tuple keys (PROCUREMENT 子類型)
+    ('SPT', 'PROCUREMENT', 'PO'): ['raw_po'],
+    ('SPT', 'PROCUREMENT', 'PR'): ['raw_pr'],
+    # ('SPT', 'PROCUREMENT', 'COMBINED'): ['raw_po', 'raw_pr'],  # TODO: 待測試完成後啟用
 }
 
 # 各 entity/type 的選填檔案
-OPTIONAL_FILES: Dict[Tuple[str, str], List[str]] = {
+OPTIONAL_FILES: Dict[Tuple, List[str]] = {
+    # 2-tuple keys (標準處理類型)
     ('SPT', 'PO'): [
         'previous',
         'procurement_po',
@@ -92,11 +116,6 @@ OPTIONAL_FILES: Dict[Tuple[str, str], List[str]] = {
         'media_left',
         'media_summary',
     ],
-    ('SPT', 'PROCUREMENT'): [
-        'raw_po',
-        'raw_pr',
-        'procurement_previous',
-    ],
     ('SPX', 'PO'): [
         'previous',
         'procurement_po',
@@ -110,6 +129,25 @@ OPTIONAL_FILES: Dict[Tuple[str, str], List[str]] = {
         'procurement_pr',
     ],
     ('SPX', 'PPE'): [],
+    # 3-tuple keys (PROCUREMENT 子類型)
+    ('SPT', 'PROCUREMENT', 'PO'): [
+        'procurement_previous',
+        'media_finished',
+        'media_left',
+        'media_summary',
+    ],
+    ('SPT', 'PROCUREMENT', 'PR'): [
+        'procurement_previous',
+        'media_finished',
+        'media_left',
+        'media_summary',
+    ],
+    # ('SPT', 'PROCUREMENT', 'COMBINED'): [  # TODO: 待測試完成後啟用
+    #     'procurement_previous',
+    #     'media_finished',
+    #     'media_left',
+    #     'media_summary',
+    # ],
 }
 
 # 支援的檔案格式
@@ -135,3 +173,25 @@ PAGE_CONFIG = {
     'layout': 'wide',
     'initial_sidebar_state': 'expanded',
 }
+
+
+def get_file_requirements(entity: str, proc_type: str, source_type: str = "") -> Tuple[List[str], List[str]]:
+    """
+    獲取檔案需求
+
+    Args:
+        entity: Entity 名稱 (如 'SPT', 'SPX')
+        proc_type: 處理類型 (如 'PO', 'PR', 'PROCUREMENT')
+        source_type: 子類型 (僅 PROCUREMENT 使用: 'PO', 'PR', 'COMBINED')
+
+    Returns:
+        (required_files, optional_files) 元組
+    """
+    if proc_type == 'PROCUREMENT' and source_type:
+        key = (entity, proc_type, source_type)
+    else:
+        key = (entity, proc_type)
+
+    required = REQUIRED_FILES.get(key, [])
+    optional = OPTIONAL_FILES.get(key, [])
+    return required, optional
