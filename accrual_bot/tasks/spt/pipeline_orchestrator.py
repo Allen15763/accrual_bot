@@ -166,6 +166,46 @@ class SPTPipelineOrchestrator:
 
         return pipeline
 
+    def _normalize_procurement_paths(
+        self,
+        file_paths: Dict[str, Any],
+        source_type: str
+    ) -> Dict[str, Any]:
+        """
+        根據 source_type 正規化採購檔案路徑
+
+        將 procurement_previous_po/pr 統一為 procurement_previous，
+        並移除不需要的原始資料檔案路徑
+
+        Args:
+            file_paths: 原始檔案路徑配置 (從 paths.toml 載入)
+            source_type: 處理類型 ('PO', 'PR', 'COMBINED')
+
+        Returns:
+            Dict[str, Any]: 正規化後的檔案路徑
+        """
+        paths = file_paths.copy()
+
+        if source_type == 'PO':
+            # 移除 PR 相關路徑
+            paths.pop('raw_pr', None)
+            paths.pop('procurement_previous_pr', None)
+            # 重命名 procurement_previous_po -> procurement_previous
+            if 'procurement_previous_po' in paths:
+                paths['procurement_previous'] = paths.pop('procurement_previous_po')
+
+        elif source_type == 'PR':
+            # 移除 PO 相關路徑
+            paths.pop('raw_po', None)
+            paths.pop('procurement_previous_po', None)
+            # 重命名 procurement_previous_pr -> procurement_previous
+            if 'procurement_previous_pr' in paths:
+                paths['procurement_previous'] = paths.pop('procurement_previous_pr')
+
+        # COMBINED: 保留所有路徑，不做處理
+
+        return paths
+
     def build_procurement_pipeline(
         self,
         file_paths: Dict[str, Any],
@@ -176,16 +216,19 @@ class SPTPipelineOrchestrator:
         構建 SPT 採購處理 pipeline
 
         Args:
-            file_paths: 檔案路徑配置
+            file_paths: 檔案路徑配置 (從 paths.toml 載入，會自動正規化)
             source_type: 處理類型
                 - 'PO': 僅處理 PO
                 - 'PR': 僅處理 PR
-                - 'COMBINED': 同時處理 PO 和 PR (未實作)
+                - 'COMBINED': 同時處理 PO 和 PR
             custom_steps: 自定義步驟（可選）
 
         Returns:
             Pipeline: 配置好的 pipeline
         """
+        # 正規化檔案路徑
+        normalized_paths = self._normalize_procurement_paths(file_paths, source_type)
+
         pipeline_config = PipelineConfig(
             name=f"SPT_PROCUREMENT_{source_type}_Processing",
             description=f"SPT Procurement {source_type} processing pipeline",
@@ -212,7 +255,7 @@ class SPTPipelineOrchestrator:
             for step_name in enabled_steps:
                 step = self._create_step(
                     step_name,
-                    file_paths,
+                    normalized_paths,
                     processing_type='PROCUREMENT',
                     source_type='COMBINED'
                 )
@@ -259,7 +302,7 @@ class SPTPipelineOrchestrator:
         for step_name in enabled_steps:
             step = self._create_step(
                 step_name,
-                file_paths,
+                normalized_paths,
                 processing_type='PROCUREMENT',
                 source_type=source_type
             )
@@ -432,12 +475,17 @@ class SPTPipelineOrchestrator:
             print(f"Warning: Unknown step '{step_name}' for SPT {processing_type} pipeline")
             return None
 
-    def get_enabled_steps(self, processing_type: str = 'PO') -> List[str]:
+    def get_enabled_steps(
+        self,
+        processing_type: str = 'PO',
+        source_type: Optional[str] = None
+    ) -> List[str]:
         """
         獲取啟用的步驟列表
 
         Args:
             processing_type: 處理類型 (PO/PR/PROCUREMENT)
+            source_type: 子類型 (僅 PROCUREMENT 使用: PO/PR/COMBINED)
 
         Returns:
             List[str]: 步驟名稱列表
@@ -447,8 +495,12 @@ class SPTPipelineOrchestrator:
         elif processing_type == 'PR':
             return self.config.get('enabled_pr_steps', [])
         elif processing_type == 'PROCUREMENT':
-            # PROCUREMENT 類型需要進一步區分 PO 或 PR
-            # 預設返回 PO 的步驟列表
-            return self.config.get('enabled_procurement_po_steps', [])
+            if source_type == 'PR':
+                return self.config.get('enabled_procurement_pr_steps', [])
+            elif source_type == 'COMBINED':
+                return self.config.get('enabled_procurement_combined_steps', [])
+            else:
+                # 預設或 source_type == 'PO'
+                return self.config.get('enabled_procurement_po_steps', [])
         else:
             return []

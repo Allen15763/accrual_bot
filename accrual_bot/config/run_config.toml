@@ -5,13 +5,17 @@
 
 [run]
 # 業務實體類型: SPX, SPT, MOB
-entity = "SPX"
+entity = "SPT"
 
-# 處理類型: PO, PR, PPE
-processing_type = "PR"
+# 處理類型: PO, PR, PPE, PROCUREMENT
+processing_type = "PROCUREMENT"
 
 # 處理日期 (YYYYMM 格式)
 processing_date = 202512
+
+# Procurement 專用: 指定處理來源類型 (僅 processing_type = "PROCUREMENT" 時使用)
+# 可選值: "PO", "PR", "COMBINED"
+source_type = "PO"
 
 
 [debug]

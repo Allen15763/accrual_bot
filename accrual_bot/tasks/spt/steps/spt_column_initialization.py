@@ -52,6 +52,8 @@ class ColumnInitializationStep(PipelineStep):
                 created = False
 
             df['Remarked by Procurement'] = pd.NA
+            df['Noted by Procurement'] = pd.NA
+            
             context.update_data(df)
             duration = time.time() - start_time
 
@@ -87,8 +89,7 @@ class ColumnInitializationStep(PipelineStep):
         return True
     
     def _is_pr(self, context) -> bool:
-        var = context.metadata.processing_type
-        if var == 'PR':
+        if 'PR' in self.status_column:
             return True
         else:
             return False
