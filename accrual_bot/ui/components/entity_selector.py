@@ -17,7 +17,7 @@ def render_entity_selector() -> str:
     Returns:
         選擇的 entity
     """
-    st.subheader("📊 選擇處理平台")
+    st.subheader("📊 選擇處理實體")
 
     service = UnifiedPipelineService()
     entities = service.get_available_entities()
@@ -76,7 +76,7 @@ def render_processing_type_selector(entity: str) -> str:
         選擇的 processing type
     """
     if not entity:
-        st.info("請先選擇處理平台")
+        st.info("請先選擇處理實體")
         return ""
 
     st.subheader("📝 選擇處理類型")

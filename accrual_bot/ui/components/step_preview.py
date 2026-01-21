@@ -22,7 +22,7 @@ def render_step_preview(entity: str, proc_type: str) -> List[str]:
         啟用的步驟清單
     """
     if not entity or not proc_type:
-        st.info("請先完成平台和處理類型選擇")
+        st.info("請先完成實體和處理類型選擇")
         return []
 
     st.subheader("🔄 Pipeline 步驟預覽")

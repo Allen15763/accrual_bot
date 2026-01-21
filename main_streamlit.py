@@ -36,9 +36,9 @@ with st.sidebar:
     config = st.session_state.pipeline_config
 
     if config.entity:
-        st.success(f"**平台:** {config.entity}")
+        st.success(f"**實體:** {config.entity}")
     else:
-        st.info("**平台:** 未選擇")
+        st.info("**實體:** 未選擇")
 
     if config.processing_type:
         st.success(f"**類型:** {config.processing_type}")
@@ -98,30 +98,28 @@ with st.sidebar:
     st.caption("Powered by Streamlit")
 
 # ===== Main Content =====
-st.title("歡迎使用 Accrual Bot")
+st.title("Dev Accrual Bot")
 
 st.markdown("""
-## 📊 PO/PR/PPE 自動處理系統
+## 📊 PO/PR/etc 處理系統
 
-這是一個 user-friendly 的 Web UI，用於配置和執行 PO (Purchase Order)、PR (Purchase Request) 和 PPE (Property, Plant & Equipment) 的自動化處理流程。
+取代未結機器人，用於配置和執行 PO (Purchase Order)、PR (Purchase Request) 和 其他任務 的自動化處理流程。
 
 ### 🚀 使用步驟
 
-1. **⚙️ 配置** - 選擇處理平台、類型和日期
+1. **⚙️ 配置** - 選擇處理實體、類型和日期
 2. **📁 檔案上傳** - 上傳所需的數據檔案
 3. **▶️ 執行** - 監控 pipeline 執行進度
 4. **📊 結果** - 查看處理結果並匯出
-5. **💾 Checkpoint** - 管理執行中斷點 (可選)
+5. ~~**💾 Checkpoint** - 管理執行中斷點 (可選)~~
 
-### 📋 支援的平台
+### 📋 支援的實體
 
-- **SPT** - Sales Platform (Taobao/Shopee)
+- **SPT**
   - 支援 PO 和 PR 處理
-  - 包含佣金處理、薪資偵測等特殊邏輯
 
-- **SPX** - SPX Express Logistics
+- **SPX**
   - 支援 PO、PR 和 PPE 處理
-  - 包含押金、租金、資產驗收等複雜處理
 
 ### 💡 快速開始
 
@@ -135,14 +133,15 @@ st.markdown("""
 - 檔案上傳後會暫存於臨時目錄
 - Pipeline 執行時會即時顯示進度和日誌
 - 執行結果可匯出為 CSV 或 Excel 格式
-- Checkpoint 功能允許從中斷點繼續執行（節省時間）
+- 結束任務請依序關閉該瀏覽器分頁與終端(黑色的執行介面)
+- ~~Checkpoint 功能允許從中斷點繼續執行（節省時間)~~
 
 ### ⚠️ 注意事項
 
 - 請確保上傳的檔案格式正確（CSV 或 Excel）
 - 必填檔案必須全部上傳才能開始執行
 - 執行過程中請勿關閉瀏覽器視窗
-- MOB 平台支援尚在開發中，暫時不可用
+- MOB 支援尚在開發中，暫時不可用
 
 ---
 
@@ -177,6 +176,6 @@ with col3:
 st.markdown("---")
 st.markdown("""
 <div style='text-align: center; color: gray;'>
-    <p>Accrual Bot UI | Developed with ❤️ using Streamlit</p>
+    <p>Accrual Bot UI | Developed with FBA using Streamlit</p>
 </div>
 """, unsafe_allow_html=True)
