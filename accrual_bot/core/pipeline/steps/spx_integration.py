@@ -1510,8 +1510,17 @@ class DataReformattingStep(PipelineStep):
     
     def _remove_columns(self, df):
         df_copy = df.copy()
-        cols = config_manager._config_toml.get("spx").get("output_columns_before_nlp")
-        return df_copy[cols]
+        try:
+            cols = config_manager._config_toml.get("spx").get("output_columns_before_nlp")
+            return df_copy[cols]
+        except KeyError as err:
+            self.logger.warning(f"與預設輸出欄位不符: {err}")
+            cols = config_manager._config_toml.get("spx").get("output_columns_before_nlp")
+            renew_cols = [col for col in cols if col in df_copy.columns]
+            return df_copy[renew_cols]
+        except Exception as err:
+            self.logger.error(f"返回原DataFrame: {err}")
+            return df_copy
     
     async def validate_input(self, context: ProcessingContext) -> bool:
         """驗證輸入"""
