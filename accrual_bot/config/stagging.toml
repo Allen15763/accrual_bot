@@ -222,7 +222,7 @@ hris_bug = { keywords = '(?i)卡單', field = 'Remarked by 上月 FN', status = 
 [spt_status_label_rules.erm_conditions]
 
 jianqiang_non_mkt = { dept_exclude = '(?i)Marketing', supplier = 'TW_漸強賴伯股份有限公司', remark = 'Cindy-漸強', note = 'Department不包含Marketing且Supplier為漸強' }
-jianqiang_mkt = { dept_include = '(?i)Marketing', supplier = 'TW_漸強賴伯股份有限公司', remark = '漸強MKT', note = 'Department包含Marketing且Supplier為漸強' }
+jianqiang_mkt = { dept_include = '(?i)S01|S02|G07', supplier = 'TW_漸強賴伯股份有限公司', remark = '漸強MKT', note = 'Department包含S01、S02、G07且Supplier為漸強' }
 
 
 # ============================================================================
@@ -426,17 +426,17 @@ locker_suppliers = [
 ]
 locker_columns = [
     "discount", "PO單號", "廠商", "門市", "地址", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K",
-    "DA", "XA", "XB", "XC", "XD", "XE", "XF", "XG", "XA30", "XC30", "超出櫃體安裝費", "超出櫃體運費", "裝運費", 
+    "DA", "控制系統", "XA", "XB", "XC", "XD", "XE", "XF", "XA30", "XC30", "XG", "超出櫃體安裝費", "超出櫃體運費", "裝運費", 
     "進場月份", "驗收月份", "是否申請產編貼紙", "運費PO單號", "尾款月份"
 ]
 locker_agg_columns = [
-    "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "DA", "XA", "XB", "XC", "XD", "XE", "XF", "XG", "XA30", "XC30",
+    "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "DA", "控制系統", "XA", "XB", "XC", "XD", "XE", "XF", "XA30", "XC30", "XG",
     "超出櫃體安裝費", "超出櫃體運費", "裝運費"
 ]
 locker_priority_order = [
-    "DA", "裝運費", "超出櫃體安裝費", "超出櫃體運費",
+    "DA", "控制系統", "裝運費", "超出櫃體安裝費", "超出櫃體運費",
     "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K",
-    "XA", "XB", "XC", "XD", "XE", "XF", "XG", "XA30", "XC30"]
+    "XA", "XB", "XC", "XD", "XE", "XF", "XA30", "XC30", "XG"]
 expanded_contract_wb = "1psPmhZGixonVo6iX4SLhA2V4HM38iPbYN4BeFNs7WSM"
 expanded_contract_range = "A:Q"
 expanded_contract_range1 = "A:Y"

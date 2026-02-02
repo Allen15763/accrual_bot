@@ -41,6 +41,7 @@ dependencies = [
     "xlsxwriter==3.2.5",
     "duckdb>=1.4.0",
     "loguru>=0.7.3",
+    "PyYAML>=6.0.0,"
 ]
 
 [project.optional-dependencies]

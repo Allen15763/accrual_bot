@@ -48,7 +48,7 @@ def create_pivot_summary(
 
 def load_and_process_data(
     file_path: str,
-    file_type: Literal['parquet', 'csv'],
+    file_type: Literal['parquet', 'xlsx', 'csv'],
     columns: List[str],
     column_indices: List[int],
     filter_condition: Optional[str] = None
@@ -60,7 +60,7 @@ def load_and_process_data(
     -----------
     file_path : str
         檔案路徑
-    file_type : Literal['parquet', 'csv']
+    file_type : Literal['parquet', 'xlsx', 'csv']
         檔案類型
     columns : List[str]
         要讀取的欄位清單 [產品代碼, 幣別, 金額]
@@ -77,6 +77,8 @@ def load_and_process_data(
     # 讀取檔案
     if file_type == 'parquet':
         df = pd.read_parquet(file_path)[columns]
+    elif file_type == 'xlsx':
+        df = pd.read_excel(file_path)[columns]
     else:  # csv
         df = pd.read_csv(file_path)[columns]
     
@@ -138,38 +140,38 @@ if __name__ == '__main__':
     # 配置所有資料來源
     data_config = {
         'raw_po': {
-            'file_path': r'C:\SEA\Accrual\prpo_bot\accrual_bot\checkpoints\SPX_PO_202512_after_Load_All_Data\data.parquet',
+            'file_path': r'C:\SEA\Accrual\prpo_bot\accrual_bot\checkpoints\SPX_PO_202601_after_SPXDataLoading\data.parquet',
             'file_type': 'parquet',
             'columns': COL_ORIGINAL,
             'column_indices': [0, 1, 3, 4],
         },
         'spx_po': {
-            'file_path': r'C:\SEA\Accrual\prpo_bot\accrual_bot\checkpoints\SPX_PO_202512_after_Reformat_Data\data.parquet',
+            'file_path': r'C:\SEA\Accrual\prpo_bot\accrual_bot\checkpoints\SPX_PO_202601_after_DataReformatting\data.parquet',
             'file_type': 'parquet',
             'columns': COL_STANDARDIZED,
             'column_indices': [0, 2],
         },
         'spt_po': {
-            'file_path': r'C:\SEA\Accrual\prpo_bot\accrual_bot\checkpoints\SPT_PO_202512_after_Export_Results\data.parquet',
+            'file_path': r'C:\SEA\Accrual\prpo_bot\accrual_bot\checkpoints\SPT_PO_202601_after_SPTPostProcessing\data.parquet',
             'file_type': 'parquet',
             'columns': COL_STANDARDIZED,
             'column_indices': [0, 1, 3, 4],
         },
         'raw_pr': {
-            'file_path': r'C:\SEA\Accrual\prpo_bot\resources\頂一下\202512\Original Data\202512_purchase_request_20260201_092128.csv',
+            'file_path': r'C:\SEA\Accrual\prpo_bot\resources\頂一下\202601\Original Data\202601_purchase_request_20260202_100413.csv',
             'file_type': 'csv',
             'columns': COL_ORIGINAL,
             'column_indices': [0, 1, 3, 4],
         },
         'spx_pr': {
-            'file_path': r'C:\SEA\Accrual\prpo_bot\resources\頂一下\202512\Original Data\202512_purchase_request_20260201_092128.csv',
+            'file_path': r'C:\SEA\Accrual\prpo_bot\resources\頂一下\202601\Original Data\202601_purchase_request_20260202_100413.csv',
             'file_type': 'csv',
             'columns': COL_ORIGINAL,
             'column_indices': [0, 2],
             'filter_condition': 'SPX',
         },
         'spt_pr': {
-            'file_path': r'C:\SEA\Accrual\prpo_bot\resources\頂一下\202512\Original Data\202512_purchase_request_20260201_092128.csv',
+            'file_path': r'C:\SEA\Accrual\prpo_bot\resources\頂一下\202601\Original Data\202601_purchase_request_20260202_100413.csv',
             'file_type': 'csv',
             'columns': COL_ORIGINAL,
             'column_indices': [0, 1, 3, 4],

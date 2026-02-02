@@ -34,7 +34,7 @@ procurement_po = { dtype = "str" }
 ap_invoice = {}
 previous_pr = { dtype = "str" }
 procurement_pr = { dtype = "str" }
-ops_validation = { sheet_name = "智取櫃驗收明細", header = 3, usecols = "A:AH", kiosk_sheet_name = "繳費機驗收明細", kiosk_usecols = "A:G" }
+ops_validation = { sheet_name = "智取櫃驗收明細(分DA)", header = 3, usecols = "A:AI", kiosk_sheet_name = "繳費機驗收明細", kiosk_usecols = "A:G" }
 
 
 # =============================================================================
