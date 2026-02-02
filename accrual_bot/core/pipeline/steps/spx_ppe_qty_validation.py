@@ -268,7 +268,7 @@ class AccountingOPSValidationStep(PipelineStep):
         def convert_type(df):
             df_copy = df.copy()
             col = ['PO單號', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 
-                   'DA', 'XA', 'XB', 'XC', 'XD', 'XE', 'XF', 'XG', 'XA30', 'XC30', 
+                   'DA', '控制系統', 'XA', 'XB', 'XC', 'XD', 'XE', 'XF', 'XA30', 'XC30', 'XG', 
                    '超出櫃體安裝費', '超出櫃體運費', '裝運費']
             df_copy = (df_copy[col]
                        .set_index('PO單號')

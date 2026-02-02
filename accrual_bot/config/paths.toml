@@ -34,7 +34,7 @@ procurement_po = { dtype = "str" }
 ap_invoice = {}
 previous_pr = { dtype = "str" }
 procurement_pr = { dtype = "str" }
-ops_validation = { sheet_name = "智取櫃驗收明細", header = 3, usecols = "A:AH", kiosk_sheet_name = "繳費機驗收明細", kiosk_usecols = "A:G" }
+ops_validation = { sheet_name = "智取櫃驗收明細(分DA)", header = 3, usecols = "A:AI", kiosk_sheet_name = "繳費機驗收明細", kiosk_usecols = "A:G" }
 
 
 # =============================================================================
@@ -105,6 +105,22 @@ procurement_pr = { dtype = "str" }
 media_finished = { dtype = "str", sheet_name = "2024-2025使用完畢" }
 media_left = { dtype = "str", sheet_name = "2024-25新聞剩餘量" }
 media_summary = { dtype = "str", sheet_name = "2024-2025新聞總表(已用記錄)" }
+
+
+# =============================================================================
+# SPT PROCUREMENT 路徑配置
+# =============================================================================
+[spt.procurement]
+raw_po = "{resources}/{YYYYMM}/Original Data/{YYYYMM}_purchase_order_*.csv"
+raw_pr = "{resources}/{YYYYMM}/Original Data/{YYYYMM}_purchase_request_*.csv"
+procurement_previous_pr = "{resources}/{YYYYMM}/採購底稿/未結PO {PREV_YYYYMM} SPTTW.xlsx"
+procurement_previous_po = "{resources}/{YYYYMM}/採購底稿/未結PO {PREV_YYYYMM} SPTTW.xlsx"
+
+[spt.procurement.params]
+raw_po = { encoding = "utf-8", sep = ",", dtype = "str", keep_default_na = false, na_values = [""] }
+raw_pr = { encoding = "utf-8", sep = ",", dtype = "str", keep_default_na = false, na_values = [""] }
+procurement_previous_pr = { dtype = "str", sheet_name = "PR"}
+procurement_previous_po = { dtype = "str", sheet_name = "PO"}
 
 
 # =============================================================================

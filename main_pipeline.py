@@ -108,6 +108,18 @@ async def main() -> Dict[str, Any]:
             logger.info("使用 PPE pipeline")
         else:
             raise ValueError(f"{config.entity} 不支援 PPE 處理類型")
+    elif config.processing_type == "PROCUREMENT":
+        # PROCUREMENT 處理 (僅限 SPT)
+        if config.entity != "SPT":
+            raise ValueError(f"{config.entity} 不支援 PROCUREMENT 處理類型")
+        if not config.source_type:
+            raise ValueError("PROCUREMENT 處理類型需要設定 source_type (PO/PR/COMBINED)")
+
+        pipeline = orchestrator.build_procurement_pipeline(
+            file_paths=file_paths,
+            source_type=config.source_type
+        )
+        logger.info(f"使用 PROCUREMENT pipeline, source_type={config.source_type}")
     else:
         raise ValueError(f"不支援的處理類型: {config.processing_type}")
 
@@ -124,6 +136,10 @@ async def main() -> Dict[str, Any]:
 
     # 將 file_paths 儲存到 context 中，供步驟存取參數
     context.set_variable('file_paths', file_paths)
+
+    # PROCUREMENT 專用: 儲存 source_type 供 resume 使用
+    if config.processing_type == "PROCUREMENT":
+        context.set_variable('source_type', config.source_type)
 
     # 6. 執行 Pipeline
     if config.step_by_step:
@@ -190,7 +206,7 @@ async def resume_from_checkpoint(
         checkpoint_name: checkpoint 名稱 (例如: "SPX_PO_202512_after_Load_All_Data")
         from_step: 從哪個步驟開始 (例如: "Add_Columns")
         entity: 業務實體 (SPX/SPT/MOB)
-        processing_type: 處理類型 (PO/PR/PPE)
+        processing_type: 處理類型 (PO/PR/PPE/PROCUREMENT)
         processing_date: 處理日期 (YYYYMM)
         save_checkpoints: 是否儲存 checkpoint
 
@@ -210,6 +226,9 @@ async def resume_from_checkpoint(
         or
 
         result = asyncio.run(resume_from_checkpoint(...))
+
+    Note:
+        PROCUREMENT 類型會從 checkpoint 的 context 中讀取 source_type
     """
     from accrual_bot.core.pipeline.checkpoint import CheckpointManager, PipelineWithCheckpoint
 
@@ -239,6 +258,13 @@ async def resume_from_checkpoint(
             pipeline = orchestrator.build_ppe_pipeline(file_paths, processing_date)
         else:
             raise ValueError(f"{entity} 不支援 PPE 處理類型")
+    elif processing_type == 'PROCUREMENT':
+        # 從 context 取得 source_type (由 main() 儲存)
+        source_type = context.get_variable('source_type') or 'PO'
+        if hasattr(orchestrator, 'build_procurement_pipeline'):
+            pipeline = orchestrator.build_procurement_pipeline(file_paths, source_type)
+        else:
+            raise ValueError(f"{entity} 不支援 PROCUREMENT 處理類型")
     else:
         raise ValueError(f"不支援的處理類型: {processing_type}")
 
@@ -333,7 +359,6 @@ async def run_spt_pr_full_pipeline() -> Dict[str, Any]:
     result["context"] = context
     return result
 
-
 # =============================================================================
 # 入口點
 # =============================================================================
@@ -341,10 +366,8 @@ async def run_spt_pr_full_pipeline() -> Dict[str, Any]:
 if __name__ == "__main__":
     warnings.filterwarnings("ignore")
 
-    # 執行 main 函數
+    # 執行 main 函數 (根據 run_config.toml 配置)
     result = asyncio.run(main())
 
     # 設定退出碼
     sys.exit(0 if result.get("success", False) else 1)
-
-    print(1)

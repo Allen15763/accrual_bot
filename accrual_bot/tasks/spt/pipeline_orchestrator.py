@@ -19,6 +19,17 @@ from accrual_bot.tasks.spt.steps import (
     SPTAccountPredictionStep,
     CommissionDataUpdateStep,
     PayrollDetectionStep,
+    # Procurement steps
+    SPTProcurementDataLoadingStep,
+    SPTProcurementPRDataLoadingStep,
+    ProcurementPreviousMappingStep,
+    SPTProcurementStatusEvaluationStep,
+    ColumnInitializationStep,
+    ProcurementPreviousValidationStep,
+    # COMBINED Procurement steps
+    CombinedProcurementDataLoadingStep,
+    CombinedProcurementProcessingStep,
+    CombinedProcurementExportStep,
 )
 
 from accrual_bot.tasks.spx.steps import (
@@ -44,8 +55,9 @@ class SPTPipelineOrchestrator:
 
     功能:
     1. 根據配置動態創建 pipeline
-    2. 支援 PO/PR 兩種處理類型
+    2. 支援 PO/PR/PROCUREMENT 三種處理類型
     3. 可選擇啟用/禁用特定步驟
+    4. PROCUREMENT 類型支援 PO、PR 單獨處理或合併處理
     """
 
     def __init__(self):
@@ -154,11 +166,162 @@ class SPTPipelineOrchestrator:
 
         return pipeline
 
+    def _normalize_procurement_paths(
+        self,
+        file_paths: Dict[str, Any],
+        source_type: str
+    ) -> Dict[str, Any]:
+        """
+        根據 source_type 正規化採購檔案路徑
+
+        將 procurement_previous_po/pr 統一為 procurement_previous，
+        並移除不需要的原始資料檔案路徑
+
+        Args:
+            file_paths: 原始檔案路徑配置 (從 paths.toml 載入)
+            source_type: 處理類型 ('PO', 'PR', 'COMBINED')
+
+        Returns:
+            Dict[str, Any]: 正規化後的檔案路徑
+        """
+        paths = file_paths.copy()
+
+        if source_type == 'PO':
+            # 移除 PR 相關路徑
+            paths.pop('raw_pr', None)
+            paths.pop('procurement_previous_pr', None)
+            # 重命名 procurement_previous_po -> procurement_previous
+            if 'procurement_previous_po' in paths:
+                paths['procurement_previous'] = paths.pop('procurement_previous_po')
+
+        elif source_type == 'PR':
+            # 移除 PO 相關路徑
+            paths.pop('raw_po', None)
+            paths.pop('procurement_previous_po', None)
+            # 重命名 procurement_previous_pr -> procurement_previous
+            if 'procurement_previous_pr' in paths:
+                paths['procurement_previous'] = paths.pop('procurement_previous_pr')
+
+        # COMBINED: 保留所有路徑，不做處理
+
+        return paths
+
+    def build_procurement_pipeline(
+        self,
+        file_paths: Dict[str, Any],
+        source_type: str = 'PO',
+        custom_steps: Optional[List[PipelineStep]] = None
+    ) -> Pipeline:
+        """
+        構建 SPT 採購處理 pipeline
+
+        Args:
+            file_paths: 檔案路徑配置 (從 paths.toml 載入，會自動正規化)
+            source_type: 處理類型
+                - 'PO': 僅處理 PO
+                - 'PR': 僅處理 PR
+                - 'COMBINED': 同時處理 PO 和 PR
+            custom_steps: 自定義步驟（可選）
+
+        Returns:
+            Pipeline: 配置好的 pipeline
+        """
+        # 正規化檔案路徑
+        normalized_paths = self._normalize_procurement_paths(file_paths, source_type)
+
+        pipeline_config = PipelineConfig(
+            name=f"SPT_PROCUREMENT_{source_type}_Processing",
+            description=f"SPT Procurement {source_type} processing pipeline",
+            entity_type=self.entity_type,
+            stop_on_error=True
+        )
+
+        pipeline = Pipeline(pipeline_config)
+
+        if source_type == 'COMBINED':
+            # COMBINED 模式: 同時處理 PO 和 PR
+            enabled_steps = self.config.get('enabled_procurement_combined_steps', [])
+
+            if not enabled_steps:
+                # 默認步驟順序
+                enabled_steps = [
+                    "CombinedProcurementDataLoading",
+                    "ProcurementPreviousValidation",
+                    "CombinedProcurementProcessing",
+                    "CombinedProcurementExport",
+                ]
+
+            # 動態添加步驟
+            for step_name in enabled_steps:
+                step = self._create_step(
+                    step_name,
+                    normalized_paths,
+                    processing_type='PROCUREMENT',
+                    source_type='COMBINED'
+                )
+                if step:
+                    pipeline.add_step(step)
+
+            # 添加自定義步驟
+            if custom_steps:
+                for step in custom_steps:
+                    pipeline.add_step(step)
+
+            return pipeline
+
+        # 單一類型處理 (PO 或 PR)
+        if source_type == 'PO':
+            enabled_steps = self.config.get('enabled_procurement_po_steps', [])
+        elif source_type == 'PR':
+            enabled_steps = self.config.get('enabled_procurement_pr_steps', [])
+        else:
+            raise ValueError(f"Invalid source_type: {source_type}. Must be 'PO', 'PR', or 'COMBINED'")
+
+        if not enabled_steps:
+            # 默認步驟順序
+            if source_type == 'PO':
+                enabled_steps = [
+                    "SPTProcurementDataLoading",
+                    "ColumnInitialization",
+                    "ProcurementPreviousMapping",
+                    "DateLogic",
+                    "SPTProcurementStatusEvaluation",
+                    "SPTProcurementExport",
+                ]
+            else:  # PR
+                enabled_steps = [
+                    "SPTProcurementPRDataLoading",
+                    "ColumnInitialization",
+                    "ProcurementPreviousMapping",
+                    "DateLogic",
+                    "SPTProcurementStatusEvaluation",
+                    "SPTProcurementExport",
+                ]
+
+        # 動態添加步驟
+        for step_name in enabled_steps:
+            step = self._create_step(
+                step_name,
+                normalized_paths,
+                processing_type='PROCUREMENT',
+                source_type=source_type
+            )
+            if step:
+                pipeline.add_step(step)
+
+        # 添加自定義步驟
+        if custom_steps:
+            for step in custom_steps:
+                pipeline.add_step(step)
+
+        return pipeline
+
     def _create_step(
         self,
         step_name: str,
         file_paths: Dict[str, Any],
-        processing_type: str = 'PO'
+        processing_type: str = 'PO',
+        source_type: str = None
     ) -> Optional[PipelineStep]:
         """
         根據步驟名稱創建步驟實例
@@ -253,6 +416,55 @@ class SPTPipelineOrchestrator:
                 required=True,
                 retry_count=0
             ),
+
+            # PROCUREMENT 步驟
+            'SPTProcurementDataLoading': lambda: SPTProcurementDataLoadingStep(
+                name="SPTProcurementDataLoading",
+                file_paths=file_paths
+            ),
+            'SPTProcurementPRDataLoading': lambda: SPTProcurementPRDataLoadingStep(
+                name="SPTProcurementPRDataLoading",
+                file_paths=file_paths
+            ),
+            'ColumnInitialization': lambda: ColumnInitializationStep(
+                name="ColumnInitialization",
+                status_column="PR狀態" if source_type == 'PR' else "PO狀態"
+            ),
+            'ProcurementPreviousMapping': lambda: ProcurementPreviousMappingStep(
+                name="ProcurementPreviousMapping"
+            ),
+            'SPTProcurementStatusEvaluation': lambda: SPTProcurementStatusEvaluationStep(
+                name="SPTProcurementStatusEvaluation",
+                status_column="PR狀態" if source_type == 'PR' else "PO狀態"
+            ),
+            'SPTProcurementExport': lambda: SPXPRExportStep(
+                name="SPTProcurementExport",
+                output_dir="output",
+                sheet_name=source_type if source_type else "PO",
+                include_index=False,
+                required=True,
+                retry_count=0
+            ),
+
+            # COMBINED PROCUREMENT 步驟
+            'CombinedProcurementDataLoading': lambda: CombinedProcurementDataLoadingStep(
+                name="CombinedProcurementDataLoading",
+                file_paths=file_paths
+            ),
+            'ProcurementPreviousValidation': lambda: ProcurementPreviousValidationStep(
+                name="ProcurementPreviousValidation",
+                strict_mode=False  # 寬鬆模式，驗證失敗不中斷 pipeline
+            ),
+            'CombinedProcurementProcessing': lambda: CombinedProcurementProcessingStep(
+                name="CombinedProcurementProcessing"
+            ),
+            'CombinedProcurementExport': lambda: CombinedProcurementExportStep(
+                name="CombinedProcurementExport",
+                output_dir="output",
+                filename_template="{YYYYMM}_PROCUREMENT_COMBINED.xlsx",
+                include_index=False,
+                retry_count=3
+            ),
         }
 
         step_factory = step_registry.get(step_name)
@@ -263,17 +475,32 @@ class SPTPipelineOrchestrator:
             print(f"Warning: Unknown step '{step_name}' for SPT {processing_type} pipeline")
             return None
 
-    def get_enabled_steps(self, processing_type: str = 'PO') -> List[str]:
+    def get_enabled_steps(
+        self,
+        processing_type: str = 'PO',
+        source_type: Optional[str] = None
+    ) -> List[str]:
         """
         獲取啟用的步驟列表
 
         Args:
-            processing_type: 處理類型 (PO/PR)
+            processing_type: 處理類型 (PO/PR/PROCUREMENT)
+            source_type: 子類型 (僅 PROCUREMENT 使用: PO/PR/COMBINED)
 
         Returns:
             List[str]: 步驟名稱列表
         """
         if processing_type == 'PO':
             return self.config.get('enabled_po_steps', [])
-        else:
+        elif processing_type == 'PR':
             return self.config.get('enabled_pr_steps', [])
+        elif processing_type == 'PROCUREMENT':
+            if source_type == 'PR':
+                return self.config.get('enabled_procurement_pr_steps', [])
+            elif source_type == 'COMBINED':
+                return self.config.get('enabled_procurement_combined_steps', [])
+            else:
+                # 預設或 source_type == 'PO'
+                return self.config.get('enabled_procurement_po_steps', [])
+        else:
+            return []

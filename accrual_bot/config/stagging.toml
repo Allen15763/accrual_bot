@@ -52,6 +52,28 @@ enabled_pr_steps = [
     "SPTPostProcessing",
     "SPTExport",
 ]
+enabled_procurement_po_steps = [
+    "SPTProcurementDataLoading",
+    "ColumnInitialization",
+    "ProcurementPreviousMapping",
+    "DateLogic",
+    "SPTProcurementStatusEvaluation",
+    "SPTProcurementExport",
+]
+enabled_procurement_pr_steps = [
+    "SPTProcurementPRDataLoading",
+    "ColumnInitialization",
+    "ProcurementPreviousMapping",
+    "DateLogic",
+    "SPTProcurementStatusEvaluation",
+    "SPTProcurementExport",
+]
+enabled_procurement_combined_steps = [
+    "CombinedProcurementDataLoading",
+    "ProcurementPreviousValidation",
+    "CombinedProcurementProcessing",
+    "CombinedProcurementExport",
+]
 
 [pipeline.spx]
 enabled_po_steps = [
@@ -200,7 +222,7 @@ hris_bug = { keywords = '(?i)卡單', field = 'Remarked by 上月 FN', status = 
 [spt_status_label_rules.erm_conditions]
 
 jianqiang_non_mkt = { dept_exclude = '(?i)Marketing', supplier = 'TW_漸強賴伯股份有限公司', remark = 'Cindy-漸強', note = 'Department不包含Marketing且Supplier為漸強' }
-jianqiang_mkt = { dept_include = '(?i)Marketing', supplier = 'TW_漸強賴伯股份有限公司', remark = '漸強MKT', note = 'Department包含Marketing且Supplier為漸強' }
+jianqiang_mkt = { dept_include = '(?i)S01|S02|G07', supplier = 'TW_漸強賴伯股份有限公司', remark = '漸強MKT', note = 'Department包含S01、S02、G07且Supplier為漸強' }
 
 
 # ============================================================================
@@ -404,17 +426,17 @@ locker_suppliers = [
 ]
 locker_columns = [
     "discount", "PO單號", "廠商", "門市", "地址", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K",
-    "DA", "XA", "XB", "XC", "XD", "XE", "XF", "XG", "XA30", "XC30", "超出櫃體安裝費", "超出櫃體運費", "裝運費", 
+    "DA", "控制系統", "XA", "XB", "XC", "XD", "XE", "XF", "XA30", "XC30", "XG", "超出櫃體安裝費", "超出櫃體運費", "裝運費", 
     "進場月份", "驗收月份", "是否申請產編貼紙", "運費PO單號", "尾款月份"
 ]
 locker_agg_columns = [
-    "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "DA", "XA", "XB", "XC", "XD", "XE", "XF", "XG", "XA30", "XC30",
+    "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "DA", "控制系統", "XA", "XB", "XC", "XD", "XE", "XF", "XA30", "XC30", "XG",
     "超出櫃體安裝費", "超出櫃體運費", "裝運費"
 ]
 locker_priority_order = [
-    "DA", "裝運費", "超出櫃體安裝費", "超出櫃體運費",
+    "DA", "控制系統", "裝運費", "超出櫃體安裝費", "超出櫃體運費",
     "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K",
-    "XA", "XB", "XC", "XD", "XE", "XF", "XG", "XA30", "XC30"]
+    "XA", "XB", "XC", "XD", "XE", "XF", "XA30", "XC30", "XG"]
 expanded_contract_wb = "1psPmhZGixonVo6iX4SLhA2V4HM38iPbYN4BeFNs7WSM"
 expanded_contract_range = "A:Q"
 expanded_contract_range1 = "A:Y"
@@ -595,3 +617,201 @@ enabled_entities = ["SPT"]
 source = "current_month_reviewed_by"
 targets = ["previous_month_reviewed_by", "current_month_reviewed_by"]
 description = "從前期底稿取回 Reviewer 資訊"
+
+
+# =============================================================================
+# 採購前期底稿映射配置 (參考 previous_workpaper_integration 模式)
+# =============================================================================
+[spt_procurement_previous_mapping]
+# 欄位名稱正則模式
+[spt_procurement_previous_mapping.column_patterns]
+po_line = '(?i)^(po[_\s]?line)$'
+pr_line = '(?i)^(pr[_\s]?line)$'
+remarked_by_procurement = '(?i)^(remarked?[_\s]?by[_\s]?(procurement|pq))$'
+
+# PO 映射配置
+[[spt_procurement_previous_mapping.po_mappings.fields]]
+source = "remarked_by_procurement"
+target = "prev_remarked_procurement"
+fill_na = true
+description = "前期採購備註"
+
+# PR 映射配置
+[[spt_procurement_previous_mapping.pr_mappings.fields]]
+source = "remarked_by_procurement"
+target = "prev_remarked_procurement"
+fill_na = true
+description = "前期採購備註"
+
+
+# =============================================================================
+# 採購狀態判斷規則 - 完全配置驅動
+# =============================================================================
+# 條件類型說明:
+#   - contains: 欄位包含指定模式 (正則)
+#   - equals: 欄位等於指定值
+#   - not_equals: 欄位不等於指定值
+#   - erm_in_range: ERM 在 Item Description 日期範圍內
+#   - erm_le_closing: ERM ≤ 結帳月
+#   - erm_gt_closing: ERM > 結帳月
+#
+# combine 說明:
+#   - and: 所有條件皆需滿足
+#   - or: 任一條件滿足即可
+# =============================================================================
+
+[[spt_procurement_status_rules.conditions]]
+priority = 1
+status_value = "需求取消"
+note = "前期備註為需求取消|close|關單"
+[[spt_procurement_status_rules.conditions.checks]]
+field = "prev_remarked_procurement"
+type = "contains"
+pattern = "(?i)需求取消|close|關單"
+
+[[spt_procurement_status_rules.conditions]]
+priority = 2
+status_value = "前期已完成"
+note = "前期採購備註為已完成"
+[[spt_procurement_status_rules.conditions.checks]]
+field = "prev_remarked_procurement"
+type = "equals"
+value = "已完成"
+
+[[spt_procurement_status_rules.conditions]]
+priority = 3
+status_value = "Affiliate"
+note = "Item Description 包含 Affiliate 或 分潤"
+[[spt_procurement_status_rules.conditions.checks]]
+field = "Item Description"
+type = "contains"
+pattern = "(?i)affiliate|分潤"
+
+[[spt_procurement_status_rules.conditions]]
+priority = 4
+status_value = "勞報"
+note = "Item Description 包含 AMS commission、Shopee commission、LiveStream and KOL"
+[[spt_procurement_status_rules.conditions.checks]]
+field = "Item Description"
+type = "contains"
+pattern = "(?i)AMS\\s+commission|Shopee\\s+commission|(?=.*livestream)(?=.*kol)"
+
+[[spt_procurement_status_rules.conditions]]
+priority = 5
+status_value = "FN Payroll"
+note = "Item Description 包含 Employee Bonus"
+[[spt_procurement_status_rules.conditions.checks]]
+field = "Item Description"
+type = "contains"
+pattern = "(?i)employee\\s*bonus"
+
+[[spt_procurement_status_rules.conditions]]
+priority = 6
+status_value = "FN Payroll"
+note = "Supplier是勤業眾信"
+[[spt_procurement_status_rules.conditions.checks]]
+field = "Supplier"
+type = "contains"
+pattern = "勤業眾信"
+
+[[spt_procurement_status_rules.conditions]]
+priority = 7
+status_value = "Svp Rental"
+note = "Item Description 同時包含 SVP 和 租金/rent"
+combine = "and"
+[[spt_procurement_status_rules.conditions.checks]]
+field = "Item Description"
+type = "contains"
+pattern = "(?i)svp"
+[[spt_procurement_status_rules.conditions.checks]]
+field = "Item Description"
+type = "contains"
+pattern = "(?i)租金|rent"
+
+[[spt_procurement_status_rules.conditions]]
+priority = 8
+status_value = "Svp Rental"
+note = "Item Description 包含 ^Leased^ 的特殊格式摘要 且Supplier非聯合大於大樓|臺北文創大樓|高力國際公寓大廈"
+combine = "and"
+[[spt_procurement_status_rules.conditions.checks]]
+field = "Item Description"
+type = "contains"
+pattern = "(?i)\\^Leased\\^S\\d{1}-kwh\\^|(?=.*leased)(?=.*kwh)"
+[[spt_procurement_status_rules.conditions.checks]]
+field = "Supplier"
+type = "not_contains"
+pattern = "聯合大於大樓|臺北文創大樓|高力國際公寓大廈"
+
+[[spt_procurement_status_rules.conditions]]
+priority = 9
+status_value = "已完成"
+note = "前期非已完成，且 ERM 在範圍內且 ≤ 結帳月"
+combine = "and"
+[[spt_procurement_status_rules.conditions.checks]]
+field = "prev_remarked_procurement"
+type = "not_equals"
+value = "已完成"
+[[spt_procurement_status_rules.conditions.checks]]
+type = "erm_in_range"
+[[spt_procurement_status_rules.conditions.checks]]
+type = "erm_le_closing"
+[[spt_procurement_status_rules.conditions.checks]]
+field = "YMs of Item Description"
+type = "not_equals"
+value = "100001,100002"
+
+[[spt_procurement_status_rules.conditions]]
+priority = 10
+status_value = "已完成"
+note = "前期非已完成，且 ERM ≤ 結帳月"
+combine = "and"
+[[spt_procurement_status_rules.conditions.checks]]
+field = "prev_remarked_procurement"
+type = "not_equals"
+value = "已完成"
+[[spt_procurement_status_rules.conditions.checks]]
+type = "erm_le_closing"
+[[spt_procurement_status_rules.conditions.checks]]
+field = "YMs of Item Description"
+type = "not_equals"
+value = "100001,100002"
+
+[[spt_procurement_status_rules.conditions]]
+priority = 11
+status_value = "未完成"
+note = "ERM 在範圍內且 > 結帳月"
+combine = "and"
+[[spt_procurement_status_rules.conditions.checks]]
+type = "erm_in_range"
+[[spt_procurement_status_rules.conditions.checks]]
+type = "erm_gt_closing"
+[[spt_procurement_status_rules.conditions.checks]]
+field = "YMs of Item Description"
+type = "not_equals"
+value = "100001,100002"
+
+[[spt_procurement_status_rules.conditions]]
+priority = 12
+status_value = "未完成"
+note = "ERM > 結帳月"
+combine = "and"
+[[spt_procurement_status_rules.conditions.checks]]
+type = "erm_gt_closing"
+[[spt_procurement_status_rules.conditions.checks]]
+field = "YMs of Item Description"
+type = "not_equals"
+value = "100001,100002"
+
+[[spt_procurement_status_rules.conditions]]
+priority = 13
+status_value = "格式錯誤"
+note = "非標準格式，解析摘要區間失敗"
+combine = "and"
+[[spt_procurement_status_rules.conditions.checks]]
+field = "YMs of Item Description"
+type = "equals"
+value = "100001,100002"
+[[spt_procurement_status_rules.conditions.checks]]
+field = "prev_remarked_procurement"
+type = "not_equals"
+value = "已完成"

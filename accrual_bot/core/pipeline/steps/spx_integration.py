@@ -1021,6 +1021,7 @@ class ValidationDataProcessingStep(PipelineStep):
             'J': r'locker\s*J(?![A-Za-z0-9])',
             'K': r'locker\s*K(?![A-Za-z0-9])',
             'DA': r'locker\s*控制主[櫃|機]',
+            '控制系統': r'locker\s*控制系統',
             'XA': r'locker\s*XA(?![A-Za-z0-9])',
             'XB': r'locker\s*XB(?![A-Za-z0-9])',
             'XC': r'locker\s*XC(?![A-Za-z0-9])',

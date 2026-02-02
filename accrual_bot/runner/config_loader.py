@@ -25,6 +25,9 @@ class RunConfig:
     processing_type: str
     processing_date: int
 
+    # Procurement 專用設定
+    source_type: str = ""  # 'PO', 'PR', 'COMBINED' (僅 PROCUREMENT 使用)
+
     # Debug 設定
     step_by_step: bool = False
     save_checkpoints: bool = True
@@ -73,6 +76,8 @@ def load_run_config(config_path: Optional[Path] = None) -> RunConfig:
         entity=run.get("entity", "SPX"),
         processing_type=run.get("processing_type", "PO"),
         processing_date=run.get("processing_date", 202512),
+        # Procurement 專用設定
+        source_type=run.get("source_type", ""),
         # Debug 設定
         step_by_step=debug.get("step_by_step", False),
         save_checkpoints=debug.get("save_checkpoints", True),

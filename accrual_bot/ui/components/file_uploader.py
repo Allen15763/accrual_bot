@@ -28,9 +28,17 @@ def render_file_uploader(entity: str, proc_type: str, file_handler: FileHandler)
 
     st.subheader("📁 檔案上傳")
 
-    key = (entity, proc_type)
-    required_files = REQUIRED_FILES.get(key, [])
-    optional_files = OPTIONAL_FILES.get(key, [])
+    # 獲取 source_type (僅 PROCUREMENT 使用)
+    source_type = ""
+    if proc_type == 'PROCUREMENT':
+        source_type = st.session_state.pipeline_config.procurement_source_type
+        if not source_type:
+            st.warning("⚠️ 請先在配置頁選擇處理來源類型 (PO / PR)")
+            return {}
+
+    # 使用 helper 函數獲取檔案需求
+    from accrual_bot.ui.config import get_file_requirements
+    required_files, optional_files = get_file_requirements(entity, proc_type, source_type)
 
     if not required_files:
         st.warning("此組合沒有定義檔案需求")

@@ -18,6 +18,19 @@ from accrual_bot.core.pipeline.steps.spt_evaluation_affiliate import CommissionD
 from accrual_bot.core.pipeline.steps.spt_evaluation_accountant import SPTStatusLabelStep
 from accrual_bot.core.pipeline.steps.spt_account_prediction import AccountPredictionConditions, SPTAccountPredictionStep
 
+# SPT Procurement steps (from tasks/spt/steps/)
+from .spt_procurement_loading import (
+    SPTProcurementDataLoadingStep,
+    SPTProcurementPRDataLoadingStep,
+)
+from .spt_procurement_mapping import ProcurementPreviousMappingStep
+from .spt_procurement_evaluation import SPTProcurementStatusEvaluationStep
+from .spt_column_initialization import ColumnInitializationStep
+from .spt_procurement_validation import ProcurementPreviousValidationStep
+from .spt_combined_procurement_loading import CombinedProcurementDataLoadingStep
+from .spt_combined_procurement_processing import CombinedProcurementProcessingStep
+from .spt_combined_procurement_export import CombinedProcurementExportStep
+
 __all__ = [
     'SPTDataLoadingStep',
     'SPTPRDataLoadingStep',
@@ -32,4 +45,15 @@ __all__ = [
     'SPTStatusLabelStep',
     'AccountPredictionConditions',
     'SPTAccountPredictionStep',
+    # Procurement steps
+    'SPTProcurementDataLoadingStep',
+    'SPTProcurementPRDataLoadingStep',
+    'ProcurementPreviousMappingStep',
+    'SPTProcurementStatusEvaluationStep',
+    'ColumnInitializationStep',
+    'ProcurementPreviousValidationStep',
+    # COMBINED Procurement steps
+    'CombinedProcurementDataLoadingStep',
+    'CombinedProcurementProcessingStep',
+    'CombinedProcurementExportStep',
 ]

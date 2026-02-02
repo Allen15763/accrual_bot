@@ -199,7 +199,7 @@ def _get_default_amount_columns() -> List[str]:
     """取得預設的金額欄位列表"""
     return [
         'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
-        'I', 'J', 'K', 'DA', 'XA', 'XB', 'XC', 'XD', 'XE', 'XF', 'XG', "XA30", "XC30",
+        'I', 'J', 'K', 'DA', 'XA', 'XB', 'XC', 'XD', 'XE', 'XF', "XA30", "XC30", 'XG',
         '超出櫃體安裝費', '超出櫃體運費', '裝運費'
     ]
 

@@ -60,7 +60,7 @@ st.subheader("📈 執行統計")
 col1, col2, col3, col4 = st.columns(4)
 
 with col1:
-    st.metric("處理平台", config.entity)
+    st.metric("處理實體", config.entity)
 
 with col2:
     st.metric("處理類型", config.processing_type)
