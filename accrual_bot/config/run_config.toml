@@ -5,7 +5,7 @@
 
 [run]
 # 業務實體類型: SPX, SPT, MOB
-entity = "SPT"
+entity = "SPX"
 
 # 處理類型: PO, PR, PPE, PROCUREMENT
 processing_type = "PO"

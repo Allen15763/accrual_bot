@@ -1008,7 +1008,9 @@ class ValidationDataProcessingStep(PipelineStep):
         
         # 定義櫃體種類的正則表達式模式
         patterns = {
-            # A~K類櫃體，後面非英文字母數字組合，但允許中文字符
+            # A~K類櫃體，後面非英文字母數字組合，但允許中文字符； whatever + locker ${type} + nonEng/digit
+            #  e.g. 2025/12 SVP_SPX 門市智取櫃工程SPX locker XA 第二期款項 #SP-C-Leasehold； 後面是空白非英數->caught
+            #       2025/12 SVP_SPX 門市智取櫃工程SPX locker XA第一期款項 #SP-C-Leasehold； 後面是中文非英數->caught
             'A': r'locker\s*A(?![A-Za-z0-9])',
             'B': r'locker\s*B(?![A-Za-z0-9])',
             'C': r'locker\s*C(?![A-Za-z0-9])',
