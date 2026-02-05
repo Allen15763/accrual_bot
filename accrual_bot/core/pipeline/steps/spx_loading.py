@@ -545,7 +545,7 @@ class PPEDataLoadingStep(PipelineStep):
         
         try:
             # 從 context 或參數獲取檔案路徑
-            file_url = (self.contract_filing_list_url or 
+            file_url = (self.contract_filing_list_url.get('path') or 
                         context.get_variable('contract_filing_list_url'))
             
             if not file_url:
