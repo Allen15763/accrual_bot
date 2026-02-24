@@ -23,7 +23,7 @@ source_type = "PO"
 step_by_step = false
 
 # 儲存 checkpoint
-save_checkpoints = false
+save_checkpoints = true
 
 # 顯示詳細日誌
 verbose = false
@@ -31,7 +31,7 @@ verbose = false
 
 [resume]
 # 是否從 checkpoint 恢復執行
-enabled = true
+enabled = false
 
 # checkpoint 名稱 (例如: "SPX_PO_202512_after_Load_All_Data、SPX_PO_202512_after_SPXDataLoading")
 checkpoint_name = "SPX_PO_202601_after_SPXDataLoading"

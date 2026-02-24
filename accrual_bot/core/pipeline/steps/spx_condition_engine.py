@@ -120,7 +120,13 @@ class SPXConditionEngine:
                 continue
 
             # 限縮：僅命中「尚無狀態」的列
-            mask = mask & no_status
+            # 若規則宣告 override_statuses，則額外納入擁有這些狀態的列
+            override_statuses = rule.get('override_statuses', [])
+            if override_statuses:
+                overridable = df[status_column].isin(override_statuses)
+                mask = mask & (no_status | overridable)
+            else:
+                mask = mask & no_status
 
             count = mask.sum()
             rule_key = f"priority_{priority}_{status_value}"

@@ -972,12 +972,14 @@ list_key = "spx.ops_for_rent"
 type = "desc_erm_not_error"
 
 # --- 條件 10: 租金已入帳 ---
+# override_statuses: 允許覆蓋條件8/9產生的租金狀態
 [[spx_status_stage1_rules.conditions]]
 priority = 10
 status_value = "已入帳"
 apply_to = ["PO"]
 note = "狀態為已完成_租金且GL DATE非空(已入帳)"
 combine = "and"
+override_statuses = ["已完成_租金(ERM<=當月租金)", "已完成_租金(摘要月<=當月租金)"]
 [[spx_status_stage1_rules.conditions.checks]]
 field = "PO狀態"
 type = "contains"
