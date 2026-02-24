@@ -23,7 +23,7 @@ source_type = "PO"
 step_by_step = false
 
 # 儲存 checkpoint
-save_checkpoints = true
+save_checkpoints = false
 
 # 顯示詳細日誌
 verbose = false
@@ -31,10 +31,10 @@ verbose = false
 
 [resume]
 # 是否從 checkpoint 恢復執行
-enabled = false
+enabled = true
 
 # checkpoint 名稱 (例如: "SPX_PO_202512_after_Load_All_Data、SPX_PO_202512_after_SPXDataLoading")
-checkpoint_name = "SPT_PO_202512_after_Load_All_Data"
+checkpoint_name = "SPX_PO_202601_after_SPXDataLoading"
 
 # 從哪個步驟開始 (例如: "ProductFilter")
 # Orchestrator定義的step name

@@ -246,10 +246,11 @@ class ColumnAdditionStep(PipelineStep):
         if 'GL#' not in df.columns:
             return pd.Series('N', index=df.index)
         
-        return np.where(
-            (df['GL#'].astype('string') == '650003') | (df['GL#'].astype('string') == '450014'), 
-            "Y", "N"
-        )
+        sm_accounts = config_manager._config_toml.get(
+            'spx_column_defaults', {}
+        ).get('sm_accounts', ['650003', '450014'])
+        sm_mask = df['GL#'].astype('string').isin([str(a) for a in sm_accounts])
+        return np.where(sm_mask, "Y", "N")
     
     async def validate_input(self, context: ProcessingContext) -> bool:
         """驗證輸入"""
@@ -1127,13 +1128,16 @@ class ValidationDataProcessingStep(PipelineStep):
         if fa_accounts:
             df.loc[need_to_accrual, 'Account code'] = fa_accounts[0]
         
-        # 設置 Account Name
-        df.loc[need_to_accrual, 'Account Name'] = 'AP,FA Clear Account'
-        
-        # 設置其他欄位
+        # 設置 Account Name（從配置讀取）
+        col_defaults = config_manager._config_toml.get('spx_column_defaults', {})
+        df.loc[need_to_accrual, 'Account Name'] = col_defaults.get(
+            'validation_account_name', 'AP,FA Clear Account'
+        )
+
+        # 設置其他欄位（從配置讀取）
         df.loc[need_to_accrual, 'Product code'] = df.loc[need_to_accrual, 'Product Code']
-        df.loc[need_to_accrual, 'Region_c'] = "TW"
-        df.loc[need_to_accrual, 'Dep.'] = '000'
+        df.loc[need_to_accrual, 'Region_c'] = col_defaults.get('region', 'TW')
+        df.loc[need_to_accrual, 'Dep.'] = col_defaults.get('default_department', '000')
         df.loc[need_to_accrual, 'Currency_c'] = df.loc[need_to_accrual, 'Currency']
         
         # 計算 Accr. Amount
@@ -1156,8 +1160,10 @@ class ValidationDataProcessingStep(PipelineStep):
             df.loc[need_to_accrual & ~non_shipping, '本期驗收數量/金額']
         df.drop('temp_amount', axis=1, inplace=True)
         
-        # 設置 Liability
-        df.loc[need_to_accrual, 'Liability'] = '200414'
+        # 設置 Liability（從配置讀取）
+        df.loc[need_to_accrual, 'Liability'] = col_defaults.get(
+            'validation_liability', '200414'
+        )
         
         return df
     
