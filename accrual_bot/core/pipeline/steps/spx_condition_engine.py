@@ -83,6 +83,19 @@ class SPXConditionEngine:
         """
         stats: Dict[str, int] = {}
 
+        # 先定位「尚無狀態」的列，僅對這些列進行規則匹配
+        no_status = (
+            df[status_column].isna()
+            | (df[status_column] == '')
+            | (df[status_column] == 'nan')
+        )
+        already_has = int((~no_status).sum())
+        if already_has > 0:
+            logger.info(
+                f"[{self.config_section}] 輸入資料已有 {already_has:,} 筆"
+                f"含狀態值，引擎僅處理其餘 {int(no_status.sum()):,} 筆"
+            )
+
         for rule in self.rules:
             # 檢查 apply_to 過濾
             apply_to = rule.get('apply_to', ['PO', 'PR'])
@@ -106,6 +119,9 @@ class SPXConditionEngine:
             if mask is None:
                 continue
 
+            # 限縮：僅命中「尚無狀態」的列
+            mask = mask & no_status
+
             count = mask.sum()
             rule_key = f"priority_{priority}_{status_value}"
             stats[rule_key] = int(count)
@@ -118,11 +134,12 @@ class SPXConditionEngine:
                 )
                 df.loc[mask, 'matched_condition_on_status'] = note
 
-            # 更新 no_status mask
+                # 更新 no_status：已被賦值的列不再參與後續規則
+                no_status = no_status & ~mask
+
+            # 同步更新 prebuilt_masks 中的 no_status
             if update_no_status and 'prebuilt_masks' in context:
-                context['prebuilt_masks']['no_status'] = (
-                    (df[status_column].isna()) | (df[status_column] == 'nan')
-                )
+                context['prebuilt_masks']['no_status'] = no_status
 
         return df, stats
 
@@ -265,7 +282,7 @@ class SPXConditionEngine:
         if check_type == 'desc_erm_le_date':
             if processing_date and 'YMs of Item Description' in df.columns:
                 return (df['YMs of Item Description']
-                        .str[:6].astype('Int64') <= processing_date)
+                        .str[7:].astype('Int64') <= processing_date)
             return None
 
         if check_type == 'desc_erm_gt_date':
@@ -363,7 +380,8 @@ class SPXConditionEngine:
         if check_type == 'is_fa':
             if 'is_fa' in prebuilt:
                 return prebuilt['is_fa']
-            fa_accounts = config_manager.get_list('SPX', 'fa_accounts', ['199999'])
+            fa_accounts = config_manager._config_toml.get('fa_accounts', {}).get('spx')
+            fa_accounts = [str(i) for i in fa_accounts]
             if 'GL#' in df.columns:
                 return df['GL#'].astype('string').isin(
                     [str(x) for x in fa_accounts]
@@ -475,8 +493,8 @@ class SPXConditionEngine:
         """
         # 特殊處理：asset_suppliers = kiosk + locker
         if key == 'spx.asset_suppliers':
-            kiosk = config_manager.get_list('SPX', 'kiosk_suppliers', [])
-            locker = config_manager.get_list('SPX', 'locker_suppliers', [])
+            kiosk = config_manager._config_toml.get('spx', {}).get('kiosk_suppliers')
+            locker = config_manager._config_toml.get('spx', {}).get('locker_suppliers')
             return kiosk + locker
 
         parts = key.split('.')
