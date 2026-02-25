@@ -488,7 +488,7 @@ output_columns_before_nlp_pr = [
     "是否結案","結案是否有差異數量","check_with_entry_invoice",
     "pr_line","remarked_by_procurement","noted_by_procurement",
     "remarked_by_fn","remarked_by_上月_fn","noted_by_fn",
-    "remarked_by_上月_procurement", "previ_liability", "pr狀態","是否估計入帳",
+    "remarked_by_上月_procurement", "pr狀態","是否估計入帳",
     "是否為fa","是否為s&m","account_code",
     "account_name","product_code_c","region_c",
     "dep.","currency_c","accr._amount",
@@ -622,13 +622,6 @@ source = "noted_by_fn"
 target = "Noted by FN"
 fill_na = false
 description = "特殊會計備註 (PR 可覆蓋 PO 的值)"
-
-[[previous_workpaper_integration.pr_mappings.fields]]
-source = "liability"
-target = "previ_Liability"
-fill_na = true
-description = "負債科目"
-entities = ["SPX"]  # 僅限 SPX，空陣列或省略entities表示所有 Entity 套用
 
 [previous_workpaper_integration.reviewer_mapping]
 # Reviewer 資訊映射配置 (僅限 SPT)
