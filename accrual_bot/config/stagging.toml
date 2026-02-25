@@ -498,6 +498,22 @@ output_columns_before_nlp_pr = [
     "question_from_reviewer","check_by_ap",
 ]
 
+dw_suppliers = [
+    "TW_寶倉物流股份有限公司",
+    "TW_新技術供應鏈與物流股份有限公司",
+    "TW_全勝國際企業股份有限公司",
+    "TW_新財企業股份有限公司",
+    "TW_湧昱有限公司",
+    "TW_鑫志勝股份有限公司",
+    "TW_長榮國際儲運股份有限公司",
+    "TW_勤德股份有限公司",
+    "TW_茗嘉鼎實業股份有限公司",
+    "TW_佳輝鍛造有限公司",
+    "TW_輝庭企業股份有限公司",
+    "TW_澤宇國際企業股份有限公司",
+]
+
+
 [fa_accounts]
 mob = [199999, 530016, 610303]
 spt = [199999]
@@ -864,6 +880,66 @@ validation_liability = "200414"
 #   例如 pattern_key = "spx.deposit_keywords" 引用 [spx] 區段的 deposit_keywords
 # =============================================================================
 
+# --- 找零金識別 ---
+[[spx_status_stage1_rules.conditions]]
+priority = 1
+status_value = "門市找零金"
+apply_to = ["PO", "PR"]
+note = "供應商為立保找零金且Item Description包含找零，GL#非FA科目(199999)"
+combine = "and"
+[[spx_status_stage1_rules.conditions.checks]]
+field = "{TYPE} Supplier"
+type = "equals"
+value_key = "TW_立保保全股份有限公司－找零金"
+[[spx_status_stage1_rules.conditions.checks]]
+field = "Item Description"
+type = "contains"
+pattern = "(?i)找零"
+[[spx_status_stage1_rules.conditions.checks]]
+field = "GL#"
+type = "not_equals"
+value_key = "fa_accounts.spx"
+
+# --- 倉庫押金識別 ---
+[[spx_status_stage1_rules.conditions]]
+priority = 1
+status_value = "倉庫押金"
+apply_to = ["PO", "PR"]
+note = "供應商為倉庫系列且Item Description包含押金|保證金，GL#非FA科目(199999)"
+combine = "and"
+[[spx_status_stage1_rules.conditions.checks]]
+field = "{TYPE} Supplier"
+type = "in_list"
+list_key = "spx.dw_suppliers"
+[[spx_status_stage1_rules.conditions.checks]]
+field = "Item Description"
+type = "contains"
+pattern = "押金|保證金"
+[[spx_status_stage1_rules.conditions.checks]]
+field = "GL#"
+type = "not_equals"
+value_key = "fa_accounts.spx"
+
+# --- 門市押金識別 ---
+[[spx_status_stage1_rules.conditions]]
+priority = 1
+status_value = "門市押金"
+apply_to = ["PO", "PR"]
+note = "供應商為自然人(TW_xxx_ddd)且Item Description包含押金等，GL#非FA科目(199999)"
+combine = "and"
+[[spx_status_stage1_rules.conditions.checks]]
+field = "{TYPE} Supplier"
+type = "contains"
+pattern = '^TW_.*_\d+$'
+[[spx_status_stage1_rules.conditions.checks]]
+field = "Item Description"
+type = "contains"
+pattern_key = "spx.deposit_keywords"
+[[spx_status_stage1_rules.conditions.checks]]
+field = "GL#"
+type = "not_equals"
+value_key = "fa_accounts.spx"
+
 # --- 條件 1: 押金/保證金識別 ---
 [[spx_status_stage1_rules.conditions]]
 priority = 1
@@ -892,7 +968,7 @@ apply_to = ["PO", "PR"]
 note = "供應商為寶倉物流/新技術供應鏈且類別為水電相關倉儲成本"
 combine = "and"
 [[spx_status_stage1_rules.conditions.checks]]
-field = "Supplier"
+field = "{TYPE} Supplier"
 type = "in_list"
 list_key = "spx.bao_supplier"
 [[spx_status_stage1_rules.conditions.checks]]
@@ -923,7 +999,7 @@ status_value = "授扣GL調整"
 apply_to = ["PO", "PR"]
 note = "供應商為台電/自來水/電信等公共費用供應商"
 [[spx_status_stage1_rules.conditions.checks]]
-field = "Supplier"
+field = "{TYPE} Supplier"
 type = "contains"
 pattern_key = "spx.utility_suppliers"
 
@@ -943,7 +1019,7 @@ field = "GL#"
 type = "equals"
 value_key = "spx.account_rent"
 [[spx_status_stage1_rules.conditions.checks]]
-field = "Requester"
+field = "{TYPE} Requester"
 type = "in_list"
 list_key = "spx.ops_for_rent"
 [[spx_status_stage1_rules.conditions.checks]]
@@ -965,7 +1041,7 @@ field = "GL#"
 type = "equals"
 value_key = "spx.account_rent"
 [[spx_status_stage1_rules.conditions.checks]]
-field = "Requester"
+field = "{TYPE} Requester"
 type = "in_list"
 list_key = "spx.ops_for_rent"
 [[spx_status_stage1_rules.conditions.checks]]
@@ -1000,7 +1076,7 @@ type = "not_error"
 [[spx_status_stage1_rules.conditions.checks]]
 type = "no_status"
 [[spx_status_stage1_rules.conditions.checks]]
-field = "Requester"
+field = "{TYPE} Requester"
 type = "in_list"
 list_key = "spx.ops_for_rent"
 [[spx_status_stage1_rules.conditions.checks]]
@@ -1023,12 +1099,12 @@ value = "100001,100002"
 priority = 12
 status_value = "已完成_intermediary"
 apply_to = ["PO", "PR"]
-note = "尚未標籤、OPS intermediary人員、摘要含intermediary、ERM==當月或(ERM<當月且上月FN備註已完成)"
+note = "尚未標籤、OPS intermediary人員、摘要含intermediary、ERM==當月或(ERM<當月且上月FN備註已完成)、沒有GL DATE"
 combine = "and"
 [[spx_status_stage1_rules.conditions.checks]]
 type = "no_status"
 [[spx_status_stage1_rules.conditions.checks]]
-field = "Requester"
+field = "{TYPE} Requester"
 type = "equals"
 value_key = "spx.ops_for_intermediary"
 [[spx_status_stage1_rules.conditions.checks]]
@@ -1037,6 +1113,9 @@ type = "contains"
 pattern = "(?i)intermediary"
 [[spx_status_stage1_rules.conditions.checks]]
 type = "erm_le_date"
+[[spx_status_stage1_rules.conditions.checks]]
+field = "GL DATE"
+type = "is_null"
 
 # --- 條件 13: 未完成_intermediary ---
 [[spx_status_stage1_rules.conditions]]
@@ -1048,7 +1127,7 @@ combine = "and"
 [[spx_status_stage1_rules.conditions.checks]]
 type = "no_status"
 [[spx_status_stage1_rules.conditions.checks]]
-field = "Requester"
+field = "{TYPE} Requester"
 type = "equals"
 value_key = "spx.ops_for_intermediary"
 [[spx_status_stage1_rules.conditions.checks]]
@@ -1132,11 +1211,31 @@ type = "remark_completed"
 [[spx_erm_status_rules.conditions.checks]]
 type = "not_fa"
 
+# --- ERM 條件 2.1: 已入帳（GL DATE）；排除備註跟billing qty限制---
+[[spx_erm_status_rules.conditions]]
+priority = 2
+status_value = "已入帳"
+note = "有GL DATE、ERM在摘要範圍內、ERM<=月結月份、收貨數量匹配、非FA科目"
+combine = "and"
+[[spx_erm_status_rules.conditions.checks]]
+field = "GL DATE"
+type = "is_not_null"
+[[spx_erm_status_rules.conditions.checks]]
+type = "no_status"
+[[spx_erm_status_rules.conditions.checks]]
+type = "erm_in_range"
+[[spx_erm_status_rules.conditions.checks]]
+type = "erm_le_date"
+[[spx_erm_status_rules.conditions.checks]]
+type = "qty_matched"
+[[spx_erm_status_rules.conditions.checks]]
+type = "not_fa"
+
 # --- ERM 條件 3: 已完成(not_billed) ---
 [[spx_erm_status_rules.conditions]]
 priority = 3
 status_value = "已完成(not_billed)"
-note = "採購/FN備註已完成、上月FN PR非未完成、尚未標籤、ERM在範圍內、ERM<=月結、收貨匹配、未開帳(Billed Amount=0)"
+note = "採購/FN備註已完成、上月FN PR非未完成、尚未標籤、ERM在範圍內、ERM<=月結、收貨匹配、未入帳(Billed Amount=0)"
 combine = "and"
 [[spx_erm_status_rules.conditions.checks]]
 type = "remark_completed"
@@ -1157,7 +1256,7 @@ type = "not_billed"
 [[spx_erm_status_rules.conditions]]
 priority = 4
 status_value = "已完成(fully_billed)"
-note = "採購/FN備註已完成、尚未標籤、ERM在範圍內、ERM<=月結、收貨匹配、Billed Amount!=0、全部開帳(Amount-Billed=0)"
+note = "採購/FN備註已完成、尚未標籤、ERM在範圍內、ERM<=月結、收貨匹配、Billed Amount!=0、全部入帳(Amount-Billed=0)"
 combine = "and"
 [[spx_erm_status_rules.conditions.checks]]
 type = "remark_completed"
@@ -1181,7 +1280,7 @@ type = "fully_billed"
 [[spx_erm_status_rules.conditions]]
 priority = 5
 status_value = "已完成(partially_billed)"
-note = "採購/FN備註已完成、尚未標籤、ERM在範圍內、ERM<=月結、收貨匹配、Billed Amount!=0、部分開帳(Amount-Billed!=0)"
+note = "採購/FN備註已完成、尚未標籤、ERM在範圍內、ERM<=月結、收貨匹配、Billed Amount!=0、部分入帳(Amount-Billed!=0)"
 combine = "and"
 [[spx_erm_status_rules.conditions.checks]]
 type = "remark_completed"

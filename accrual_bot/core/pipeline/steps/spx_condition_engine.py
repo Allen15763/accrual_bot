@@ -113,7 +113,8 @@ class SPXConditionEngine:
 
             # 建構組合 mask
             mask = self._build_combined_mask(
-                df, checks, combine, status_column, context
+                df, checks, combine, status_column, context,
+                processing_type=processing_type
             )
 
             if mask is None:
@@ -163,16 +164,22 @@ class SPXConditionEngine:
         checks: List[Dict[str, Any]],
         combine: str,
         status_column: str,
-        context: Dict[str, Any]
+        context: Dict[str, Any],
+        processing_type: str = "PO"
     ) -> Optional[pd.Series]:
         """建構多個 check 的組合 mask
 
         Args:
             combine: 'and' 或 'or'
+            processing_type: 處理類型，用於替換 field 中的 {TYPE} 佔位符
         """
         masks: List[pd.Series] = []
 
         for check in checks:
+            # 替換 field 中的 {TYPE} 為實際處理類型（如 PO/PR）
+            if '{TYPE}' in check.get('field', ''):
+                check = {**check, 'field': check['field'].replace('{TYPE}', processing_type)}
+
             mask = self._evaluate_check(df, check, status_column, context)
             if mask is not None:
                 masks.append(mask)
