@@ -145,6 +145,7 @@ class DepositStatusUpdateStep(PipelineStep):
             
             original_status = df.loc[update_mask, self.status_column].copy()
             df.loc[update_mask, self.status_column] = self.completed_status
+            df.loc[update_mask, 'matched_condition_on_status'] = "任一PO內的Item含有訂金等字樣，以最晚的ERM日期為完成月"
             updated_count = update_mask.sum()
             
             self.logger.info(f"🔄 實際更新的記錄數: {updated_count:,} 筆")
