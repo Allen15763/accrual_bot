@@ -268,8 +268,10 @@ class StatusStage1Step(PipelineStep):
 
         to_be_close = (df_spx_closing.loc[c1, closing_col].unique()
                        if c1.any() else [])
+        to_be_close = ['SPTTW-' + i for i in to_be_close]
         closed = (df_spx_closing.loc[c2, closing_col].unique()
                   if c2.any() else [])
+        closed = ['SPTTW-' + i for i in closed]
 
         cond_to_be_close = df[id_col].astype('string').isin(
             [str(x) for x in to_be_close]
