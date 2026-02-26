@@ -1124,7 +1124,7 @@ class ValidationDataProcessingStep(PipelineStep):
         df.loc[need_to_accrual, '是否估計入帳'] = 'Y'
         
         # 設置 Account code
-        fa_accounts = config_manager.get_list('SPX', 'fa_accounts')
+        fa_accounts = config_manager._config_toml.get('fa_accounts', {}).get('spx')
         if fa_accounts:
             df.loc[need_to_accrual, 'Account code'] = fa_accounts[0]
         
