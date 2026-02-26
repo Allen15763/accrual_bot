@@ -89,10 +89,7 @@ from .spx_exporting import SPXExportStep, AccountingOPSExportingStep
 from .spx_ppe_qty_validation import AccountingOPSValidationStep
 
 # SPX PR 專用步驟
-from .spx_pr_evaluation import (
-    PRERMConditions,
-    SPXPRERMLogicStep
-)
+from .spx_pr_evaluation import SPXPRERMLogicStep
 from .spx_exporting import SPXPRExportStep
 
 # 通用後處理步驟
@@ -182,7 +179,6 @@ __all__ = [
 
     
     # SPX PR Logic
-    'PRERMConditions',
     'SPXPRERMLogicStep',
     'SPXPRExportStep',
     

@@ -1590,3 +1590,135 @@ value = "0"
 cast = "Float64"
 [[spx_erm_status_rules.conditions.checks]]
 type = "qty_not_matched"
+
+# =============================================================================
+# SPX PR ERM 狀態規則（配置驅動）
+# 對應 SPXPRERMLogicStep 的 8 個 PR 狀態條件
+#
+# 與 PO 的核心差異：
+# 1. 不判斷收貨狀態（無 Received Quantity 相關邏輯）
+# 2. 不判斷入賬狀態（無 Billed Amount 相關邏輯）
+# 3. 基於業務類型（租金/Intermediary/資產）進行判斷
+# =============================================================================
+
+# --- PR ERM 條件 1: 已入帳（前期FN標註）---
+[[spx_pr_erm_status_rules.conditions]]
+priority = 1
+status_value = "已入帳"
+note = "前期FN備註明確標註「已入帳」"
+[[spx_pr_erm_status_rules.conditions.checks]]
+field = "Remarked by 上月 FN"
+type = "contains"
+pattern = "(?i)已入帳"
+
+# --- PR ERM 條件 2: 已完成（有採購或會計備註）---
+[[spx_pr_erm_status_rules.conditions]]
+priority = 2
+status_value = "已完成"
+note = "採購/FN備註已完成或Rent、上月FN非未完成、ERM在範圍內、ERM<=月結、採購備註非error"
+combine = "and"
+[[spx_pr_erm_status_rules.conditions.checks]]
+type = "remark_completed"
+[[spx_pr_erm_status_rules.conditions.checks]]
+field = "Remarked by 上月 FN"
+type = "not_contains"
+pattern = "(?i)未完成"
+[[spx_pr_erm_status_rules.conditions.checks]]
+type = "not_error"
+[[spx_pr_erm_status_rules.conditions.checks]]
+type = "erm_in_range"
+[[spx_pr_erm_status_rules.conditions.checks]]
+type = "erm_le_date"
+
+# --- PR ERM 條件 2-1: 已完成（沒有採購或會計備註）---
+[[spx_pr_erm_status_rules.conditions]]
+priority = 3
+status_value = "已完成"
+note = "採購備註非未完成/取消、上月FN非未完成、ERM在範圍內、ERM<=月結、採購備註非error"
+combine = "and"
+[[spx_pr_erm_status_rules.conditions.checks]]
+field = "Remarked by Procurement"
+type = "not_contains"
+pattern = "(?i)未完成|取消"
+[[spx_pr_erm_status_rules.conditions.checks]]
+field = "Remarked by 上月 FN"
+type = "not_contains"
+pattern = "(?i)未完成"
+[[spx_pr_erm_status_rules.conditions.checks]]
+type = "not_error"
+[[spx_pr_erm_status_rules.conditions.checks]]
+type = "erm_in_range"
+[[spx_pr_erm_status_rules.conditions.checks]]
+type = "erm_le_date"
+
+# --- PR ERM 條件 3: 未完成 ---
+[[spx_pr_erm_status_rules.conditions]]
+priority = 4
+status_value = "未完成"
+note = "採購備註非error、ERM在範圍內、ERM>月結月份"
+combine = "and"
+[[spx_pr_erm_status_rules.conditions.checks]]
+type = "not_error"
+[[spx_pr_erm_status_rules.conditions.checks]]
+type = "erm_in_range"
+[[spx_pr_erm_status_rules.conditions.checks]]
+type = "erm_gt_date"
+
+# --- PR ERM 條件 4: 範圍錯誤_租金 ---
+[[spx_pr_erm_status_rules.conditions]]
+priority = 5
+status_value = "error(Description Period is out of ERM)_租金"
+note = "採購備註非error、ERM不在摘要期間內、申請人為租金ops、科目為租金科目、摘要包含租金"
+combine = "and"
+[[spx_pr_erm_status_rules.conditions.checks]]
+type = "not_error"
+[[spx_pr_erm_status_rules.conditions.checks]]
+type = "out_of_range"
+[[spx_pr_erm_status_rules.conditions.checks]]
+field = "Requester"
+type = "in_list"
+list_key = "spx.ops_for_rent"
+[[spx_pr_erm_status_rules.conditions.checks]]
+field = "GL#"
+type = "equals"
+value_key = "spx.account_rent"
+[[spx_pr_erm_status_rules.conditions.checks]]
+field = "Item Description"
+type = "contains"
+pattern = "(?i)租金"
+
+# --- PR ERM 條件 5: 範圍錯誤_薪資 ---
+[[spx_pr_erm_status_rules.conditions]]
+priority = 6
+status_value = "error(Description Period is out of ERM)_薪資"
+note = "採購備註非error、ERM不在摘要期間內、摘要包含派遣/Salary/Agency Fee"
+combine = "and"
+[[spx_pr_erm_status_rules.conditions.checks]]
+type = "not_error"
+[[spx_pr_erm_status_rules.conditions.checks]]
+type = "out_of_range"
+[[spx_pr_erm_status_rules.conditions.checks]]
+field = "Item Description"
+type = "contains"
+pattern = "(?i)派遣|Salary|Agency Fee"
+
+# --- PR ERM 條件 6: 範圍錯誤（一般）---
+[[spx_pr_erm_status_rules.conditions]]
+priority = 7
+status_value = "error(Description Period is out of ERM)"
+note = "採購備註非error、ERM不在摘要期間內"
+combine = "and"
+[[spx_pr_erm_status_rules.conditions.checks]]
+type = "not_error"
+[[spx_pr_erm_status_rules.conditions.checks]]
+type = "out_of_range"
+
+# --- PR ERM 條件 7: 資產類_待確認 ---
+[[spx_pr_erm_status_rules.conditions]]
+priority = 8
+status_value = "資產類_待確認"
+note = "供應商為智取櫃或繳費機供應商"
+[[spx_pr_erm_status_rules.conditions.checks]]
+field = "PR Supplier"
+type = "in_list"
+list_key = "spx.asset_suppliers"

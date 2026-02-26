@@ -27,7 +27,7 @@ from accrual_bot.core.pipeline.steps.spx_evaluation import (
     PPEMonthDifferenceStep
 )
 from accrual_bot.core.pipeline.steps.spx_evaluation_2 import DepositStatusUpdateStep
-from accrual_bot.core.pipeline.steps.spx_pr_evaluation import PRERMConditions, SPXPRERMLogicStep
+from accrual_bot.core.pipeline.steps.spx_pr_evaluation import SPXPRERMLogicStep
 from accrual_bot.core.pipeline.steps.spx_integration import (
     ColumnAdditionStep,
     APInvoiceIntegrationStep,
@@ -62,7 +62,6 @@ __all__ = [
     'PPEContractDateUpdateStep',
     'PPEMonthDifferenceStep',
     'DepositStatusUpdateStep',
-    'PRERMConditions',
     'SPXPRERMLogicStep',
     'ColumnAdditionStep',
     'APInvoiceIntegrationStep',
