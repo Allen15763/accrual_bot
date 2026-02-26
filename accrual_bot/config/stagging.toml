@@ -1094,7 +1094,7 @@ value_key = "fa_accounts.spx"
 
 # --- 倉庫押金識別 ---
 [[spx_status_stage1_rules.conditions]]
-priority = 1
+priority = 2
 status_value = "倉庫押金"
 apply_to = ["PO", "PR"]
 note = "供應商為倉庫系列且Item Description包含押金|保證金，GL#非FA科目(199999)"
@@ -1114,7 +1114,7 @@ value_key = "fa_accounts.spx"
 
 # --- 門市押金識別 ---
 [[spx_status_stage1_rules.conditions]]
-priority = 1
+priority = 3
 status_value = "門市押金"
 apply_to = ["PO", "PR"]
 note = "供應商為自然人(TW_xxx_ddd)且Item Description包含押金等，GL#非FA科目(199999)"
@@ -1132,9 +1132,9 @@ field = "GL#"
 type = "not_equals"
 value_key = "fa_accounts.spx"
 
-# --- 條件 1: 押金/保證金識別 ---
+# --- 條件 : 押金/保證金識別 ---
 [[spx_status_stage1_rules.conditions]]
-priority = 1
+priority = 4
 status_value_key = "spx.deposit_keywords_label"
 apply_to = ["PO", "PR"]
 note = "Item Description包含押金/保證金/Deposit/找零金/定存，且GL#非FA科目(199999)，且排除繳費機訂金"
@@ -1152,9 +1152,9 @@ field = "Item Description"
 type = "not_contains"
 pattern = "(?i)繳費機訂金"
 
-# --- 條件 2: BAO供應商GL調整 ---
+# --- 條件 : BAO供應商GL調整 ---
 [[spx_status_stage1_rules.conditions]]
-priority = 2
+priority = 5
 status_value = "GL調整"
 apply_to = ["PO", "PR"]
 note = "供應商為寶倉物流/新技術供應鏈且類別為水電相關倉儲成本"
@@ -1168,9 +1168,9 @@ field = "Category"
 type = "in_list"
 list_key = "spx.bao_categories"
 
-# --- 條件 5: 上月FN備註關單 ---
+# --- 條件 : 上月FN備註關單 ---
 [[spx_status_stage1_rules.conditions]]
-priority = 5
+priority = 6
 status_value = "參照上月關單"
 apply_to = ["PO", "PR"]
 note = "Remarked by 上月 FN 或 Remarked by 上月 FN PR 包含「刪」或「關」"
@@ -1403,7 +1403,7 @@ type = "remark_completed"
 [[spx_erm_status_rules.conditions.checks]]
 type = "not_fa"
 
-# --- ERM 條件 2.1: 已入帳（GL DATE）；排除備註跟billing qty限制---
+# --- ERM 條件 2.1: 已入帳（GL DATE）；排除備註跟billing amt限制---
 [[spx_erm_status_rules.conditions]]
 priority = 2
 status_value = "已入帳"
