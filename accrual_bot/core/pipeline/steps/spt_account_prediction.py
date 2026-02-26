@@ -256,7 +256,16 @@ class SPTAccountPredictionStep(PipelineStep):
                 keywords, case=False, na=False
             )
             condition &= desc_condition
-        
+
+        # 金額上限條件（例如：金額小於 30,000）
+        if 'max_amount' in rule and rule['max_amount'] is not None:
+            amount_col = 'Entry Amount'
+            if amount_col in df.columns:
+                amount_condition = pd.to_numeric(
+                    df[amount_col], errors='coerce'
+                ) < rule['max_amount']
+                condition &= amount_condition
+
         return condition
 
     def _log_condition_result(self, rule_name: str, count: int):

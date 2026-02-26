@@ -236,7 +236,8 @@ jianqiang_mkt = { dept_include = '(?i)S01|S02|G07', supplier = 'TW_漸強賴伯�
 # - account: 會計科目代碼
 # - departments: 部門列表（可選，支援多個部門）
 # - supplier: 供應商名稱（可選）
-# - description_keywords: Item Description 關鍵字（可選，不分大小寫）
+# - description_keywords: Item Description 關鍵字（可選，不分大小寫，多個關鍵字用 | 分隔）
+# - max_amount: 金額上限（可選，Entry Amount 須小於此值）
 # - condition_desc: 條件描述（顯示在 matched_conditions 欄位）
 # ============================================================================
 
@@ -385,6 +386,204 @@ account = "610105"
 departments = ["C02 - Customer Service (COR)"]
 supplier = "TW_NTT Singapore Pte. Ltd."
 condition_desc = "Department等於C02 - Customer Service (COR)，Supplier等於TW_NTT Singapore Pte. Ltd."
+
+[[spt_account_prediction.rules]]
+rule_id = 21
+account = "600305"
+departments = ["G03 - People (G&A)"]
+supplier = "TW_欣亞美容儀器材料行"
+description_keywords = "按摩床巾|拋棄式床單"
+condition_desc = "Department等於G03 - People (G&A)，Supplier等於TW_欣亞美容儀器材料行，且Item Description包含\"按摩床巾\"或\"拋棄式床單\"(不分大小寫)"
+
+[[spt_account_prediction.rules]]
+rule_id = 22
+account = "610101"
+departments = ["G03 - People (G&A)"]
+supplier = "TW_旭良文具印刷有限公司"
+description_keywords = "name cards"
+condition_desc = "Department等於G03 - People (G&A)，Supplier等於TW_旭良文具印刷有限公司，且Item Description包含\"name cards\"(不分大小寫)"
+
+[[spt_account_prediction.rules]]
+rule_id = 23
+account = "610101"
+departments = ["G03 - People (G&A)"]
+supplier = "TW_洋美環境維護股份有限公司"
+description_keywords = "垃圾袋"
+condition_desc = "Department等於G03 - People (G&A)，Supplier等於TW_洋美環境維護股份有限公司，且Item Description包含\"垃圾袋\"(不分大小寫)"
+
+[[spt_account_prediction.rules]]
+rule_id = 24
+account = "610206"
+departments = ["G03 - People (G&A)"]
+supplier = "TW_洋美環境維護股份有限公司"
+description_keywords = "Cleaning service fee"
+condition_desc = "Department等於G03 - People (G&A)，Supplier等於TW_洋美環境維護股份有限公司，且Item Description包含\"Cleaning service fee\"(不分大小寫)"
+
+[[spt_account_prediction.rules]]
+rule_id = 25
+account = "610104"
+departments = ["G03 - People (G&A)"]
+supplier = "TW_良程科技有限公司"
+condition_desc = "Department等於G03 - People (G&A)，Supplier等於TW_良程科技有限公司"
+
+[[spt_account_prediction.rules]]
+rule_id = 26
+account = "610103"
+departments = ["G03 - People (G&A)"]
+supplier = "TW_統一速達股份有限公司第１０６１營業區"
+description_keywords = "郵資"
+condition_desc = "Department等於G03 - People (G&A)，Supplier等於TW_統一速達股份有限公司第１０６１營業區，且Item Description包含\"郵資\"(不分大小寫)"
+
+[[spt_account_prediction.rules]]
+rule_id = 27
+account = "610103"
+departments = ["G03 - People (G&A)"]
+supplier = "TW_全球商務科技股份有限公司"
+description_keywords = "快遞"
+condition_desc = "Department等於G03 - People (G&A)，Supplier等於TW_全球商務科技股份有限公司，且Item Description包含\"快遞\"(不分大小寫)"
+
+[[spt_account_prediction.rules]]
+rule_id = 28
+account = "610103"
+departments = ["G03 - People (G&A)"]
+supplier = "TW_中華郵政股份有限公司台北光華郵局"
+description_keywords = "郵資"
+condition_desc = "Department等於G03 - People (G&A)，Supplier等於TW_中華郵政股份有限公司台北光華郵局，且Item Description包含\"郵資\"(不分大小寫)"
+
+[[spt_account_prediction.rules]]
+rule_id = 29
+account = "610201"
+departments = ["G03 - People (G&A)"]
+supplier = "TW_台灣歐力士股份有限公司"
+description_keywords = "事務機租賃費 Copy machine|影印機 Copy machine"
+condition_desc = "Department等於G03 - People (G&A)，Supplier等於TW_台灣歐力士股份有限公司，且Item Description包含\"事務機租賃費 Copy machine\"或\"影印機 Copy machine\"(不分大小寫)"
+
+[[spt_account_prediction.rules]]
+rule_id = 30
+account = "610104"
+departments = ["G03 - People (G&A)"]
+supplier = "TW_台灣歐力士股份有限公司"
+description_keywords = "事務機影印費 Printing|影印費 Printer"
+condition_desc = "Department等於G03 - People (G&A)，Supplier等於TW_台灣歐力士股份有限公司，且Item Description包含\"事務機影印費 Printing\"或\"影印費 Printer\"(不分大小寫)"
+
+[[spt_account_prediction.rules]]
+rule_id = 31
+account = "610206"
+departments = ["G03 - People (G&A)"]
+supplier = "TW_松潔環境維護股份有限公司"
+description_keywords = "Cleaning service fee"
+condition_desc = "Department等於G03 - People (G&A)，Supplier等於TW_松潔環境維護股份有限公司，且Item Description包含\"Cleaning service fee\"(不分大小寫)"
+
+[[spt_account_prediction.rules]]
+rule_id = 32
+account = "610101"
+departments = ["G03 - People (G&A)"]
+supplier = "TW_松潔環境維護股份有限公司"
+description_keywords = "洗手乳|垃圾袋|洗碗精"
+condition_desc = "Department等於G03 - People (G&A)，Supplier等於TW_松潔環境維護股份有限公司，且Item Description包含\"洗手乳\"或\"垃圾袋\"或\"洗碗精\"(不分大小寫)"
+
+[[spt_account_prediction.rules]]
+rule_id = 33
+account = "610206"
+departments = ["G03 - People (G&A)"]
+supplier = "TW_晶城環保服務有限公司"
+description_keywords = "Cleaning fee"
+condition_desc = "Department等於G03 - People (G&A)，Supplier等於TW_晶城環保服務有限公司，且Item Description包含\"Cleaning fee\"(不分大小寫)"
+
+[[spt_account_prediction.rules]]
+rule_id = 34
+account = "610215"
+departments = ["G03 - People (G&A)"]
+supplier = "TW_信威物流有限公司"
+description_keywords = "Storage Rental"
+condition_desc = "Department等於G03 - People (G&A)，Supplier等於TW_信威物流有限公司，且Item Description包含\"Storage Rental\"(不分大小寫)"
+
+[[spt_account_prediction.rules]]
+rule_id = 35
+account = "610215"
+departments = ["G03 - People (G&A)"]
+supplier = "TW_新得利倉儲股份有限公司"
+description_keywords = "Storage Rental"
+condition_desc = "Department等於G03 - People (G&A)，Supplier等於TW_新得利倉儲股份有限公司，且Item Description包含\"Storage Rental\"(不分大小寫)"
+
+[[spt_account_prediction.rules]]
+rule_id = 36
+account = "610206"
+departments = ["G03 - People (G&A)"]
+supplier = "TW_惠國科技股份有限公司"
+condition_desc = "Department等於G03 - People (G&A)，Supplier等於TW_惠國科技股份有限公司"
+
+[[spt_account_prediction.rules]]
+rule_id = 37
+account = "610206"
+departments = ["G03 - People (G&A)"]
+supplier = "TW_賀眾企業股份有限公司"
+description_keywords = "水質檢測"
+condition_desc = "Department等於G03 - People (G&A)，Supplier等於TW_賀眾企業股份有限公司，且Item Description包含\"水質檢測\"(不分大小寫)"
+
+[[spt_account_prediction.rules]]
+rule_id = 38
+account = "610206"
+departments = ["G03 - People (G&A)"]
+supplier = "TW_承開空調工程有限公司"
+condition_desc = "Department等於G03 - People (G&A)，Supplier等於TW_承開空調工程有限公司"
+
+[[spt_account_prediction.rules]]
+rule_id = 39
+account = "660201"
+supplier = "TW_采江互動科技股份有限公司"
+description_keywords = "Chatbot Trainer Outsourced Labour & Services"
+condition_desc = "Supplier等於TW_采江互動科技股份有限公司，且Item Description包含\"Chatbot Trainer Outsourced Labour & Services\"(不分大小寫)"
+
+[[spt_account_prediction.rules]]
+rule_id = 40
+account = "530030"
+supplier = "TW_程高資訊服務股份有限公司"
+description_keywords = "Outsourced Labour & Services"
+condition_desc = "Supplier等於TW_程高資訊服務股份有限公司，且Item Description包含\"Outsourced Labour & Services\"(不分大小寫)"
+
+[[spt_account_prediction.rules]]
+rule_id = 41
+account = "610206"
+departments = ["G03 - People (G&A)"]
+supplier = "TW_聖筑室內裝修設計工程有限公司"
+description_keywords = "檢測|修繕|自動門異音|地毯費用"
+condition_desc = "Department等於G03 - People (G&A)，Supplier等於TW_聖筑室內裝修設計工程有限公司，且Item Description包含\"檢測\"或\"修繕\"或\"自動門異音\"或\"地毯費用\"(不分大小寫)"
+
+[[spt_account_prediction.rules]]
+rule_id = 42
+account = "610214"
+departments = ["G03 - People (G&A)"]
+supplier = "TW_聖筑室內裝修設計工程有限公司"
+description_keywords = "貼紙|天花板板材|油漆"
+max_amount = 30000
+condition_desc = "Department等於G03 - People (G&A)，Supplier等於TW_聖筑室內裝修設計工程有限公司，且Item Description包含\"貼紙\"或\"天花板板材\"或\"油漆\"(不分大小寫)，且Entry Amount小於30,000"
+
+[[spt_account_prediction.rules]]
+rule_id = 43
+account = "610303"
+departments = ["G03 - People (G&A)"]
+supplier = "TW_聖筑室內裝修設計工程有限公司"
+description_keywords = "折合桌"
+max_amount = 30000
+condition_desc = "Department等於G03 - People (G&A)，Supplier等於TW_聖筑室內裝修設計工程有限公司，且Item Description包含\"折合桌\"(不分大小寫)，且Entry Amount小於30,000"
+
+[[spt_account_prediction.rules]]
+rule_id = 44
+account = "610206"
+departments = ["G03 - People (G&A)"]
+supplier = "TW_三泰電器股份有限公司"
+description_keywords = "故障|維修|更換|修繕"
+condition_desc = "Department等於G03 - People (G&A)，Supplier等於TW_三泰電器股份有限公司，且Item Description包含\"故障\"或\"維修\"或\"更換\"或\"修繕\"(不分大小寫)"
+
+[[spt_account_prediction.rules]]
+rule_id = 45
+account = "610303"
+departments = ["G03 - People (G&A)"]
+supplier = "TW_三泰電器股份有限公司"
+description_keywords = "微波爐|電視|投影機"
+max_amount = 30000
+condition_desc = "Department等於G03 - People (G&A)，Supplier等於TW_三泰電器股份有限公司，且Item Description包含\"微波爐\"或\"電視\"或\"投影機\"(不分大小寫)，且Entry Amount小於30,000"
 
 
 [spx]
