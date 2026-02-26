@@ -248,7 +248,7 @@ class StatusStage1Step(PipelineStep):
         tag_column = 'PO狀態' if is_po else 'PR狀態'
         processing_type = 'PO' if is_po else 'PR'
 
-        # === 代碼保留段 1：日期格式轉換 ===
+        # === 1：日期格式轉換 ===
         df['Remarked by 上月 FN'] = self.convert_date_format_in_remark(
             df['Remarked by 上月 FN']
         )
@@ -257,7 +257,7 @@ class StatusStage1Step(PipelineStep):
                 df['Remarked by 上月 FN PR']
             )
 
-        # === 代碼保留段 2：關單清單比對（數據驅動）===
+        # === 2：關單清單比對（數據驅動）===
         c1, c2 = self.is_closed_spx(df_spx_closing)
         if is_po:
             id_col = 'PO#'
@@ -266,30 +266,55 @@ class StatusStage1Step(PipelineStep):
             id_col = 'PR#'
             closing_col = 'new_pr_no'
 
+        # 先取得關單清單的po_no
         to_be_close = (df_spx_closing.loc[c1, closing_col].unique()
                        if c1.any() else [])
-        to_be_close = ['SPTTW-' + i for i in to_be_close]
         closed = (df_spx_closing.loc[c2, closing_col].unique()
                   if c2.any() else [])
-        closed = ['SPTTW-' + i for i in closed]
+        
+        # 把要關單的資料分為整張關跟部分Item關
+        to_be_close_all, to_be_close_partial = self._closing_by_line(df_spx_closing, to_be_close)
+        closed_all, closed_partial = self._closing_by_line(df_spx_closing, closed)
+        # 加上前綴
+        to_be_close_all, to_be_close_partial = self._add_prefix(to_be_close_all), self._add_prefix(to_be_close_partial)
+        closed_all, closed_partial = self._add_prefix(closed_all), self._add_prefix(closed_partial)
 
+        # 整張關的條件遮罩
         cond_to_be_close = df[id_col].astype('string').isin(
-            [str(x) for x in to_be_close]
+            [str(x) for x in to_be_close_all]
         )
+        cond_closed = df[id_col].astype('string').isin(
+            [str(x) for x in closed_all]
+        )
+        # 更新值
         df.loc[cond_to_be_close, tag_column] = '待關單'
         self._log_label_condition(
             f'{id_col}在待關單清單', cond_to_be_close.sum(), '待關單'
         )
 
-        cond_closed = df[id_col].astype('string').isin(
-            [str(x) for x in closed]
-        )
         df.loc[cond_closed, tag_column] = '已關單'
         self._log_label_condition(
             f'{id_col}在已關單清單', cond_closed.sum(), '已關單'
         )
 
-        # === 代碼保留段 3：FA備註提取（需 regex extract）===
+        # # 部分Item關的條件遮罩
+        cond_to_be_close = df[id_col.replace('#', ' Line')].astype('string').isin(
+            [str(x) for x in to_be_close_partial]
+        )
+        cond_closed = df[id_col.replace('#', ' Line')].astype('string').isin(
+            [str(x) for x in closed_partial]
+        )
+        # 更新值
+        df.loc[cond_to_be_close, tag_column] = '待關單'
+        self._log_label_condition(
+            f'{id_col.replace("#", " Line")}在待關單清單', cond_to_be_close.sum(), '待關單'
+        )
+        df.loc[cond_closed, tag_column] = '已關單'
+        self._log_label_condition(
+            f'{id_col.replace("#", " Line")}在已關單清單', cond_closed.sum(), '已關單'
+        )
+
+        # === 3：FA備註提取（需 regex extract）===
         # PO: Remarked by 上月 FN + Remarked by 上月 FN PR
         # PR: Remarked by 上月 FN
         fn_col = 'Remarked by 上月 FN'
@@ -392,6 +417,52 @@ class StatusStage1Step(PipelineStep):
         )
         
         return condition_to_be_closed, condition_closed
+    
+    def _closing_by_line(self, df: pd.DataFrame, po_no: List) -> List:
+
+        remove_all = []
+        remove_partial = []
+
+        filtered_df = df[df['po_no'].isin(po_no)].copy()
+
+        for index, row in filtered_df.iterrows():
+            po = row['po_no']
+            line = str(row['line_no']).strip()  # 確保轉成字串並去除前後空白
+            
+            # 情況 1：如果是 ALL
+            if line == 'ALL':
+                remove_all.append(po)
+                
+            # 情況 2：如果是 Line 開頭的指定行號
+            elif line.startswith('Line'):
+                # 步驟 A: 把 "Line" 拔掉，只留後面的數字和符號
+                num_str = line.replace('Line', '').strip()
+                
+                # 步驟 B: 使用正則表達式，支援頓號 (、) 或是半形逗號 (,) 切割
+                parts = re.split(r'[、,]', num_str)
+                
+                # 步驟 C: 針對切割出來的每一段做判斷
+                for part in parts:
+                    part = part.strip()
+                    
+                    # 如果這段裡面有波浪號 (代表是範圍，例如 2~12)
+                    if '~' in part:
+                        start_str, end_str = part.split('~')
+                        # 確保裡面真的是數字
+                        if start_str.isdigit() and end_str.isdigit():
+                            start_num = int(start_str)
+                            end_num = int(end_str)
+                            for i in range(start_num, end_num + 1):
+                                remove_partial.append(f"{po}-{i}")
+                    
+                    # 如果這段只是純數字 (代表是跳號的單一數字，例如 11)
+                    elif part.isdigit():
+                        remove_partial.append(f"{po}-{part}")
+        return remove_all, remove_partial
+    
+    def _add_prefix(self, array: List) -> List:
+        """新增前綴使其符合HRIS產出的PO#格式"""
+        return ['SPTTW-' + i for i in array]
     
     def convert_date_format_in_remark(self, series: pd.Series) -> pd.Series:
         """轉換備註中的日期格式 (YYYY/MM -> YYYYMM)

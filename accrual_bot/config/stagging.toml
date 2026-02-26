@@ -1164,9 +1164,33 @@ field = "Item Description"
 type = "not_contains"
 pattern = "(?i)繳費機訂金"
 
-# --- 條件 : BAO供應商GL調整 ---
+# --- 條件 : 已完成_預付 ---
 [[spx_status_stage1_rules.conditions]]
 priority = 6
+status_value = "已完成_預付"
+apply_to = ["PO", "PR"]
+note = "預付數量為1或2、開票數量為0、有GL DATE、GL#為520036或666666"
+combine = "and"
+[[spx_status_stage1_rules.conditions.checks]]
+field = "Prepay Quantity"
+type = "in_list"
+values = ["1", "2"]
+[[spx_status_stage1_rules.conditions.checks]]
+field = "Billed Quantity"
+type = "equals"
+value = 0
+cast = "Float64"
+[[spx_status_stage1_rules.conditions.checks]]
+field = "GL DATE"
+type = "is_not_null"
+[[spx_status_stage1_rules.conditions.checks]]
+field = "GL#"
+type = "in_list"
+values = ["520036", "666666"]
+
+# --- 條件 : BAO供應商GL調整 ---
+[[spx_status_stage1_rules.conditions]]
+priority = 7
 status_value = "GL調整"
 apply_to = ["PO", "PR"]
 note = "供應商為寶倉物流/新技術供應鏈且類別為水電相關倉儲成本"
@@ -1182,7 +1206,7 @@ list_key = "spx.bao_categories"
 
 # --- 條件 : 上月FN備註關單 ---
 [[spx_status_stage1_rules.conditions]]
-priority = 7
+priority = 8
 status_value = "參照上月關單"
 apply_to = ["PO", "PR"]
 note = "Remarked by 上月 FN 或 Remarked by 上月 FN PR 包含「刪」或「關」"
@@ -1198,7 +1222,7 @@ pattern = "刪|關"
 
 # --- 條件 : 公共費用供應商 ---
 [[spx_status_stage1_rules.conditions]]
-priority = 8
+priority = 9
 status_value = "授扣GL調整"
 apply_to = ["PO", "PR"]
 note = "供應商為台電/自來水/電信等公共費用供應商"
@@ -1209,7 +1233,7 @@ pattern_key = "spx.utility_suppliers"
 
 # --- 條件 : 已完成_租金(ERM<=當月) ---
 [[spx_status_stage1_rules.conditions]]
-priority = 9
+priority = 10
 status_value = "已完成_租金(ERM<=當月租金)"
 apply_to = ["PO", "PR"]
 note = "尚未標籤、申請人為OPS租金人員、GL#為租金科目、ERM<=當月、摘要月<=當月"
@@ -1231,9 +1255,10 @@ type = "desc_erm_le_date"
 
 
 # --- 條件 : 租金已入帳 ---
-# override_statuses: 允許覆蓋條件8/9產生的租金狀態
+# override_statuses: 允許覆蓋條件10產生的租金狀態
+# 已完成_租金(摘要月<=當月租金)條件已移除
 [[spx_status_stage1_rules.conditions]]
-priority = 10
+priority = 11
 status_value = "已入帳"
 apply_to = ["PO"]
 note = "狀態為已完成_租金且GL DATE非空(已入帳)"
@@ -1249,7 +1274,7 @@ type = "is_not_null"
 
 # --- 條件 : 未完成_租金 ---
 [[spx_status_stage1_rules.conditions]]
-priority = 11
+priority = 12
 status_value = "未完成_租金"
 apply_to = ["PO", "PR"]
 note = "採購備註非error、尚未標籤、OPS租金人員、租金科目、摘要含租金、ERM>當月且摘要日期非100001,100002"
@@ -1279,7 +1304,7 @@ value = "100001,100002"
 
 # --- 條件 : 已完成_intermediary ---
 [[spx_status_stage1_rules.conditions]]
-priority = 12
+priority = 13
 status_value = "已完成_intermediary"
 apply_to = ["PO", "PR"]
 note = "尚未標籤、OPS intermediary人員、摘要含intermediary、ERM==當月或(ERM<當月且上月FN備註已完成)、沒有GL DATE"
@@ -1302,7 +1327,7 @@ type = "is_null"
 
 # --- 條件 : 未完成_intermediary ---
 [[spx_status_stage1_rules.conditions]]
-priority = 13
+priority = 14
 status_value = "未完成_intermediary"
 apply_to = ["PO", "PR"]
 note = "尚未標籤、OPS intermediary人員、摘要含intermediary、ERM>當月"
@@ -1322,7 +1347,7 @@ type = "erm_gt_date"
 
 # --- 條件 : 資產待驗收(PO) ---
 [[spx_status_stage1_rules.conditions]]
-priority = 14
+priority = 15
 status_value = "Pending_validating"
 apply_to = ["PO"]
 note = "供應商為智取櫃/繳費機供應商、不含一般入FA備註(但包含部分完成入FA)、非關單項目"
@@ -1338,7 +1363,7 @@ pattern = "關"
 
 # --- 條件 : PR智取櫃與繳費機 ---
 [[spx_status_stage1_rules.conditions]]
-priority = 15
+priority = 16
 status_value = "智取櫃與繳費機"
 apply_to = ["PR"]
 note = "PR供應商為智取櫃/繳費機供應商、非關單項目"
