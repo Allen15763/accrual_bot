@@ -1082,7 +1082,7 @@ combine = "and"
 [[spx_status_stage1_rules.conditions.checks]]
 field = "{TYPE} Supplier"
 type = "equals"
-value_key = "TW_立保保全股份有限公司－找零金"
+value = "TW_立保保全股份有限公司－找零金"
 [[spx_status_stage1_rules.conditions.checks]]
 field = "Item Description"
 type = "contains"

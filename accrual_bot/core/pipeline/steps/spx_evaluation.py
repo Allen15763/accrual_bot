@@ -279,39 +279,24 @@ class StatusStage1Step(PipelineStep):
         to_be_close_all, to_be_close_partial = self._add_prefix(to_be_close_all), self._add_prefix(to_be_close_partial)
         closed_all, closed_partial = self._add_prefix(closed_all), self._add_prefix(closed_partial)
 
-        # 整張關的條件遮罩
-        cond_to_be_close = df[id_col].astype('string').isin(
-            [str(x) for x in to_be_close_all]
+        # 整張關
+        line_col = id_col.replace('#', ' Line')
+        df = self._apply_closing_status(
+            df, id_col, tag_column,
+            to_be_close_all, '待關單', f'{id_col}在待關單清單'
         )
-        cond_closed = df[id_col].astype('string').isin(
-            [str(x) for x in closed_all]
+        df = self._apply_closing_status(
+            df, id_col, tag_column,
+            closed_all, '已關單', f'{id_col}在已關單清單'
         )
-        # 更新值
-        df.loc[cond_to_be_close, tag_column] = '待關單'
-        self._log_label_condition(
-            f'{id_col}在待關單清單', cond_to_be_close.sum(), '待關單'
+        # 部分 Item 關
+        df = self._apply_closing_status(
+            df, line_col, tag_column,
+            to_be_close_partial, '待關單', f'{line_col}在待關單清單'
         )
-
-        df.loc[cond_closed, tag_column] = '已關單'
-        self._log_label_condition(
-            f'{id_col}在已關單清單', cond_closed.sum(), '已關單'
-        )
-
-        # # 部分Item關的條件遮罩
-        cond_to_be_close = df[id_col.replace('#', ' Line')].astype('string').isin(
-            [str(x) for x in to_be_close_partial]
-        )
-        cond_closed = df[id_col.replace('#', ' Line')].astype('string').isin(
-            [str(x) for x in closed_partial]
-        )
-        # 更新值
-        df.loc[cond_to_be_close, tag_column] = '待關單'
-        self._log_label_condition(
-            f'{id_col.replace("#", " Line")}在待關單清單', cond_to_be_close.sum(), '待關單'
-        )
-        df.loc[cond_closed, tag_column] = '已關單'
-        self._log_label_condition(
-            f'{id_col.replace("#", " Line")}在已關單清單', cond_closed.sum(), '已關單'
+        df = self._apply_closing_status(
+            df, line_col, tag_column,
+            closed_partial, '已關單', f'{line_col}在已關單清單'
         )
 
         # === 3：FA備註提取（需 regex extract）===
@@ -384,11 +369,6 @@ class StatusStage1Step(PipelineStep):
                 actual_cols = [supplier_col, requester_col]
                 if temp_col not in actual_cols:
                     df.drop(columns=[temp_col], inplace=True, errors='ignore')
-
-        # === 關單標記（原始邏輯保留）===
-        if 'PO#' in df_spx_closing.columns and 'PO#' in df.columns:
-            closed_po_list = df_spx_closing['PO#'].unique().tolist()
-            df.loc[df['PO#'].isin(closed_po_list), 'Closing_Status'] = 'Closed'
 
         self.logger.info("成功給予第一階段狀態")
         return df
@@ -463,7 +443,35 @@ class StatusStage1Step(PipelineStep):
     def _add_prefix(self, array: List) -> List:
         """新增前綴使其符合HRIS產出的PO#格式"""
         return ['SPTTW-' + i for i in array]
-    
+
+    def _apply_closing_status(self, df: pd.DataFrame,
+                              match_col: str,
+                              tag_column: str,
+                              closing_list: List,
+                              status: str,
+                              label: str) -> pd.DataFrame:
+        """比對關單清單並賦予狀態標籤
+
+        Args:
+            df: 主資料 DataFrame
+            match_col: 用於比對的欄位名稱（如 'PO#' 或 'PO Line'）
+            tag_column: 狀態寫入的目標欄位（'PO狀態' 或 'PR狀態'）
+            closing_list: 關單編號清單
+            status: 要賦予的狀態值（'待關單' 或 '已關單'）
+            label: 日誌標籤描述
+
+        Returns:
+            pd.DataFrame: 更新後的 DataFrame
+        """
+        if not closing_list:
+            return df
+        mask = df[match_col].astype('string').isin(
+            [str(x) for x in closing_list]
+        )
+        df.loc[mask, tag_column] = status
+        self._log_label_condition(label, mask.sum(), status)
+        return df
+
     def convert_date_format_in_remark(self, series: pd.Series) -> pd.Series:
         """轉換備註中的日期格式 (YYYY/MM -> YYYYMM)
         
