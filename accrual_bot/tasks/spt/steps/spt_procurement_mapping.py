@@ -131,6 +131,7 @@ class ProcurementPreviousMappingStep(PipelineStep):
         """
         # 一次性解析鍵值欄位
         key_col_canonical = f'{key_type}_line'
+        source_df = self._fix_missing_mapping_key(source_df, key_type)
         df_key = ColumnResolver.resolve(df, key_col_canonical)
         source_key = ColumnResolver.resolve(source_df, key_col_canonical)
 
@@ -183,6 +184,28 @@ class ProcurementPreviousMappingStep(PipelineStep):
             f"(fill_na={fill_na}, {len(mapping_dict)} mappings)"
         )
 
+        return df
+
+    def _fix_missing_mapping_key(self, df, processing_type: str) -> pd.DataFrame:
+        """避免參照底稿本身沒有POPR Line的欄位導致prev_col映射失敗"""
+        if processing_type == 'po':
+            processing_type = 'PO#'
+        elif processing_type == 'pr':
+            processing_type = 'PR#'
+        else:
+            processing_type = None
+
+        if processing_type:
+            if processing_type[:2] + ' Line' not in df.columns:
+                df[f'{processing_type[:2]} Line'] = (
+                    df[processing_type].astype('string') + df['Line#'].astype('string')
+                )
+                self.logger.debug(f"Add column: {processing_type[:2]} Line")
+                return df
+            else:
+                self.logger.debug("Has PO/PR Line columns")
+                return df
+        self.logger.debug("Error on adding PO/PR Line columns")
         return df
 
     async def validate_input(self, context: ProcessingContext) -> bool:
