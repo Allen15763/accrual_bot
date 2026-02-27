@@ -94,7 +94,7 @@ class UnifiedPipelineService:
             ValueError: 當 proc_type 無效時
         """
         # 整合配置文件中的參數到 file_paths
-        enriched_file_paths = self._enrich_file_paths(file_paths, entity, proc_type)
+        enriched_file_paths = self._enrich_file_paths(file_paths, entity, proc_type, source_type)
 
         orchestrator = self._get_orchestrator(entity)
 
@@ -150,7 +150,8 @@ class UnifiedPipelineService:
         self,
         file_paths: Dict[str, str],
         entity: str,
-        proc_type: str
+        proc_type: str,
+        source_type: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         整合配置文件中的檔案參數到 file_paths
@@ -158,10 +159,14 @@ class UnifiedPipelineService:
         從 config/paths.toml 讀取 [entity.proc_type.params] 區段的參數，
         將簡單的字符串路徑轉換為包含 params 的字典結構。
 
+        當 source_type 有值時（如 PROCUREMENT 的 PO/PR），若直接 key 查找失敗，
+        會嘗試以 {file_key}_{source_type} 的後綴形式查找對應參數。
+
         Args:
             file_paths: UI 提供的檔案路徑字典（字符串格式）
             entity: Entity 名稱（如 'SPX'）
             proc_type: 處理類型（如 'PO'）
+            source_type: 子類型（僅 PROCUREMENT 使用: 'PO'/'PR'）
 
         Returns:
             整合參數後的 file_paths 字典
@@ -188,6 +193,13 @@ class UnifiedPipelineService:
                         enriched_paths[file_key] = {
                             'path': file_path,
                             'params': params_config[file_key]
+                        }
+                    elif source_type and f"{file_key}_{source_type.lower()}" in params_config:
+                        # PROCUREMENT: procurement_previous → procurement_previous_po/pr
+                        suffixed_key = f"{file_key}_{source_type.lower()}"
+                        enriched_paths[file_key] = {
+                            'path': file_path,
+                            'params': params_config[suffixed_key]
                         }
                     else:
                         enriched_paths[file_key] = file_path
