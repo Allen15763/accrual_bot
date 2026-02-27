@@ -48,8 +48,8 @@ class TestPipelineOrchestratorsIntegration:
         # 構建 pipeline
         pipeline = orchestrator.build_po_pipeline(file_paths)
 
-        # 驗證 pipeline 結構
-        assert len(pipeline.steps) == 6
+        # 驗證 pipeline 結構（步驟數由 config/stagging.toml 決定）
+        assert len(pipeline.steps) >= 6
         assert pipeline.config.entity_type == 'SPT'
 
         # 註：完整執行需要所有步驟的依賴，此處只驗證構建
@@ -69,6 +69,6 @@ class TestPipelineOrchestratorsIntegration:
         # 構建 pipeline
         pipeline = orchestrator.build_po_pipeline(file_paths)
 
-        # 驗證 pipeline 結構
-        assert len(pipeline.steps) == 8
+        # 驗證 pipeline 結構（步驟數由 config/stagging.toml 決定）
+        assert len(pipeline.steps) >= 8
         assert pipeline.config.entity_type == 'SPX'

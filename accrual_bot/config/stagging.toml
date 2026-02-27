@@ -17,6 +17,25 @@ DATE_YMD = '(\d{4}/\d{2}/\d{2})'
 DATE_YM = '(\d{4}/\d{2})'
 
 # ============================================================================
+# Data Shape Summary Configuration - 資料完整性驗證摘要
+# ============================================================================
+
+[data_shape_summary]
+enabled = true
+export_excel = true
+output_dir = "output"
+
+[data_shape_summary.raw_columns]
+product_col = "Product Code"
+currency_col = "Currency"
+amount_col = "Entry Amount"
+
+[data_shape_summary.processed_columns]
+product_col = "product_code"
+currency_col = "currency"
+amount_col = "entry_amount"
+
+# ============================================================================
 # Pipeline Configuration - Configuration-driven step loading
 # ============================================================================
 
@@ -36,6 +55,7 @@ enabled_po_steps = [
     "SPTAccountPrediction",
     "SPTPostProcessing",
     "SPTExport",
+    "DataShapeSummary",
 ]
 enabled_pr_steps = [
     "SPTPRDataLoading",
@@ -51,6 +71,7 @@ enabled_pr_steps = [
     "SPTAccountPrediction",
     "SPTPostProcessing",
     "SPTExport",
+    "DataShapeSummary",
 ]
 enabled_procurement_po_steps = [
     "SPTProcurementDataLoading",
@@ -90,7 +111,8 @@ enabled_po_steps = [
     "ValidationDataProcessing",
     "DepositStatusUpdate",
     "DataReformatting",
-    "SPXExport"
+    "SPXExport",
+    "DataShapeSummary",
 ]
 enabled_pr_steps = [
     "SPXPRDataLoading",
@@ -103,7 +125,8 @@ enabled_pr_steps = [
     "StatusStage1",
     "SPXPRERMLogic",
     "PRDataReformatting",
-    "SPXPRExport"
+    "SPXPRExport",
+    "DataShapeSummary",
 ]
 
 [category_patterns_by_desc]

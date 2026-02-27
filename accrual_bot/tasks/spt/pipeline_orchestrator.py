@@ -37,6 +37,9 @@ from accrual_bot.tasks.spx.steps import (
     SPXPRERMLogicStep,
 )
 
+# Import common steps
+from accrual_bot.tasks.common import DataShapeSummaryStep
+
 # Import shared steps from core
 from accrual_bot.core.pipeline.steps import (
     ProductFilterStep,
@@ -464,6 +467,14 @@ class SPTPipelineOrchestrator:
                 filename_template="{YYYYMM}_PROCUREMENT_COMBINED.xlsx",
                 include_index=False,
                 retry_count=3
+            ),
+
+            # Data Shape Summary
+            'DataShapeSummary': lambda: DataShapeSummaryStep(
+                name="DataShapeSummary",
+                export_excel=True,
+                output_dir="output",
+                required=False
             ),
         }
 

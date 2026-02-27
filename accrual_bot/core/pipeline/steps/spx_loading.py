@@ -124,6 +124,12 @@ class SPXDataLoadingStep(PipelineStep):
             context.update_data(df)
             context.set_variable('processing_date', date)
             context.set_variable('processing_month', m)
+
+            # 儲存原始資料快照供 DataShapeSummary 使用
+            shape_summary_cfg = config_manager._config_toml.get('data_shape_summary', {})
+            if shape_summary_cfg.get('enabled', False):
+                context.add_auxiliary_data('raw_data_snapshot', df.copy())
+
             # 原處理OPS驗收底稿的方法介面需要路徑，故存成變量至Process_Validation步驟使用
             context.set_variable('validation_file_path', validated_configs.get('ops_validation').get('path'))
             # 提供快速測試支援
@@ -1378,7 +1384,12 @@ class SPXPRDataLoadingStep(PipelineStep):
             context.set_variable('processing_date', date)
             context.set_variable('processing_month', m)
             context.set_variable('file_paths', validated_configs)
-            
+
+            # 儲存原始資料快照供 DataShapeSummary 使用
+            shape_summary_cfg = config_manager._config_toml.get('data_shape_summary', {})
+            if shape_summary_cfg.get('enabled', False):
+                context.add_auxiliary_data('raw_data_snapshot', df.copy())
+
             # 階段 4: 添加輔助數據到 Context
             auxiliary_count = 0
             for data_name, data_content in loaded_data.items():
