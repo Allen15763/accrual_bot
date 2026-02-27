@@ -44,6 +44,12 @@ from accrual_bot.core.pipeline.steps.spx_exporting import (
     SPXPRExportStep
 )
 from accrual_bot.core.pipeline.steps.spx_ppe_qty_validation import AccountingOPSValidationStep
+from accrual_bot.tasks.spx.steps.spx_ppe_desc import (
+    PPEDescDataLoadingStep,
+    DescriptionExtractionStep,
+    ContractPeriodMappingStep,
+    PPEDescExportStep,
+)
 
 __all__ = [
     'SPXDataLoadingStep',
@@ -75,4 +81,8 @@ __all__ = [
     'AccountingOPSExportingStep',
     'SPXPRExportStep',
     'AccountingOPSValidationStep',
+    'PPEDescDataLoadingStep',
+    'DescriptionExtractionStep',
+    'ContractPeriodMappingStep',
+    'PPEDescExportStep',
 ]

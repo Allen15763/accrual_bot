@@ -16,7 +16,7 @@ ENTITY_CONFIG: Dict[str, Dict] = {
     },
     'SPX': {
         'display_name': 'SPX',
-        'types': ['PO', 'PR', 'PPE'],
+        'types': ['PO', 'PR', 'PPE', 'PPE_DESC'],
         'description': 'SPX Platform for opened PR/PO',
         'icon': '📦',
     },
@@ -43,6 +43,11 @@ PROCESSING_TYPE_CONFIG: Dict[str, Dict] = {
         'display_name': '採購審核 (PROCUREMENT)',
         'description': '採購人員專用處理流程，支援 PO/PR 單獨或合併處理',
         'icon': '📋',
+    },
+    'PPE_DESC': {
+        'display_name': '未結 PPE 摘要 (PPE_DESC)',
+        'description': 'PO/PR 底稿說明欄位提取與年限對應',
+        'icon': '📊',
     },
 }
 
@@ -80,6 +85,8 @@ FILE_LABELS: Dict[str, str] = {
     'media_finished': '媒體使用完畢清單 (選填)',
     'media_left': '媒體剩餘量清單 (選填)',
     'media_summary': '媒體總表 (選填)',
+    'workpaper': 'PO/PR 底稿 Excel (必填，含 PO_yyyymm 和 PR_yyyymm sheet)',
+    'contract_periods': '年限表 (必填)',
 }
 
 # 各 entity/type 的必要檔案
@@ -90,6 +97,7 @@ REQUIRED_FILES: Dict[Tuple, List[str]] = {
     ('SPX', 'PO'): ['raw_po'],
     ('SPX', 'PR'): ['raw_pr'],
     ('SPX', 'PPE'): ['contract_filing_list'],
+    ('SPX', 'PPE_DESC'): ['workpaper', 'contract_periods'],
     # 3-tuple keys (PROCUREMENT 子類型)
     ('SPT', 'PROCUREMENT', 'PO'): ['raw_po'],
     ('SPT', 'PROCUREMENT', 'PR'): ['raw_pr'],
@@ -129,6 +137,7 @@ OPTIONAL_FILES: Dict[Tuple, List[str]] = {
         'procurement_pr',
     ],
     ('SPX', 'PPE'): [],
+    ('SPX', 'PPE_DESC'): [],
     # 3-tuple keys (PROCUREMENT 子類型)
     ('SPT', 'PROCUREMENT', 'PO'): [
         'procurement_previous',

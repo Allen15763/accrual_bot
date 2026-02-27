@@ -62,6 +62,19 @@ contract_filing_list = {}
 
 
 # =============================================================================
+# SPX PPE_DESC 路徑配置（摘要提取與年限對應）
+# =============================================================================
+[spx.ppe_desc]
+workpaper = "{resources}/{YYYYMM}/PPE/SPTTW-{YYYYMM}-Purchase Order-Accrued-SPX - Review-AP Check.xlsx"
+contract_periods = "{resources}/{YYYYMM}/PPE/年限表_{YYYYMM}.xlsx"
+
+[spx.ppe_desc.params]
+workpaper_po = { dtype = "str" }
+workpaper_pr = { dtype = "str" }
+contract_periods = {}
+
+
+# =============================================================================
 # SPT PO 路徑配置
 # =============================================================================
 [spt.po]

@@ -115,6 +115,10 @@ class UnifiedPipelineService:
             if not processing_date:
                 raise ValueError("PPE 處理需要提供 processing_date")
             return orchestrator.build_ppe_pipeline(enriched_file_paths, processing_date)
+        elif proc_type == 'PPE_DESC' and entity == 'SPX':
+            if not processing_date:
+                raise ValueError("PPE_DESC 處理需要提供 processing_date")
+            return orchestrator.build_ppe_desc_pipeline(enriched_file_paths, processing_date)
         else:
             raise ValueError(f"不支援的處理類型: {entity}/{proc_type}")
 

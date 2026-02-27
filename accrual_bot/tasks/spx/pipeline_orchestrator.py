@@ -23,6 +23,10 @@ from accrual_bot.tasks.spx.steps import (
     ValidationDataProcessingStep,
     SPXExportStep,
     SPXPRExportStep,
+    PPEDescDataLoadingStep,
+    DescriptionExtractionStep,
+    ContractPeriodMappingStep,
+    PPEDescExportStep,
 )
 
 # Import shared steps from core
@@ -227,6 +231,64 @@ class SPXPipelineOrchestrator:
 
         return pipeline
 
+    def build_ppe_desc_pipeline(
+        self,
+        file_paths: Dict[str, Any],
+        processing_date: int,
+        custom_steps: Optional[List[PipelineStep]] = None
+    ) -> Pipeline:
+        """
+        構建 SPX PPE_DESC 後處理 pipeline
+
+        從 PO/PR 底稿提取品項說明摘要，並對應年限表。
+
+        Args:
+            file_paths: 文件路徑配置（workpaper, contract_periods）
+            processing_date: 處理日期 (YYYYMM)，用於解析 sheet 名稱
+            custom_steps: 自定義步驟（可選）
+
+        Returns:
+            Pipeline: 配置好的 pipeline
+        """
+        pipeline_config = PipelineConfig(
+            name="SPX_PPE_DESC_Processing",
+            description="SPX PO/PR description extraction with contract period mapping",
+            entity_type=self.entity_type,
+            stop_on_error=True
+        )
+
+        pipeline = Pipeline(pipeline_config)
+
+        # 固定步驟順序
+        # 1. 載入 PO/PR 底稿和年限表
+        pipeline.add_step(PPEDescDataLoadingStep(
+            name="PPEDescDataLoading",
+            file_paths=file_paths,
+            processing_date=processing_date
+        ))
+
+        # 2. 說明欄位提取（摘要、地址、智取櫃型號）
+        pipeline.add_step(DescriptionExtractionStep(
+            name="DescriptionExtraction"
+        ))
+
+        # 3. 年限對應
+        pipeline.add_step(ContractPeriodMappingStep(
+            name="ContractPeriodMapping"
+        ))
+
+        # 4. 匯出 3-sheet Excel
+        pipeline.add_step(PPEDescExportStep(
+            name="PPEDescExport"
+        ))
+
+        # 添加自定義步驟
+        if custom_steps:
+            for step in custom_steps:
+                pipeline.add_step(step)
+
+        return pipeline
+
     def _create_step(
         self,
         step_name: str,
@@ -340,5 +402,14 @@ class SPXPipelineOrchestrator:
         """
         if processing_type == 'PO':
             return self.config.get('enabled_po_steps', [])
-        else:
+        elif processing_type == 'PR':
             return self.config.get('enabled_pr_steps', [])
+        elif processing_type == 'PPE_DESC':
+            return [
+                'PPEDescDataLoading',
+                'DescriptionExtraction',
+                'ContractPeriodMapping',
+                'PPEDescExport',
+            ]
+        else:
+            return self.config.get('enabled_ppe_steps', [])

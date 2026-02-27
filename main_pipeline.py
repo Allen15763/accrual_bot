@@ -108,6 +108,13 @@ async def main() -> Dict[str, Any]:
             logger.info("使用 PPE pipeline")
         else:
             raise ValueError(f"{config.entity} 不支援 PPE 處理類型")
+    elif config.processing_type == "PPE_DESC":
+        # PPE ESC 處理
+        if hasattr(orchestrator, 'build_ppe_desc_pipeline'):
+            pipeline = orchestrator.build_ppe_desc_pipeline(file_paths, config.processing_date)
+            logger.info("使用 PPE_DESC pipeline")
+        else:
+            raise ValueError(f"{config.entity} 不支援 PPE_DESC 處理類型")
     elif config.processing_type == "PROCUREMENT":
         # PROCUREMENT 處理 (僅限 SPT)
         if config.entity != "SPT":

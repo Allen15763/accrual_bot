@@ -7,7 +7,7 @@
 # 業務實體類型: SPX, SPT, MOB
 entity = "SPX"
 
-# 處理類型: PO, PR, PPE, PROCUREMENT
+# 處理類型: PO, PR, PPE, PPE_DESC, PROCUREMENT
 processing_type = "PO"
 
 # 處理日期 (YYYYMM 格式)
