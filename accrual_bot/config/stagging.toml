@@ -702,7 +702,7 @@ output_columns_before_nlp = [
 output_columns_before_nlp_pr = [
     "pr_link","pr_number","requester",
     "region","department","pr_supplier",
-    "description","currency","total_amount",
+    "description","currency", "status","total_amount",
     "last_action_date","expected_receive_month","pia",
     "category","product_code","rgn",
     "gl_number","item_description","unit_price",
