@@ -31,14 +31,6 @@ from .business import (
     DepartmentConversionStep
 )
 
-# MOB特定步驟
-from .mob_steps import (
-    MOBStatusStep,
-    MOBAccrualStep,
-    MOBDepartmentStep,
-    MOBValidationStep
-)
-
 # SPT特定步驟
 from .spt_steps import (
     SPTStatusStep,
@@ -125,12 +117,6 @@ __all__ = [
     'AccountingAdjustmentStep',
     'AccountCodeMappingStep',
     'DepartmentConversionStep',
-    
-    # MOB
-    'MOBStatusStep',
-    'MOBAccrualStep',
-    'MOBDepartmentStep',
-    'MOBValidationStep',
     
     # SPT
     'SPTStatusStep',
