@@ -23,6 +23,14 @@ except ImportError:
     from accrual_bot.core.datasources import ParquetSource
     from accrual_bot.core.datasources import DuckDBSource
 
+# GoogleSheetsSource 為可選依賴（需安裝 gspread）
+try:
+    from .google_sheet_source import GoogleSheetsSource
+    _GOOGLE_SHEETS_AVAILABLE = True
+except ImportError:
+    GoogleSheetsSource = None  # type: ignore[assignment,misc]
+    _GOOGLE_SHEETS_AVAILABLE = False
+
 
 class DataSourceFactory:
     """數據源工廠"""
@@ -33,6 +41,7 @@ class DataSourceFactory:
         DataSourceType.CSV: CSVSource,
         DataSourceType.PARQUET: ParquetSource,
         DataSourceType.DUCKDB: DuckDBSource,
+        **({DataSourceType.GOOGLE_SHEETS: GoogleSheetsSource} if _GOOGLE_SHEETS_AVAILABLE else {}),
     }
     
     logger = logging.getLogger("DataSourceFactory")
