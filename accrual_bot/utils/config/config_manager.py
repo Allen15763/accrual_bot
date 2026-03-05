@@ -461,19 +461,30 @@ class ConfigManager:
             }
         }
     
-    def get(self, section: str, key: str, fallback: Any = None) -> str:
+    def get(self, section: str, key: str = None, fallback: Any = None) -> Any:
         """
-        獲取配置值
-        
+        獲取配置值，支援 dot-notation 語法
+
         Args:
-            section: 配置段落名稱
-            key: 配置鍵名
+            section: 配置段落名稱，或 dot-notation 路徑（如 'pipeline.spt.enabled_po_steps'）
+            key: 配置鍵名（若 section 已含 dot-notation 且 key=None，則自動拆分）
             fallback: 預設值
-            
+
         Returns:
-            str: 配置值
+            配置值
         """
         try:
+            # dot-notation 支援：'pipeline.spt.name' 形式
+            if key is None and '.' in section:
+                parts = section.split('.')
+                value = self._config_toml
+                for part in parts:
+                    if isinstance(value, dict):
+                        value = value.get(part, {})
+                    else:
+                        return fallback
+                return value if value != {} else fallback
+
             return self._config_data.get(section, {}).get(key, fallback)
         except Exception:
             return fallback
@@ -733,6 +744,83 @@ class ConfigManager:
                 result = result[key]
             else:
                 return None
+        return result
+
+    def get_path(self, section: str, key: str = None, fallback: str = None) -> Optional[Path]:
+        """
+        獲取路徑配置值，轉換為 Path 物件
+
+        Args:
+            section: 配置段落名稱（INI section 或 dot-notation TOML 路徑）
+            key: 配置鍵名
+            fallback: 預設值
+
+        Returns:
+            Optional[Path]: Path 物件，找不到時返回 None
+        """
+        path_str = self.get(section, key, fallback)
+        return Path(path_str) if path_str else None
+
+    def get_nested(self, *keys: str, fallback: Any = None) -> Any:
+        """
+        取得 TOML 多層巢狀配置值
+
+        Args:
+            *keys: 依序的鍵名（如 'pipeline', 'spt', 'enabled_po_steps'）
+            fallback: 找不到時的預設值
+
+        Returns:
+            Any: 配置值
+
+        Example:
+            config_manager.get_nested('pipeline', 'spt', 'enabled_po_steps')
+        """
+        try:
+            value = self._config_toml
+            for key in keys:
+                value = value[key]
+            return value
+        except (KeyError, TypeError):
+            return fallback
+
+    def get_all(self, section: str, subsection: str = None) -> Dict:
+        """
+        取得整個配置段落或子段落的字典
+
+        優先查詢 TOML 配置（_config_toml），找不到時查詢 INI 配置（_config_data）。
+
+        Args:
+            section: 段落名稱
+            subsection: 子段落名稱（選填）
+
+        Returns:
+            Dict: 配置字典（找不到時回傳空字典）
+        """
+        # 優先從 TOML 查詢
+        toml_section = self._config_toml.get(section, None)
+        if toml_section is not None:
+            if subsection:
+                return toml_section.get(subsection, {})
+            return toml_section
+
+        # fallback 到 INI 配置
+        ini_section = self._config_data.get(section, {})
+        if subsection:
+            return ini_section.get(subsection, {})
+        return ini_section
+
+    def to_dict(self) -> Dict:
+        """
+        回傳完整配置字典副本（INI + TOML 合併）
+
+        Returns:
+            Dict: 完整配置字典
+        """
+        result = dict(self._config_data)
+        if self._config_toml:
+            result['_toml'] = self._config_toml.copy()
+        if self._paths_toml:
+            result['_paths'] = self._paths_toml.copy()
         return result
 
     def reload_config(self) -> None:
