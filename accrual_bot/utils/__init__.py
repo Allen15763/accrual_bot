@@ -6,6 +6,8 @@
 from .config import *
 from .logging import *
 from .helpers import *
+from .metadata_builder import MetadataBuilder, SchemaConfig, ColumnSpec, SourceSpec
+from .duckdb_manager import DuckDBManager, DuckDBConfig
 
 __all__ = [
     # 從子模組匯出的所有內容
@@ -65,5 +67,15 @@ __all__ = [
     'validate_dataframe_columns',
     'concat_dataframes_safely',
     'parallel_apply',
-    'memory_efficient_operation'
+    'memory_efficient_operation',
+
+    # metadata_builder 模組
+    'MetadataBuilder',
+    'SchemaConfig',
+    'ColumnSpec',
+    'SourceSpec',
+
+    # duckdb_manager 模組
+    'DuckDBManager',
+    'DuckDBConfig',
 ]
