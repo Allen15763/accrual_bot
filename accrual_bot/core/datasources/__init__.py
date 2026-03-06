@@ -12,6 +12,11 @@ from .excel_source import ExcelSource
 from .csv_source import CSVSource
 from .parquet_source import ParquetSource
 from .duckdb_source import DuckDBSource
+try:
+    from .google_sheet_source import GoogleSheetsSource, GoogleSheetsManager
+except ImportError:
+    GoogleSheetsSource = None  # type: ignore[assignment,misc]
+    GoogleSheetsManager = None  # type: ignore[assignment,misc]
 
 __all__ = [
     'DataSource',
@@ -22,5 +27,7 @@ __all__ = [
     'ExcelSource',
     'CSVSource',
     'ParquetSource',
-    'DuckDBSource'
+    'DuckDBSource',
+    'GoogleSheetsSource',
+    'GoogleSheetsManager',  # 向後兼容別名
 ]

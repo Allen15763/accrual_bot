@@ -37,6 +37,9 @@ class DataSourceConfig:
     lazy_load: bool = False
     encoding: str = 'utf-8'
     chunk_size: Optional[int] = None
+    cache_ttl_seconds: int = 300        # 快取過期秒數（預設 5 分鐘）
+    cache_max_items: int = 10           # 最大快取條目數
+    cache_eviction_policy: str = "lru"  # 驅逐策略
     
     def validate(self) -> tuple[bool, List[str]]:
         """
@@ -103,7 +106,10 @@ class DataSourceConfig:
             cache_enabled=self.cache_enabled,
             lazy_load=self.lazy_load,
             encoding=self.encoding,
-            chunk_size=self.chunk_size
+            chunk_size=self.chunk_size,
+            cache_ttl_seconds=self.cache_ttl_seconds,
+            cache_max_items=self.cache_max_items,
+            cache_eviction_policy=self.cache_eviction_policy
         )
     
     @classmethod
@@ -127,7 +133,10 @@ class DataSourceConfig:
             cache_enabled=config_dict.get('cache_enabled', True),
             lazy_load=config_dict.get('lazy_load', False),
             encoding=config_dict.get('encoding', 'utf-8'),
-            chunk_size=config_dict.get('chunk_size')
+            chunk_size=config_dict.get('chunk_size'),
+            cache_ttl_seconds=config_dict.get('cache_ttl_seconds', 300),
+            cache_max_items=config_dict.get('cache_max_items', 10),
+            cache_eviction_policy=config_dict.get('cache_eviction_policy', 'lru')
         )
     
     def to_dict(self) -> Dict[str, Any]:
@@ -143,7 +152,10 @@ class DataSourceConfig:
             'cache_enabled': self.cache_enabled,
             'lazy_load': self.lazy_load,
             'encoding': self.encoding,
-            'chunk_size': self.chunk_size
+            'chunk_size': self.chunk_size,
+            'cache_ttl_seconds': self.cache_ttl_seconds,
+            'cache_max_items': self.cache_max_items,
+            'cache_eviction_policy': self.cache_eviction_policy
         }
 
 

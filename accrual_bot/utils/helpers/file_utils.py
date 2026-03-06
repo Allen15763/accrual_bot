@@ -11,6 +11,9 @@ import hashlib
 import time
 
 from ..config.constants import SUPPORTED_FILE_EXTENSIONS, EXCEL_EXTENSIONS, CSV_EXTENSIONS
+from ..logging import get_logger
+
+logger = get_logger('utils.file_utils')
 
 
 def get_resource_path(relative_path: str) -> str:
@@ -41,26 +44,32 @@ def validate_file_path(file_path: str, check_exists: bool = True) -> bool:
         bool: 是否有效
     """
     if not file_path or not isinstance(file_path, str):
+        logger.warning(f"無效的檔案路徑（非字串或空值）: {file_path!r}")
         return False
-    
+
     try:
         path = Path(file_path)
-        
+
         # 檢查路徑格式是否有效
         if not path.name:
+            logger.warning(f"路徑格式無效（無檔案名稱）: {file_path}")
             return False
-        
+
         # 檢查檔案是否存在
         if check_exists and not path.exists():
+            logger.warning(f"檔案不存在: {file_path}")
             return False
-        
+
         # 檢查是否為檔案（而非目錄）
         if check_exists and not path.is_file():
+            logger.warning(f"路徑非檔案（可能是目錄）: {file_path}")
             return False
-        
+
+        logger.debug(f"路徑驗證通過: {file_path}")
         return True
-        
-    except (OSError, ValueError):
+
+    except (OSError, ValueError) as e:
+        logger.warning(f"驗證路徑時發生例外: {file_path} — {e}")
         return False
 
 
@@ -138,9 +147,15 @@ def ensure_directory_exists(directory_path: str) -> bool:
         bool: 操作是否成功
     """
     try:
-        Path(directory_path).mkdir(parents=True, exist_ok=True)
+        path = Path(directory_path)
+        if path.exists():
+            logger.debug(f"目錄已存在: {directory_path}")
+        else:
+            path.mkdir(parents=True, exist_ok=True)
+            logger.info(f"已建立目錄: {directory_path}")
         return True
-    except OSError:
+    except OSError as e:
+        logger.error(f"建立目錄失敗: {directory_path} — {e}")
         return False
 
 
@@ -222,9 +237,11 @@ def get_file_info(file_path: str) -> Dict[str, Any]:
     """
     try:
         path = Path(file_path)
+        if not path.exists():
+            logger.warning(f"取得檔案資訊失敗，路徑不存在: {file_path}")
+            return {}
         stat = path.stat()
-        
-        return {
+        info = {
             'name': path.name,
             'stem': path.stem,
             'suffix': path.suffix,
@@ -234,10 +251,13 @@ def get_file_info(file_path: str) -> Dict[str, Any]:
             'modified_time': stat.st_mtime,
             'is_file': path.is_file(),
             'is_dir': path.is_dir(),
-            'exists': path.exists(),
+            'exists': True,
             'absolute_path': str(path.absolute())
         }
-    except (OSError, AttributeError):
+        logger.debug(f"取得檔案資訊成功: {file_path} ({info['size_mb']} MB)")
+        return info
+    except (OSError, AttributeError) as e:
+        logger.warning(f"取得檔案資訊時發生例外: {file_path} — {e}")
         return {}
 
 
@@ -279,23 +299,27 @@ def copy_file_safely(src_path: str, dst_path: str, overwrite: bool = False) -> b
     try:
         src = Path(src_path)
         dst = Path(dst_path)
-        
+
         # 檢查來源檔案是否存在
         if not src.exists():
+            logger.warning(f"複製失敗，來源檔案不存在: {src_path}")
             return False
-        
+
         # 檢查目標檔案是否已存在
         if dst.exists() and not overwrite:
+            logger.warning(f"複製失敗，目標檔案已存在且未允許覆蓋: {dst_path}")
             return False
-        
+
         # 確保目標目錄存在
         dst.parent.mkdir(parents=True, exist_ok=True)
-        
+
         # 複製檔案
         shutil.copy2(src, dst)
+        logger.info(f"檔案複製成功: {src_path} → {dst_path}")
         return True
-        
-    except (OSError, shutil.Error):
+
+    except (OSError, shutil.Error) as e:
+        logger.error(f"複製檔案時發生例外: {src_path} → {dst_path} — {e}")
         return False
 
 
@@ -397,6 +421,31 @@ def find_files_by_pattern(directory: str, pattern: str, recursive: bool = True) 
         
     except OSError:
         return []
+
+
+def load_toml(path: str) -> Dict[str, Any]:
+    """
+    載入 TOML 配置檔案
+
+    Args:
+        path: TOML 檔案路徑
+
+    Returns:
+        Dict[str, Any]: 配置字典，載入失敗時回傳空字典
+    """
+    import tomllib
+    try:
+        toml_path = Path(path)
+        if not toml_path.exists():
+            logger.warning(f"TOML 檔案不存在: {path}")
+            return {}
+        with open(toml_path, 'rb') as f:
+            data = tomllib.load(f)
+        logger.debug(f"已載入 TOML 配置: {path}")
+        return data
+    except Exception as e:
+        logger.error(f"載入 TOML 檔案失敗: {path} — {e}")
+        return {}
 
 
 def get_directory_size(directory: str) -> Tuple[int, int]:

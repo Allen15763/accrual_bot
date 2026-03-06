@@ -17,6 +17,7 @@ from accrual_bot.tasks.spt.steps import (
     SPTERMLogicStep,
     SPTStatusLabelStep,
     SPTAccountPredictionStep,
+    SPTPostProcessingStep,
     CommissionDataUpdateStep,
     PayrollDetectionStep,
     # Procurement steps
@@ -35,6 +36,8 @@ from accrual_bot.tasks.spt.steps import (
 from accrual_bot.tasks.spx.steps import (
     SPXPRExportStep,  # SPT 使用 SPX 的 Export (內容相同)
     SPXPRERMLogicStep,
+    ColumnAdditionStep,
+    APInvoiceIntegrationStep,
 )
 
 # Import common steps
@@ -43,12 +46,9 @@ from accrual_bot.tasks.common import DataShapeSummaryStep
 # Import shared steps from core
 from accrual_bot.core.pipeline.steps import (
     ProductFilterStep,
-    ColumnAdditionStep,
-    APInvoiceIntegrationStep,
     PreviousWorkpaperIntegrationStep,
     ProcurementIntegrationStep,
     DateLogicStep,
-    SPTPostProcessingStep,
 )
 
 

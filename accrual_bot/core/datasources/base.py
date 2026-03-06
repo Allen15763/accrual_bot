@@ -5,12 +5,14 @@
 
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Dict, List, Optional, Any, Union
+from typing import Dict, List, Optional, Any, Union, Tuple
 import pandas as pd
 import asyncio
+import hashlib
+import json
 from accrual_bot.utils.logging import get_logger
 from accrual_bot.core.datasources.config import DataSourceConfig
-from datetime import datetime
+from datetime import datetime, timedelta
 
 
 class DataSourceType(Enum):
@@ -36,7 +38,9 @@ class DataSource(ABC):
         """
         self.config = config
         self.logger = get_logger(f"datasource.{self.__class__.__name__}")
-        self._cache = None
+        self._cache: Dict[str, Tuple[pd.DataFrame, datetime]] = {}
+        self._cache_ttl = timedelta(seconds=config.cache_ttl_seconds)
+        self._cache_max_size = config.cache_max_items
         self._metadata = {}
         
     @abstractmethod
@@ -79,30 +83,63 @@ class DataSource(ABC):
     
     async def read_with_cache(self, query: Optional[str] = None, **kwargs) -> pd.DataFrame:
         """
-        帶快取的讀取
-        
+        帶 TTL+LRU 快取的讀取
+
         Args:
             query: 查詢條件
             **kwargs: 額外參數
-            
+
         Returns:
             pd.DataFrame: 數據
         """
-        if self.config.cache_enabled and self._cache is not None:
-            self.logger.debug("Returning cached data")
-            return self._cache
-        
+        if not self.config.cache_enabled:
+            return await self.read(query, **kwargs)
+
+        cache_key = self._generate_cache_key(query, kwargs)
+
+        if cache_key in self._cache:
+            data, timestamp = self._cache[cache_key]
+            if datetime.now() - timestamp < self._cache_ttl:
+                self.logger.debug(f"快取命中 (key={cache_key[:8]}...)")
+                return data.copy()
+            else:
+                del self._cache[cache_key]
+                self.logger.debug(f"快取已過期，重新載入 (key={cache_key[:8]}...)")
+
         data = await self.read(query, **kwargs)
-        
-        if self.config.cache_enabled:
-            self._cache = data.copy()
-            
+        self._cache[cache_key] = (data.copy(), datetime.now())
+
+        # LRU 驅逐：超過上限時移除最舊的條目
+        if len(self._cache) > self._cache_max_size:
+            oldest_key = min(self._cache, key=lambda k: self._cache[k][1])
+            del self._cache[oldest_key]
+            self.logger.debug(f"LRU 驅逐快取條目 (key={oldest_key[:8]}...)")
+
         return data
-    
+
+    def _generate_cache_key(self, query: Optional[str], kwargs: dict) -> str:
+        """
+        生成 MD5 快取鍵值
+
+        Args:
+            query: 查詢條件
+            kwargs: 額外參數
+
+        Returns:
+            str: MD5 快取鍵值
+        """
+        # 排除日誌相關參數，避免影響快取鍵值
+        filtered_kwargs = {k: v for k, v in sorted(kwargs.items())
+                           if k not in ('logger', 'log_level')}
+        key_data = {'query': query, 'kwargs': filtered_kwargs}
+        key_json = json.dumps(key_data, sort_keys=True, default=str)
+        return hashlib.md5(key_json.encode('utf-8')).hexdigest()
+
     def clear_cache(self):
-        """清除快取"""
-        self._cache = None
-        self.logger.debug("Cache cleared")
+        """清除所有快取"""
+        count = len(self._cache)
+        self._cache.clear()
+        self.logger.debug(f"快取已清除（共 {count} 筆）")
     
     async def validate_connection(self) -> bool:
         """
