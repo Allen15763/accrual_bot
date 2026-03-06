@@ -4,31 +4,30 @@ SPX Steps - SPX-specific pipeline steps
 This module contains all SPX entity-specific processing steps.
 """
 
-# Re-export from original location for backward compatibility
-from accrual_bot.core.pipeline.steps.spx_loading import (
+from .spx_loading import (
     SPXDataLoadingStep,
     PPEDataLoadingStep,
     AccountingOPSDataLoadingStep,
-    SPXPRDataLoadingStep
+    SPXPRDataLoadingStep,
 )
-from accrual_bot.core.pipeline.steps.spx_steps import (
+from .spx_steps import (
     SPXDepositCheckStep,
     SPXClosingListIntegrationStep,
     SPXRentProcessingStep,
     SPXAssetValidationStep,
     SPXComplexStatusStep,
-    SPXPPEProcessingStep
+    SPXPPEProcessingStep,
 )
-from accrual_bot.core.pipeline.steps.spx_evaluation import (
+from .spx_evaluation import (
     StatusStage1Step,
     ERMConditions,
     SPXERMLogicStep,
     PPEContractDateUpdateStep,
-    PPEMonthDifferenceStep
+    PPEMonthDifferenceStep,
 )
-from accrual_bot.core.pipeline.steps.spx_evaluation_2 import DepositStatusUpdateStep
-from accrual_bot.core.pipeline.steps.spx_pr_evaluation import SPXPRERMLogicStep
-from accrual_bot.core.pipeline.steps.spx_integration import (
+from .spx_evaluation_2 import DepositStatusUpdateStep
+from .spx_pr_evaluation import SPXPRERMLogicStep
+from .spx_integration import (
     ColumnAdditionStep,
     APInvoiceIntegrationStep,
     ClosingListIntegrationStep,
@@ -36,15 +35,15 @@ from accrual_bot.core.pipeline.steps.spx_integration import (
     DataReformattingStep,
     PRDataReformattingStep,
     PPEDataCleaningStep,
-    PPEDataMergeStep
+    PPEDataMergeStep,
 )
-from accrual_bot.core.pipeline.steps.spx_exporting import (
+from .spx_exporting import (
     SPXExportStep,
     AccountingOPSExportingStep,
-    SPXPRExportStep
+    SPXPRExportStep,
 )
-from accrual_bot.core.pipeline.steps.spx_ppe_qty_validation import AccountingOPSValidationStep
-from accrual_bot.tasks.spx.steps.spx_ppe_desc import (
+from .spx_ppe_qty_validation import AccountingOPSValidationStep
+from .spx_ppe_desc import (
     PPEDescDataLoadingStep,
     DescriptionExtractionStep,
     ContractPeriodMappingStep,

@@ -4,21 +4,20 @@ SPT Steps - SPT-specific pipeline steps
 This module contains all SPT entity-specific processing steps.
 """
 
-# Re-export from original location for backward compatibility
-from accrual_bot.core.pipeline.steps.spt_loading import SPTDataLoadingStep, SPTPRDataLoadingStep
-from accrual_bot.core.pipeline.steps.spt_steps import (
+from .spt_loading import SPTDataLoadingStep, SPTPRDataLoadingStep
+from .spt_steps import (
     SPTStatusStep,
     SPTDepartmentStep,
     SPTAccrualStep,
     SPTValidationStep,
-    SPTPostProcessingStep
+    SPTPostProcessingStep,
 )
-from accrual_bot.core.pipeline.steps.spt_evaluation_erm import SPTERMLogicStep
-from accrual_bot.core.pipeline.steps.spt_evaluation_affiliate import CommissionDataUpdateStep, PayrollDetectionStep
-from accrual_bot.core.pipeline.steps.spt_evaluation_accountant import SPTStatusLabelStep
-from accrual_bot.core.pipeline.steps.spt_account_prediction import AccountPredictionConditions, SPTAccountPredictionStep
+from .spt_evaluation_erm import SPTERMLogicStep
+from .spt_evaluation_affiliate import CommissionDataUpdateStep, PayrollDetectionStep
+from .spt_evaluation_accountant import SPTStatusLabelStep
+from .spt_account_prediction import AccountPredictionConditions, SPTAccountPredictionStep
 
-# SPT Procurement steps (from tasks/spt/steps/)
+# SPT Procurement steps
 from .spt_procurement_loading import (
     SPTProcurementDataLoadingStep,
     SPTProcurementPRDataLoadingStep,

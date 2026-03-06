@@ -23,6 +23,14 @@ from accrual_bot.tasks.spx.steps import (
     ValidationDataProcessingStep,
     SPXExportStep,
     SPXPRExportStep,
+    APInvoiceIntegrationStep,
+    DataReformattingStep,
+    PRDataReformattingStep,
+    PPEDataLoadingStep,
+    PPEDataCleaningStep,
+    PPEDataMergeStep,
+    PPEContractDateUpdateStep,
+    PPEMonthDifferenceStep,
     PPEDescDataLoadingStep,
     DescriptionExtractionStep,
     ContractPeriodMappingStep,
@@ -35,17 +43,9 @@ from accrual_bot.tasks.common import DataShapeSummaryStep
 # Import shared steps from core
 from accrual_bot.core.pipeline.steps import (
     ProductFilterStep,
-    APInvoiceIntegrationStep,
     PreviousWorkpaperIntegrationStep,
     ProcurementIntegrationStep,
     DateLogicStep,
-    DataReformattingStep,
-    PRDataReformattingStep,
-    PPEDataLoadingStep,
-    PPEDataCleaningStep,
-    PPEDataMergeStep,
-    PPEContractDateUpdateStep,
-    PPEMonthDifferenceStep,
 )
 
 

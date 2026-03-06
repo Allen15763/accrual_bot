@@ -1,13 +1,20 @@
 """
 Pipeline 步驟實現
-包含各種通用和實體特定的處理步驟
+包含通用、可跨實體複用的處理步驟
+
+實體特定步驟已移至：
+  - accrual_bot.tasks.spt.steps  （SPT 相關步驟）
+  - accrual_bot.tasks.spx.steps  （SPX 相關步驟）
+
+向後兼容：各實體步驟的 shim 檔案仍在此目錄，
+可透過 from accrual_bot.core.pipeline.steps.spt_loading import ... 等路徑直接匯入。
 """
 
 # 抽象基類
 from .base_loading import BaseLoadingStep
 from .base_evaluation import BaseERMEvaluationStep, BaseERMConditions
 
-# 基礎步驟
+# 基礎通用步驟
 from .common import (
     DataCleaningStep,
     DateFormattingStep,
@@ -30,59 +37,6 @@ from .business import (
     AccountCodeMappingStep,
     DepartmentConversionStep
 )
-
-# SPT特定步驟
-from .spt_steps import (
-    SPTStatusStep,
-    SPTDepartmentStep,
-    SPTAccrualStep,
-    SPTValidationStep,
-    SPTPostProcessingStep
-)
-from .spt_loading import SPTDataLoadingStep, SPTPRDataLoadingStep
-from .spt_evaluation_affiliate import CommissionDataUpdateStep, PayrollDetectionStep
-from .spt_evaluation_erm import SPTERMLogicStep
-from .spt_evaluation_accountant import SPTStatusLabelStep
-from .spt_account_prediction import AccountPredictionConditions, SPTAccountPredictionStep
-
-# SPX特定步驟
-from .spx_steps import (
-    SPXDepositCheckStep,
-    SPXClosingListIntegrationStep,
-    SPXRentProcessingStep,
-    SPXAssetValidationStep,
-    SPXComplexStatusStep,
-    SPXPPEProcessingStep
-)
-from .spx_loading import (
-    SPXDataLoadingStep,
-    PPEDataLoadingStep,
-    AccountingOPSDataLoadingStep,
-    SPXPRDataLoadingStep
-)
-from .spx_integration import (
-    ColumnAdditionStep,
-    APInvoiceIntegrationStep,
-    ClosingListIntegrationStep,
-    ValidationDataProcessingStep,
-    DataReformattingStep,
-    PRDataReformattingStep,
-    PPEDataCleaningStep,
-    PPEDataMergeStep
-)
-from .spx_evaluation import (StatusStage1Step,
-                             ERMConditions,
-                             SPXERMLogicStep,
-                             PPEContractDateUpdateStep,
-                             PPEMonthDifferenceStep)
-from .spx_evaluation_2 import DepositStatusUpdateStep
-from .spx_exporting import SPXExportStep, AccountingOPSExportingStep
-
-from .spx_ppe_qty_validation import AccountingOPSValidationStep
-
-# SPX PR 專用步驟
-from .spx_pr_evaluation import SPXPRERMLogicStep
-from .spx_exporting import SPXPRExportStep
 
 # 通用後處理步驟
 from .post_processing import (
@@ -111,63 +65,13 @@ __all__ = [
     'DateLogicStep',
     'StepMetadataBuilder',
     'create_error_metadata',
-    
+
     # Business
     'StatusEvaluationStep',
     'AccountingAdjustmentStep',
     'AccountCodeMappingStep',
     'DepartmentConversionStep',
-    
-    # SPT
-    'SPTStatusStep',
-    'SPTDepartmentStep',
-    'SPTAccrualStep',
-    'SPTValidationStep',
-    'SPTPostProcessingStep',
-    
-    'SPTDataLoadingStep',
-    'SPTPRDataLoadingStep',
-    'CommissionDataUpdateStep',
-    'PayrollDetectionStep',
-    'SPTERMLogicStep',
-    'SPTStatusLabelStep',
-    'AccountPredictionConditions',
-    'SPTAccountPredictionStep',
-    
-    # SPX
-    'SPXDepositCheckStep',
-    'SPXClosingListIntegrationStep',
-    'SPXRentProcessingStep',
-    'SPXAssetValidationStep',
-    'SPXComplexStatusStep',
-    'SPXPPEProcessingStep',
-    'SPXDataLoadingStep',
-    'PPEDataLoadingStep',
-    'AccountingOPSDataLoadingStep',
-    'SPXPRDataLoadingStep',
-    'ColumnAdditionStep',
-    'APInvoiceIntegrationStep',
-    'ClosingListIntegrationStep',
-    'ValidationDataProcessingStep',
-    'DataReformattingStep',
-    'PRDataReformattingStep',
-    'PPEDataCleaningStep',
-    'PPEDataMergeStep',
-    'StatusStage1Step',
-    'ERMConditions',
-    'SPXERMLogicStep',
-    'PPEContractDateUpdateStep',
-    'PPEMonthDifferenceStep',
-    'DepositStatusUpdateStep',
-    'SPXExportStep',
-    'AccountingOPSExportingStep',
-    'AccountingOPSValidationStep',
 
-    
-    # SPX PR Logic
-    'SPXPRERMLogicStep',
-    'SPXPRExportStep',
-    
     # Post Processing
     'BasePostProcessingStep',
     'DataQualityCheckStep',
