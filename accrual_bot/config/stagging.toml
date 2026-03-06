@@ -197,8 +197,3 @@ enabled_entities = ["SPT"]
 source = "current_month_reviewed_by"
 targets = ["previous_month_reviewed_by", "current_month_reviewed_by"]
 description = "從前期底稿取回 Reviewer 資訊"
-
-
-# =============================================================================
-# 採購前期底稿映射配置 (參考 previous_workpaper_integration 模式)
-# =============================================================================
