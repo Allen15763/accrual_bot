@@ -390,6 +390,15 @@ class ConfigManager:
             with open(get_toml_path('stagging.toml'), 'rb') as f:
                 self._config_toml = tomllib.load(f)
 
+            # 加載任務特定 TOML 文件（可選，不存在則 skip）
+            for _task_name in ('stagging_spt.toml', 'stagging_spx.toml'):
+                _task_path = get_toml_path(_task_name)
+                if _task_path.exists():
+                    with open(_task_path, 'rb') as _f:
+                        _task_cfg = tomllib.load(_f)
+                    self._config_toml = ConfigManager._deep_merge(self._config_toml, _task_cfg)
+                    self._log_info(f"config manager 已合併任務配置: {_task_name}")
+
             # 加載 paths.toml
             paths_toml_file = get_toml_path('paths.toml')
             if paths_toml_file.exists():
@@ -442,6 +451,17 @@ class ConfigManager:
             for key, value in self._config.items(section_name):
                 self._config_data[section_name][key] = value
     
+    @staticmethod
+    def _deep_merge(base: dict, override: dict) -> dict:
+        """遞歸合併字典，override 的值優先"""
+        result = base.copy()
+        for key, value in override.items():
+            if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+                result[key] = ConfigManager._deep_merge(result[key], value)
+            else:
+                result[key] = value
+        return result
+
     def _set_default_config(self) -> None:
         """設定預設配置"""
         self._config_data = {
