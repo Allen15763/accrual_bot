@@ -105,6 +105,67 @@ def processing_context():
 
 
 @pytest.fixture
+def empty_context():
+    """空的 ProcessingContext"""
+    return ProcessingContext(
+        data=pd.DataFrame(),
+        entity_type='TEST',
+        processing_date=202512,
+        processing_type='PO'
+    )
+
+
+@pytest.fixture
+def spx_processing_context():
+    """SPX 處理上下文（含典型欄位和輔助資料）"""
+    from tests.fixtures.test_data_generators import create_spx_po_df
+    df = create_spx_po_df(5)
+    ctx = ProcessingContext(
+        data=df,
+        entity_type='SPX',
+        processing_date=202512,
+        processing_type='PO'
+    )
+    ctx.add_auxiliary_data('reference_account', pd.DataFrame({
+        'Account': ['100000', '100001', '199999'],
+        'Account Desc': ['Cash', 'Receivables', 'FA']
+    }))
+    ctx.add_auxiliary_data('reference_liability', pd.DataFrame({
+        'Account': ['100000', '100001'],
+        'Liability': ['211111', '211112']
+    }))
+    return ctx
+
+
+@pytest.fixture
+def spt_processing_context():
+    """SPT 處理上下文（含典型欄位和輔助資料）"""
+    from tests.fixtures.test_data_generators import create_spt_po_df
+    df = create_spt_po_df(5)
+    ctx = ProcessingContext(
+        data=df,
+        entity_type='SPT',
+        processing_date=202512,
+        processing_type='PO'
+    )
+    ctx.add_auxiliary_data('reference_account', pd.DataFrame({
+        'Account': ['300000', '300001'],
+        'Account Desc': ['Cash', 'Receivables']
+    }))
+    ctx.add_auxiliary_data('reference_liability', pd.DataFrame({
+        'Account': ['300000', '300001'],
+        'Liability': ['311111', '311112']
+    }))
+    return ctx
+
+
+@pytest.fixture
+def tmp_checkpoint_dir(tmp_path):
+    """臨時 checkpoint 目錄"""
+    return str(tmp_path / "checkpoints")
+
+
+@pytest.fixture
 def mock_data_source():
     """Mock DataSource"""
     mock = AsyncMock()

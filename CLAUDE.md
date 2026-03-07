@@ -310,27 +310,135 @@ st.switch_page("pages/1_configuration.py")  # ✗ Wrong - Streamlit won't find i
 
 ## Testing
 
-The project uses pytest with async support. Test structure:
+The project uses pytest with async support. **674 unit tests + 12 integration tests = 686 passing tests** (as of 2026-03).
+
+### Test Structure
 
 ```
 tests/
-├── conftest.py                    # Shared fixtures (mock_config_manager, processing_context, etc.)
-├── pytest.ini                     # pytest configuration with markers
-├── fixtures/sample_data.py        # Test data generators
-├── unit/                          # Unit tests (@pytest.mark.unit)
-│   ├── core/pipeline/steps/       # BaseLoadingStep, BaseERMEvaluationStep tests
-│   ├── tasks/spt/                 # SPT Orchestrator tests
-│   ├── tasks/spx/                 # SPX Orchestrator tests
-│   └── utils/config/              # ConfigManager thread-safety tests
-└── integration/                   # Integration tests (@pytest.mark.integration)
+├── conftest.py                        # Shared fixtures
+├── pytest.ini                         # pytest configuration with markers
+├── fixtures/
+│   ├── sample_data.py                 # Test data generators
+│   └── test_data_generators.py        # Entity-specific data generators
+├── unit/                              # Unit tests (@pytest.mark.unit)
+│   ├── conftest.py                    # Unit-level shared fixtures
+│   ├── core/
+│   │   ├── conftest.py                # Core-level fixtures
+│   │   ├── pipeline/
+│   │   │   ├── test_context.py        # ProcessingContext (100% coverage)
+│   │   │   ├── test_base_classes.py   # PipelineStep, StepResult, StepStatus
+│   │   │   ├── test_pipeline.py       # Pipeline execution, add/remove steps
+│   │   │   ├── test_pipeline_builder.py # PipelineBuilder fluent API
+│   │   │   ├── test_checkpoint.py     # CheckpointManager save/load
+│   │   │   └── steps/
+│   │   │       ├── test_base_loading.py       # BaseLoadingStep template
+│   │   │       ├── test_base_evaluation.py    # BaseERMEvaluationStep template
+│   │   │       ├── test_previous_workpaper.py # PreviousWorkpaperStep
+│   │   │       ├── test_common_steps.py       # StepMetadataBuilder, DateLogicStep
+│   │   │       ├── test_business_steps.py     # StatusEvaluation, AccountMapping
+│   │   │       └── test_post_processing.py    # DataQualityCheck, Statistics
+│   │   └── datasources/
+│   │       ├── test_datasource_config.py  # DataSourceConfig (100% coverage)
+│   │       ├── test_datasource_factory.py # DataSourceFactory
+│   │       ├── test_csv_source.py         # CSVSource read/write/metadata
+│   │       ├── test_excel_source.py       # ExcelSource read/write/sheets
+│   │       └── test_parquet_source.py     # ParquetSource read/write/schema
+│   ├── tasks/
+│   │   ├── conftest.py                # Task-level fixtures (ERM DataFrames)
+│   │   ├── spt/
+│   │   │   ├── test_spt_orchestrator.py       # SPTPipelineOrchestrator
+│   │   │   ├── test_spt_loading.py            # SPTDataLoadingStep validation
+│   │   │   ├── test_spt_evaluation_erm.py     # SPTERMLogicStep (96% coverage)
+│   │   │   └── test_spt_account_prediction.py # SPTAccountPredictionStep
+│   │   └── spx/
+│   │       ├── test_spx_orchestrator.py       # SPXPipelineOrchestrator
+│   │       ├── test_spx_loading.py            # SPXDataLoadingStep validation
+│   │       ├── test_spx_condition_engine.py   # Config-driven condition engine
+│   │       ├── test_spx_evaluation.py         # StatusStage1, SPXERMLogic
+│   │       └── test_spx_ppe_steps.py          # PPE description extraction
+│   ├── utils/
+│   │   ├── config/
+│   │   │   └── test_config_manager.py     # ConfigManager thread-safety
+│   │   ├── helpers/
+│   │   │   ├── test_column_utils.py       # ColumnResolver (100% coverage)
+│   │   │   ├── test_data_utils.py         # TOML loading, regex patterns
+│   │   │   └── test_file_utils.py         # File validation, copy, hash
+│   │   ├── logging/
+│   │   │   └── test_logger.py             # Singleton, thread-safety
+│   │   ├── duckdb_manager/
+│   │   │   └── test_duckdb_manager.py     # DuckDBConfig, Manager CRUD
+│   │   └── metadata_builder/
+│   │       └── test_metadata_builder.py   # SourceSpec, ColumnSpec, SchemaConfig
+│   ├── ui/
+│   │   ├── services/
+│   │   │   ├── test_unified_pipeline_service.py  # Pipeline service (94%)
+│   │   │   └── test_file_handler.py              # File handler (91%)
+│   │   └── models/
+│   │       └── test_state_models.py       # State dataclasses (100%)
+│   └── data/
+│       └── importers/
+│           └── test_base_importer.py      # BaseDataImporter
+└── integration/                       # Integration tests (@pytest.mark.integration)
+    ├── test_pipeline_orchestrators.py # SPT/SPX orchestrator integration
+    └── test_checkpoint_roundtrip.py   # Checkpoint save → load roundtrip
 ```
 
-**Coverage targets**: Overall ≥80%, ConfigManager 100%, Base Classes ≥85%, Orchestrators ≥90%
+### Running Tests
 
-**Key fixtures** (from `conftest.py`):
+```bash
+# Run all tests
+python -m pytest tests/
+
+# Run by category
+python -m pytest tests/ -m unit          # Unit tests only (674 tests)
+python -m pytest tests/ -m integration   # Integration tests only (12 tests)
+
+# Run with coverage
+python -m pytest tests/ --cov=accrual_bot --cov-report=html
+
+# Run specific module tests
+python -m pytest tests/unit/core/pipeline/ -v
+python -m pytest tests/unit/tasks/spx/ -v
+
+# Use scripts (from scripts/ directory)
+scripts/run_unit.bat                     # Unit tests
+scripts/run_integration.bat              # Integration tests
+scripts/run_coverage.bat                 # Full coverage report
+```
+
+### Coverage Summary (Key Modules)
+
+| Module | Coverage |
+|--------|----------|
+| `core/pipeline/context.py` | 100% |
+| `core/pipeline/base.py` | 90% |
+| `core/pipeline/pipeline.py` | 86% |
+| `core/pipeline/steps/post_processing.py` | 88% |
+| `core/pipeline/steps/business.py` | 84% |
+| `core/pipeline/steps/base_loading.py` | 80% |
+| `core/datasources/config.py` | 100% |
+| `core/datasources/{csv,excel,parquet}_source.py` | 77-82% |
+| `tasks/spt/steps/spt_evaluation_erm.py` | 96% |
+| `tasks/spx/steps/spx_evaluation.py` | 67% |
+| `utils/helpers/column_utils.py` | 100% |
+| `utils/helpers/file_utils.py` | 79% |
+| `utils/duckdb_manager/manager.py` | 81% |
+| `ui/services/unified_pipeline_service.py` | 94% |
+| `ui/models/state_models.py` | 100% |
+
+### Key Fixtures
+
+**`tests/conftest.py`** (shared):
 - `mock_config_manager`: Mocks ConfigManager with pipeline configuration
 - `processing_context`: ProcessingContext with sample DataFrame and auxiliary data
 - `mock_data_source_factory`: AsyncMock for data source operations
+
+**`tests/unit/tasks/conftest.py`** (task-level):
+- `spt_file_paths` / `spx_file_paths`: Typical file path dicts
+- `spt_erm_df` / `spx_erm_df`: ERM test DataFrames with all required columns
+- `spt_erm_context` / `spx_erm_context`: ProcessingContext with auxiliary data
+- `mock_spt_orchestrator_config` / `mock_spx_orchestrator_config`: Patched config_manager
 
 ## Key Patterns
 
