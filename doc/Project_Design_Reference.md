@@ -88,6 +88,7 @@ Accrual Bot 是一個**批次式、多實體、多步驟的非同步資料處理
 │  （執行緒安全單例）  （統一日誌框架）                              │
 │                                                                  │
 │  DataSourceFactory  DataSourcePool  ExcelSource / CSVSource      │
+│  GoogleSheetsSource ParquetSource   DuckDBSource                 │
 │  （工廠 + 連接池）   （資源管理）     （多格式資料存取）           │
 └──────────────────────────────────────────────────────────────────┘
 ```
@@ -131,12 +132,15 @@ project_root/
 │   │   │       ├── base_evaluation.py  # ★ BaseERMEvaluationStep（模板方法）
 │   │   │       └── common.py           # 共用步驟（DateLogic、AccountMapping 等）
 │   │   └── datasources/
+│   │       ├── __init__.py         # 統一匯出、條件匯入 GoogleSheetsSource
 │   │       ├── base.py             # DataSource (ABC)
+│   │       ├── config.py           # DataSourceConfig, DataSourceType
 │   │       ├── factory.py          # DataSourceFactory
 │   │       ├── excel_source.py
 │   │       ├── csv_source.py
 │   │       ├── parquet_source.py
-│   │       └── duckdb_source.py
+│   │       ├── duckdb_source.py
+│   │       └── google_sheet_source.py  # ★ GoogleSheetsSource（Google 試算表）
 │   │
 │   ├── tasks/                  # ★ 實體特定實作（業務邏輯所在）
 │   │   ├── common/
@@ -366,10 +370,14 @@ class DataSource(ABC):
     async def get_column_names() -> List[str]
 
 # 具體實作
-ExcelSource   # .xlsx / .xls（支援 sheet_name, header, usecols 等）
-CSVSource     # .csv（支援 encoding, sep, dtype 等）
-ParquetSource # .parquet（Checkpoint 儲存用）
-DuckDBSource  # DuckDB（含記憶體 DB）
+ExcelSource          # .xlsx / .xls（支援 sheet_name, header, usecols 等）
+CSVSource            # .csv（支援 encoding, sep, dtype 等）
+ParquetSource        # .parquet（Checkpoint 儲存用）
+DuckDBSource         # DuckDB（含記憶體 DB）
+GoogleSheetsSource   # Google 試算表（gspread + Service Account JSON 認證）
+                     # 整合 GoogleSheetsImporter / GoogleSheetsManager
+                     # 支援 async read/write、並發多工作表讀取、工作表管理
+                     # ZIP 備援路徑、credentials_config 向後相容
 ```
 
 ### 4.5 BaseLoadingStep（載入步驟模板）
@@ -943,7 +951,8 @@ DataSource (ABC)
 ├── ExcelSource
 ├── CSVSource
 ├── ParquetSource
-└── DuckDBSource
+├── DuckDBSource
+└── GoogleSheetsSource       # google_sheet_source.py（條件匯入，需 gspread）
 ```
 
 ---

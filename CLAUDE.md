@@ -153,14 +153,19 @@ enabled_pr_steps = ["SPXPRDataLoading", "ProductFilter", "ColumnAddition", ...]
 
 ### Data Sources (core/datasources/)
 
-Unified async data access layer supporting:
-- Excel (ExcelSource)
-- CSV (CSVSource)
-- Parquet (ParquetSource)
-- DuckDB (DuckDBSource)
-- Google Sheets (GoogleSheetsSource) — optional dependency
+Unified async data access layer with `DataSource` abstract base class, `DataSourceFactory` factory, and `DataSourcePool` connection pooling:
 
-All sources implement the same interface with thread-safe operations, shared thread pools, and LRU caching.
+- **ExcelSource** — `.xlsx`/`.xls`（支援 sheet_name, header, usecols, dtype）
+- **CSVSource** — `.csv`（支援 encoding, sep, dtype）
+- **ParquetSource** — `.parquet`（Checkpoint 儲存用，型別安全）
+- **DuckDBSource** — DuckDB 記憶體/檔案 DB（SQL 查詢）
+- **GoogleSheetsSource** — Google Sheets 統一數據源（optional dependency，需 `gspread`）
+  - 整合 `GoogleSheetsImporter`（accrual_bot）和 `GoogleSheetsManager`（spe_bank_recon）
+  - DataSource 介面（async read/write）+ 多試算表並發讀取 + 工作表管理（create/delete/recreate）
+  - Service Account JSON 認證 + ZIP fallback（離線環境）
+  - 向後兼容別名 `GoogleSheetsManager`
+
+All sources implement the same `DataSource` interface with thread-safe operations, shared thread pools, and LRU caching (TTL 300s, max 10 items).
 
 ### Configuration
 
@@ -682,17 +687,27 @@ Example: Adding a new entity (e.g. 'NEW')
 
 ```
 accrual_bot/
-├── core/pipeline/              # Framework components
-│   ├── pipeline.py             # Pipeline class
-│   ├── context.py              # ProcessingContext class
-│   ├── checkpoint.py           # CheckpointManager
-│   └── steps/
-│       ├── base_loading.py     # BaseLoadingStep (~593 lines)
-│       ├── base_evaluation.py  # BaseERMEvaluationStep (~518 lines)
-│       ├── common.py           # Shared steps (~1254 lines): DateLogic, ProductFilter, etc.
-│       ├── business.py         # StatusEvaluation, AccountMapping, etc.
-│       ├── post_processing.py  # DataQualityCheck, Statistics
-│       └── *.py                # Entity-specific shims (backward compat re-exports)
+├── core/
+│   ├── pipeline/               # Pipeline framework
+│   │   ├── pipeline.py         # Pipeline class
+│   │   ├── context.py          # ProcessingContext class
+│   │   ├── checkpoint.py       # CheckpointManager
+│   │   └── steps/
+│   │       ├── base_loading.py     # BaseLoadingStep (~593 lines)
+│   │       ├── base_evaluation.py  # BaseERMEvaluationStep (~518 lines)
+│   │       ├── common.py           # Shared steps (~1254 lines): DateLogic, ProductFilter, etc.
+│   │       ├── business.py         # StatusEvaluation, AccountMapping, etc.
+│   │       ├── post_processing.py  # DataQualityCheck, Statistics
+│   │       └── *.py                # Entity-specific shims (backward compat re-exports)
+│   └── datasources/            # Unified data access layer
+│       ├── base.py             # DataSource (ABC), DataSourceType
+│       ├── config.py           # DataSourceConfig, ConnectionPool
+│       ├── factory.py          # DataSourceFactory, DataSourcePool
+│       ├── excel_source.py     # ExcelSource
+│       ├── csv_source.py       # CSVSource
+│       ├── parquet_source.py   # ParquetSource
+│       ├── duckdb_source.py    # DuckDBSource
+│       └── google_sheet_source.py  # GoogleSheetsSource (optional, gspread)
 ├── tasks/                      # Entity-specific implementations
 │   ├── common/                 # Shared task steps (DataShapeSummaryStep)
 │   ├── spt/
