@@ -54,7 +54,7 @@ The codebase follows a four-layer architecture pattern:
 │  pages/ → components/ → services/ → Session State           │
 ├─────────────────────────────────────────────────────────────┤
 │                    Tasks Layer (Orchestrators)               │
-│  tasks/spt/ | tasks/spx/ | tasks/mob/                       │
+│  tasks/spt/ | tasks/spx/ | tasks/common/                     │
 ├─────────────────────────────────────────────────────────────┤
 │                    Core Layer (Framework)                    │
 │  Pipeline | PipelineStep | ProcessingContext | DataSources  │
@@ -77,9 +77,9 @@ The codebase follows a four-layer architecture pattern:
   - Data sources abstraction layer
 
 - **tasks/**: Entity-specific implementations
-  - `tasks/spt/`: SPT-specific steps and pipeline orchestrator
-  - `tasks/spx/`: SPX-specific steps and pipeline orchestrator
-  - `tasks/mob/`: MOB-specific steps and pipeline orchestrator (inactive)
+  - `tasks/spt/`: SPT-specific steps and pipeline orchestrator (PO/PR/PROCUREMENT)
+  - `tasks/spx/`: SPX-specific steps and pipeline orchestrator (PO/PR/PPE/PPE_DESC)
+  - `tasks/common/`: Shared task steps (DataShapeSummaryStep)
   - Each task module contains entity-specific business logic
 
 - **utils/**: Cross-cutting concerns
@@ -92,10 +92,10 @@ The codebase follows a four-layer architecture pattern:
 The application uses a step-based async pipeline architecture with template method pattern:
 
 - **PipelineStep**: Abstract base class for all processing steps. Each step implements `execute()` and `validate_input()` methods.
-- **BaseLoadingStep**: Template base class for data loading steps (~570 lines of shared logic):
+- **BaseLoadingStep**: Template base class for data loading steps (~593 lines of shared logic):
   - Concrete methods: `_normalize_file_paths()`, `_load_all_files_concurrent()`, `_validate_file_configs()`
   - Abstract hooks: `get_required_file_type()`, `_load_primary_file()`, `_load_reference_data()`
-- **BaseERMEvaluationStep**: Template base class for ERM evaluation steps (~465 lines of shared logic):
+- **BaseERMEvaluationStep**: Template base class for ERM evaluation steps (~518 lines of shared logic):
   - Concrete methods: `_set_file_date()`, `_get_status_column()`, `_set_accrual_flag()`, `_generate_statistics()`
   - Abstract hooks: `_build_conditions()`, `_apply_status_conditions()`, `_set_accounting_fields()`
 - **ProcessingContext**: Carries data and state between pipeline steps. Contains main DataFrame, auxiliary data, variables, and execution history.
@@ -109,28 +109,46 @@ DataLoading → Filtering → ColumnAddition → Integration → BusinessLogic �
 
 ### Entity-Specific Processing
 
-Two active entity types with configuration-driven pipeline orchestration:
+Two active entity types with configuration-driven pipeline orchestration (config split into per-entity TOML files):
 
 - **SPT** ([tasks/spt/](accrual_bot/tasks/spt/)):
-  - PO Pipeline: SPTDataLoading → CommissionDataUpdate → PayrollDetection → SPTERMLogic → SPTStatusLabel → SPTAccountPrediction
-  - PR Pipeline: SPTPRDataLoading → CommissionDataUpdate → PayrollDetection → SPTERMLogic → SPTStatusLabel → SPTAccountPrediction
-  - Advanced features: commission handling, payroll detection, account prediction rules
+  - PO Pipeline: SPTDataLoading → ProductFilter → ColumnAddition → APInvoiceIntegration → PreviousWorkpaperIntegration → ProcurementIntegration → CommissionDataUpdate → PayrollDetection → DateLogic → SPTERMLogic → SPTStatusLabel → SPTAccountPrediction → SPTPostProcessing → SPTExport → DataShapeSummary
+  - PR Pipeline: SPTPRDataLoading → ProductFilter → ColumnAddition → PreviousWorkpaperIntegration → ProcurementIntegration → CommissionDataUpdate → PayrollDetection → DateLogic → SPXPRERMLogic → SPTStatusLabel → SPTAccountPrediction → SPTPostProcessing → SPTExport → DataShapeSummary
+  - PROCUREMENT Pipeline (PO/PR/COMBINED):
+    - PO: SPTProcurementDataLoading → ColumnInitialization → ProcurementPreviousMapping → DateLogic → SPTProcurementStatusEvaluation → SPTProcurementExport
+    - PR: SPTProcurementPRDataLoading → ColumnInitialization → ProcurementPreviousMapping → DateLogic → SPTProcurementStatusEvaluation → SPTProcurementExport
+    - COMBINED: CombinedProcurementDataLoading → ProcurementPreviousValidation → CombinedProcurementProcessing → CombinedProcurementExport
+  - Advanced features: commission handling, payroll detection, account prediction rules, media data integration
 
 - **SPX** ([tasks/spx/](accrual_bot/tasks/spx/)):
-  - PO Pipeline: SPXDataLoading → ColumnAddition → ClosingListIntegration → StatusStage1 → SPXERMLogic → DepositStatusUpdate → ValidationDataProcessing → SPXExport
-  - PR Pipeline: SPXPRDataLoading → ColumnAddition → StatusStage1 → SPXPRERMLogic → SPXPRExport
+  - PO Pipeline: SPXDataLoading → ProductFilter → ColumnAddition → APInvoiceIntegration → PreviousWorkpaperIntegration → ProcurementIntegration → DateLogic → ClosingListIntegration → StatusStage1 → SPXERMLogic → ValidationDataProcessing → DepositStatusUpdate → DataReformatting → SPXExport → DataShapeSummary
+  - PR Pipeline: SPXPRDataLoading → ProductFilter → ColumnAddition → PreviousWorkpaperIntegration → ProcurementIntegration → DateLogic → ClosingListIntegration → StatusStage1 → SPXPRERMLogic → PRDataReformatting → SPXPRExport → DataShapeSummary
   - PPE Pipeline: PPEDataLoading → PPEDataCleaning → PPEDataMerge → PPEContractDateUpdate → PPEMonthDifference
-  - Complex processing: 11-condition status evaluation, deposit/rental identification, locker/kiosk asset validation
+  - PPE_DESC Pipeline: PPEDescDataLoading → DescriptionExtraction → ContractPeriodMapping → PPEDescExport
+  - Complex processing: config-driven condition engine (SPXConditionEngine), deposit/rental identification, locker/kiosk asset validation
 
-Pipeline steps can be enabled/disabled via configuration in [config/stagging.toml](accrual_bot/config/stagging.toml):
+Pipeline steps can be enabled/disabled via configuration in TOML files:
 ```toml
+# config/stagging_spt.toml
 [pipeline.spt]
-enabled_po_steps = ["SPTDataLoading", "CommissionDataUpdate", ...]
+enabled_po_steps = ["SPTDataLoading", "ProductFilter", "ColumnAddition",
+    "APInvoiceIntegration", "PreviousWorkpaperIntegration", "ProcurementIntegration",
+    "CommissionDataUpdate", "PayrollDetection", "DateLogic", "SPTERMLogic",
+    "SPTStatusLabel", "SPTAccountPrediction", "SPTPostProcessing", "SPTExport",
+    "DataShapeSummary"]
+enabled_procurement_po_steps = ["SPTProcurementDataLoading", "ColumnInitialization",
+    "ProcurementPreviousMapping", "DateLogic", "SPTProcurementStatusEvaluation",
+    "SPTProcurementExport"]
+enabled_procurement_combined_steps = ["CombinedProcurementDataLoading", ...]
 
+# config/stagging_spx.toml
 [pipeline.spx]
-enabled_po_steps = ["SPXDataLoading", "ColumnAddition", ...]
-enabled_pr_steps = ["SPXPRDataLoading", "ColumnAddition", ...]
-enabled_ppe_steps = ["PPEDataLoading", "PPEDataCleaning", ...]
+enabled_po_steps = ["SPXDataLoading", "ProductFilter", "ColumnAddition",
+    "APInvoiceIntegration", "PreviousWorkpaperIntegration", "ProcurementIntegration",
+    "DateLogic", "ClosingListIntegration", "StatusStage1", "SPXERMLogic",
+    "ValidationDataProcessing", "DepositStatusUpdate", "DataReformatting",
+    "SPXExport", "DataShapeSummary"]
+enabled_pr_steps = ["SPXPRDataLoading", "ProductFilter", "ColumnAddition", ...]
 ```
 
 ### Data Sources (core/datasources/)
@@ -140,12 +158,13 @@ Unified async data access layer supporting:
 - CSV (CSVSource)
 - Parquet (ParquetSource)
 - DuckDB (DuckDBSource)
+- Google Sheets (GoogleSheetsSource) — optional dependency
 
-All sources implement the same interface with thread-safe operations and shared thread pools.
+All sources implement the same interface with thread-safe operations, shared thread pools, and LRU caching.
 
 ### Configuration
 
-Three configuration files:
+Six configuration files:
 
 - **config/config.ini**: Legacy INI configuration (general settings, regex patterns, credentials)
 
@@ -161,13 +180,26 @@ Three configuration files:
   ops_validation = { sheet_name = "智取櫃驗收明細", header = 3, usecols = "A:AH" }
   ```
 
-- **config/stagging.toml**: Main TOML configuration containing:
-  - Pipeline configuration (enabled steps per entity)
+- **config/stagging.toml**: Shared TOML configuration containing:
+  - File paths and reference paths
   - Date regex patterns
-  - Entity-specific pivot configurations
+  - Data shape summary configuration
+  - Category patterns by description (shared keyword-to-category mappings)
+  - Shared settings across entities
+
+- **config/stagging_spt.toml**: SPT-specific configuration:
+  - Pipeline configuration (enabled steps for PO/PR/PROCUREMENT)
   - SPT status label rules and account prediction rules
-  - SPX column mappings and business rules
-  - Account code to keyword mappings
+  - SPT pivot configurations
+
+- **config/stagging_spx.toml**: SPX-specific configuration:
+  - Pipeline configuration (enabled steps for PO/PR)
+  - SPX column mappings and business rules (ap_columns, deposit_keywords, etc.)
+  - SPX pivot configurations (po/pr_pivot_index, cr_pivot_cols)
+  - Supplier lists (bao, kiosk, locker suppliers)
+  - SPX condition engine rules (spx_status_stage1_rules, spx_erm_status_rules)
+
+- **config/run_config.toml**: Runtime configuration for pipeline execution
 
 Configuration is accessed via **thread-safe singleton** `ConfigManager` from `accrual_bot.utils.config`:
 - Implements double-checked locking pattern with `threading.Lock()` to prevent race conditions
@@ -199,6 +231,7 @@ accrual_bot/ui/
 │   ├── entity_selector.py      # Entity/Type/Date selection
 │   ├── file_uploader.py        # Dynamic file upload
 │   ├── progress_tracker.py     # Execution progress
+│   ├── step_preview.py         # Pipeline step preview
 │   └── data_preview.py         # Result preview
 ├── services/                   # Service layer
 │   ├── unified_pipeline_service.py  # Pipeline service (KEY)
@@ -243,22 +276,40 @@ pipeline = service.build_pipeline(
 ```python
 # Entity configuration
 ENTITY_CONFIG = {
+    'SPT': {
+        'display_name': 'SPT',
+        'types': ['PO', 'PR', 'PROCUREMENT'],
+        'icon': '🛒',
+    },
     'SPX': {
         'display_name': 'SPX',
-        'types': ['PO', 'PR', 'PPE'],
+        'types': ['PO', 'PR', 'PPE', 'PPE_DESC'],
         'icon': '📦',
     },
 }
 
-# Required files per entity/type
+# PROCUREMENT sub-types
+PROCUREMENT_SOURCE_TYPES = {'PO': ..., 'PR': ...}  # COMBINED hidden for now
+
+# Required files per entity/type (supports 2-tuple and 3-tuple keys)
 REQUIRED_FILES = {
+    ('SPT', 'PO'): ['raw_po'],
     ('SPX', 'PO'): ['raw_po'],
     ('SPX', 'PPE'): ['contract_filing_list'],
+    ('SPX', 'PPE_DESC'): ['workpaper', 'contract_periods'],
+    ('SPT', 'PROCUREMENT', 'PO'): ['raw_po'],
+    ...
 }
 
 # Optional files per entity/type
 OPTIONAL_FILES = {
-    ('SPX', 'PO'): ['previous', 'procurement_po', 'ap_invoice', 'ops_validation'],
+    ('SPT', 'PO'): ['previous', 'procurement_po', 'ap_invoice', 'previous_pr',
+                     'procurement_pr', 'media_finished', 'media_left', 'media_summary'],
+    ('SPX', 'PO'): ['previous', 'procurement_po', 'ap_invoice', 'previous_pr',
+                     'procurement_pr', 'ops_validation'],
+    ('SPT', 'PROCUREMENT', 'PO'): ['procurement_previous', 'media_finished',
+                                    'media_left', 'media_summary'],
+    ...
 }
 ```
 
@@ -310,7 +361,7 @@ st.switch_page("pages/1_configuration.py")  # ✗ Wrong - Streamlit won't find i
 
 ## Testing
 
-The project uses pytest with async support. **674 unit tests + 12 integration tests = 686 passing tests** (as of 2026-03).
+The project uses pytest with async support. **725 tests collected** (674 unit + 12 integration + 39 unmarked), **723 passing** (as of 2026-03). 2 pre-existing failures in `test_previous_workpaper.py` (`_determine_key_type` returns None for 'PO Line'). Overall coverage: 38%.
 
 ### Test Structure
 
@@ -356,7 +407,7 @@ tests/
 │   │       ├── test_spx_loading.py            # SPXDataLoadingStep validation
 │   │       ├── test_spx_condition_engine.py   # Config-driven condition engine
 │   │       ├── test_spx_evaluation.py         # StatusStage1, SPXERMLogic
-│   │       └── test_spx_ppe_steps.py          # PPE description extraction
+│   │       └── test_spx_ppe_steps.py          # PPE description extraction (PPE_DESC)
 │   ├── utils/
 │   │   ├── config/
 │   │   │   └── test_config_manager.py     # ConfigManager thread-safety
@@ -391,7 +442,7 @@ tests/
 python -m pytest tests/
 
 # Run by category
-python -m pytest tests/ -m unit          # Unit tests only (674 tests)
+python -m pytest tests/ -m unit          # Unit tests only (674 tests, 39 unmarked not included)
 python -m pytest tests/ -m integration   # Integration tests only (12 tests)
 
 # Run with coverage
@@ -407,7 +458,9 @@ scripts/run_integration.bat              # Integration tests
 scripts/run_coverage.bat                 # Full coverage report
 ```
 
-### Coverage Summary (Key Modules)
+### Coverage Summary
+
+Overall: **38%** (14030 statements, 8661 missed). Key modules with high coverage:
 
 | Module | Coverage |
 |--------|----------|
@@ -417,15 +470,21 @@ scripts/run_coverage.bat                 # Full coverage report
 | `core/pipeline/steps/post_processing.py` | 88% |
 | `core/pipeline/steps/business.py` | 84% |
 | `core/pipeline/steps/base_loading.py` | 80% |
+| `core/pipeline/steps/base_evaluation.py` | 65% |
 | `core/datasources/config.py` | 100% |
-| `core/datasources/{csv,excel,parquet}_source.py` | 77-82% |
-| `tasks/spt/steps/spt_evaluation_erm.py` | 96% |
-| `tasks/spx/steps/spx_evaluation.py` | 67% |
+| `core/datasources/csv_source.py` | 77% |
+| `core/datasources/excel_source.py` | 80% |
+| `core/datasources/parquet_source.py` | 82% |
 | `utils/helpers/column_utils.py` | 100% |
 | `utils/helpers/file_utils.py` | 79% |
+| `utils/duckdb_manager/config.py` | 77% |
 | `utils/duckdb_manager/manager.py` | 81% |
+| `utils/metadata_builder/config.py` | 81% |
 | `ui/services/unified_pipeline_service.py` | 94% |
 | `ui/models/state_models.py` | 100% |
+
+Low coverage modules (large/complex, many external dependencies):
+- `core/pipeline/steps/common.py` (40%), `core/datasources/duckdb_source.py` (15%), `utils/duckdb_manager/operations/*` (8-34%), `utils/metadata_builder/processors/*` (19-26%)
 
 ### Key Fixtures
 
@@ -458,9 +517,21 @@ pipeline = spt_orchestrator.build_po_pipeline(file_paths={'po_file': 'path/to/po
 spx_orchestrator = SPXPipelineOrchestrator()
 pipeline = spx_orchestrator.build_pr_pipeline(file_paths={'pr_file': 'path/to/pr.xlsx'})
 
+# Create SPT PROCUREMENT pipeline (PO/PR/COMBINED)
+pipeline = spt_orchestrator.build_procurement_pipeline(
+    file_paths={'raw_po': 'path/to/po.xlsx'},
+    source_type='PO'  # or 'PR' or 'COMBINED'
+)
+
 # Create SPX PPE pipeline
 pipeline = spx_orchestrator.build_ppe_pipeline(
     file_paths={'contract_filing_list': {'path': 'path/to/file.xlsx'}},
+    processing_date=202512
+)
+
+# Create SPX PPE_DESC pipeline
+pipeline = spx_orchestrator.build_ppe_desc_pipeline(
+    file_paths={'workpaper': 'path/to/workpaper.xlsx'},
     processing_date=202512
 )
 
@@ -468,7 +539,7 @@ pipeline = spx_orchestrator.build_ppe_pipeline(
 enabled_steps = spt_orchestrator.get_enabled_steps('PO')  # Returns list from config
 ```
 
-Steps are loaded based on `[pipeline.spt]` or `[pipeline.spx]` configuration in stagging.toml.
+Steps are loaded based on `[pipeline.spt]` in `stagging_spt.toml` or `[pipeline.spx]` in `stagging_spx.toml`.
 
 ### Creating a New Pipeline (Manual)
 
@@ -580,7 +651,7 @@ Example: Adding 'INV' (Invoice) type to SPX
 | 3 | `ui/config.py` | Add `OPTIONAL_FILES[('SPX', 'INV')]` |
 | 4 | `ui/config.py` | Add file labels to `FILE_LABELS` |
 | 5 | `config/paths.toml` | Add `[spx.inv]` and `[spx.inv.params]` sections |
-| 6 | `config/stagging.toml` | Add `enabled_inv_steps` to `[pipeline.spx]` |
+| 6 | `config/stagging_spx.toml` | Add `enabled_inv_steps` to `[pipeline.spx]` section |
 | 7 | `tasks/spx/pipeline_orchestrator.py` | Add `build_inv_pipeline()` method |
 | 8 | `tasks/spx/pipeline_orchestrator.py` | Register steps in `_create_step()` |
 | 9 | `tasks/spx/pipeline_orchestrator.py` | Update `get_enabled_steps()` |
@@ -588,21 +659,22 @@ Example: Adding 'INV' (Invoice) type to SPX
 
 ### Adding a New Entity
 
-Example: Adding 'MOB' entity
+Example: Adding a new entity (e.g. 'NEW')
 
 **Additional files to create:**
 
 | # | File | Purpose |
 |---|------|---------|
-| 1 | `tasks/mob/__init__.py` | Module init, export orchestrator |
-| 2 | `tasks/mob/pipeline_orchestrator.py` | MOBPipelineOrchestrator class |
-| 3 | `tasks/mob/steps/*.py` | Entity-specific steps (if needed) |
+| 1 | `tasks/new/__init__.py` | Module init, export orchestrator |
+| 2 | `tasks/new/pipeline_orchestrator.py` | NEWPipelineOrchestrator class |
+| 3 | `tasks/new/steps/*.py` | Entity-specific steps (if needed) |
+| 4 | `config/stagging_new.toml` | Entity-specific pipeline and business rules |
 
 **Additional modifications:**
 
 | # | File | Changes |
 |---|------|---------|
-| 4 | `ui/services/unified_pipeline_service.py` | Register in `_get_orchestrator()` |
+| 5 | `ui/services/unified_pipeline_service.py` | Register in `_get_orchestrator()` |
 
 **For detailed extension guide, see [doc/UI_Architecture.md#14-擴充指南新增-pipeline-類型](doc/UI_Architecture.md)**
 
@@ -615,18 +687,20 @@ accrual_bot/
 │   ├── context.py              # ProcessingContext class
 │   ├── checkpoint.py           # CheckpointManager
 │   └── steps/
-│       ├── base_loading.py     # BaseLoadingStep (~570 lines)
-│       ├── base_evaluation.py  # BaseERMEvaluationStep (~465 lines)
-│       └── *.py                # Shared steps
+│       ├── base_loading.py     # BaseLoadingStep (~593 lines)
+│       ├── base_evaluation.py  # BaseERMEvaluationStep (~518 lines)
+│       ├── common.py           # Shared steps (~1254 lines): DateLogic, ProductFilter, etc.
+│       ├── business.py         # StatusEvaluation, AccountMapping, etc.
+│       ├── post_processing.py  # DataQualityCheck, Statistics
+│       └── *.py                # Entity-specific shims (backward compat re-exports)
 ├── tasks/                      # Entity-specific implementations
+│   ├── common/                 # Shared task steps (DataShapeSummaryStep)
 │   ├── spt/
-│   │   ├── pipeline_orchestrator.py
-│   │   └── steps/
-│   ├── spx/
-│   │   ├── pipeline_orchestrator.py
-│   │   └── steps/
-│   └── mob/
-│       └── steps/
+│   │   ├── pipeline_orchestrator.py  # SPTPipelineOrchestrator
+│   │   └── steps/              # PO/PR/PROCUREMENT steps (18 files)
+│   └── spx/
+│       ├── pipeline_orchestrator.py  # SPXPipelineOrchestrator
+│       └── steps/              # PO/PR/PPE/PPE_DESC steps (12 files)
 ├── ui/                         # Streamlit UI
 │   ├── config.py               # UI configuration constants
 │   ├── services/
@@ -636,11 +710,23 @@ accrual_bot/
 ├── config/
 │   ├── config.ini              # Legacy INI config
 │   ├── paths.toml              # File paths and read params
-│   └── stagging.toml           # Pipeline steps and business rules
-├── data/                       # Importers, exporters, transformers
+│   ├── run_config.toml         # Runtime execution config
+│   ├── stagging.toml           # Shared config (paths, date patterns, category patterns)
+│   ├── stagging_spt.toml       # SPT pipeline steps, pivot config, business rules
+│   └── stagging_spx.toml       # SPX pipeline steps, supplier lists, condition rules
+├── runner/                     # Pipeline execution (config_loader, step_executor)
+├── data/                       # Importers (base_importer, google_sheets_importer)
 └── utils/
-    ├── config/config_manager.py # Thread-safe singleton
-    └── logging/logger.py        # Unified logging
+    ├── config/
+    │   ├── config_manager.py   # Thread-safe singleton
+    │   └── constants.py        # Shared constants
+    ├── helpers/
+    │   ├── column_utils.py     # ColumnResolver
+    │   ├── data_utils.py       # TOML loading, regex patterns
+    │   └── file_utils.py       # File validation, copy, hash
+    ├── logging/logger.py       # Unified logging
+    ├── duckdb_manager/         # DuckDB operations, migration, config
+    └── metadata_builder/       # Schema config, processors, transformers
 
 # Project root
 ├── main_pipeline.py            # CLI entry point
@@ -654,14 +740,19 @@ accrual_bot/
 - **main_pipeline.py**: Entry point with example pipeline executions for each entity type
 - **accrual_bot/core/pipeline/**: Framework components
   - `pipeline.py`, `context.py`: Core pipeline infrastructure
-  - `steps/base_loading.py`: Template base class for loading steps (~570 lines)
-  - `steps/base_evaluation.py`: Template base class for ERM evaluation (~465 lines)
-  - `steps/`: Other shared pipeline steps
+  - `steps/base_loading.py`: Template base class for loading steps (~593 lines)
+  - `steps/base_evaluation.py`: Template base class for ERM evaluation (~518 lines)
+  - `steps/common.py`: Shared steps (~1254 lines) — DateLogic, ProductFilter, DataIntegration, PreviousWorkpaper, etc.
+  - `steps/business.py`: Business logic steps — StatusEvaluation, AccountMapping
+  - `steps/post_processing.py`: Post-processing steps — DataQualityCheck, Statistics
+  - `steps/*.py`: Entity-specific shim files (backward compatibility re-exports to tasks/)
 - **accrual_bot/tasks/**: Entity-specific implementations
-  - `spt/pipeline_orchestrator.py`: SPT pipeline configuration and construction
-  - `spx/pipeline_orchestrator.py`: SPX pipeline configuration and construction
-  - `spt/steps/`, `spx/steps/`, `mob/steps/`: Entity-specific step implementations (re-exported from core for backward compatibility)
-- **accrual_bot/config/stagging.toml**: Configuration file with `[pipeline.spt]` and `[pipeline.spx]` sections for step enablement
+  - `common/`: Shared task steps (DataShapeSummaryStep)
+  - `spt/pipeline_orchestrator.py`: SPT pipeline configuration (PO/PR/PROCUREMENT with PO/PR/COMBINED sub-types)
+  - `spx/pipeline_orchestrator.py`: SPX pipeline configuration (PO/PR/PPE/PPE_DESC)
+  - `spt/steps/`: SPT-specific steps — loading, ERM, status label, account prediction, procurement, combined procurement
+  - `spx/steps/`: SPX-specific steps — loading, condition engine, evaluation, exporting, integration, PPE, PPE_DESC
+- **accrual_bot/config/stagging_spt.toml**, **stagging_spx.toml**: Entity-specific configuration with `[pipeline.spt]` and `[pipeline.spx]` sections for step enablement
 - **checkpoints/**: Saved pipeline states (excluded from git)
 - **output/**: Processed results (excluded from git)
 
@@ -679,7 +770,7 @@ The codebase underwent significant refactoring to improve code quality and maint
 - **Impact**: Eliminated ~750 lines of duplication (~5% code reduction)
 
 ### Phase 3: Structure & Extensibility (P2)
-- **Tasks Directory**: Created entity-specific modules under `tasks/` (spt, spx, mob)
+- **Tasks Directory**: Created entity-specific modules under `tasks/` (spt, spx, common)
 - **Pipeline Orchestrators**: Implemented configuration-driven step loading via `SPTPipelineOrchestrator` and `SPXPipelineOrchestrator`
 - **Backward Compatibility**: All existing imports continue to work via re-exports
 
@@ -697,6 +788,17 @@ The codebase underwent significant refactoring to improve code quality and maint
 - **Fixed ProcessingContext**: Added `auxiliary_data` property for UI access
 - **Impact**: Removed ~558 lines of code (~22% reduction in UI layer)
 
+### Phase 6: Comprehensive Test Suite (2026-03)
+- **725 tests**: 674 unit + 12 integration + 39 unmarked, covering core pipeline, data sources, tasks, utilities, and UI
+- **Three-phase rollout**: P0 core infrastructure → P1 business logic → P2 extended coverage
+- **Scripts**: `scripts/` directory with `.sh`/`.bat` pairs for running unit, integration, coverage, and quick tests
+- **Test data generators**: Synthetic data factories in `tests/fixtures/test_data_generators.py`
+
+### Phase 7: Entity Config Split & Procurement Pipeline (2026-03)
+- **Config split**: `stagging.toml` split into `stagging_spt.toml` and `stagging_spx.toml` for entity-specific configuration
+- **SPT PROCUREMENT**: New pipeline type for procurement staff (PO/PR/COMBINED variants)
+- **SPX PPE_DESC**: New pipeline type for PO/PR description extraction with contract period mapping
+
 ### Benefits
 - **Maintainability**: Single source of truth for shared logic reduces bug surface area
 - **Extensibility**: New entities/types can be added via configuration + orchestrator updates
@@ -709,8 +811,15 @@ The codebase underwent significant refactoring to improve code quality and maint
 | Document | Description |
 |----------|-------------|
 | `CLAUDE.md` | This file - development guidance |
+| `doc/Project_Design_Reference.md` | Project design reference (architecture, patterns, templates) |
 | `doc/UI_Architecture.md` | Detailed UI architecture, components, and extension guide |
-| `README.md` | Project overview and quick start |
+| `doc/SPT_PROCUREMENT_Implementation.md` | SPT Procurement pipeline implementation details |
+| `doc/SPX_ConditionEngine_Implementation.md` | SPX condition engine design and implementation |
+| `doc/Unified_System_Design_Reference.md` | Unified system design overview |
+| `doc/SPE_Project_Architecture_Reference.md` | SPE project architecture reference |
+| `doc/Project_Review_And_Merger_Analysis.md` | Project review and merger analysis |
+| `doc/Task Pipeline Structure Unit Test Plan.md` | Test plan for pipeline structure |
+| `tests/README.md` | Test suite guide (725+ tests) |
 
 ## Language
 

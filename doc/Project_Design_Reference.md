@@ -60,9 +60,9 @@ Accrual Bot 是一個**批次式、多實體、多步驟的非同步資料處理
 │                                                                  │
 │   tasks/spt/pipeline_orchestrator.py  → SPT 特定步驟序列         │
 │   tasks/spx/pipeline_orchestrator.py  → SPX 特定步驟序列         │
-│   tasks/mob/pipeline_orchestrator.py  → (待擴充)                 │
+│   tasks/common/                      → 共用任務步驟             │
 │                                                                  │
-│  職責：從 stagging.toml 讀取啟用步驟，動態組裝 Pipeline           │
+│  職責：從 stagging_{entity}.toml 讀取啟用步驟，動態組裝 Pipeline  │
 └─────────────────────────────┬────────────────────────────────────┘
                               │ 呼叫 Pipeline / PipelineStep
                               ▼
@@ -73,10 +73,10 @@ Accrual Bot 是一個**批次式、多實體、多步驟的非同步資料處理
 │  PipelineBuilder   PipelineConfig      CheckpointManager         │
 │                                                                  │
 │  步驟基類：                                                       │
-│  BaseLoadingStep (~593行)  ← 模板方法：資料載入                   │
+│  BaseLoadingStep (~593行)   ← 模板方法：資料載入                  │
 │  BaseERMEvaluationStep (~518行) ← 模板方法：業務規則評估          │
 │                                                                  │
-│  共用步驟（common.py, ~1254行）：                                 │
+│  共用步驟（common.py, ~1254行）：                                │
 │  DateLogic / AccountMapping / DataIntegration / Filter ...       │
 └─────────────────────────────┬────────────────────────────────────┘
                               │ 呼叫 DataSource / ConfigManager
@@ -139,18 +139,27 @@ project_root/
 │   │       └── duckdb_source.py
 │   │
 │   ├── tasks/                  # ★ 實體特定實作（業務邏輯所在）
+│   │   ├── common/
+│   │   │   └── data_shape_summary.py      # 共用 DataShapeSummaryStep
 │   │   ├── spt/
 │   │   │   ├── __init__.py
 │   │   │   ├── pipeline_orchestrator.py   # ★ SPTPipelineOrchestrator
-│   │   │   └── steps/                     # SPT 特定步驟
-│   │   │       ├── data_loading.py
-│   │   │       ├── erm_logic.py
-│   │   │       ├── status_label.py
+│   │   │   └── steps/                     # SPT 特定步驟 (18 檔)
+│   │   │       ├── spt_loading.py         # SPTDataLoadingStep, SPTPRDataLoadingStep
+│   │   │       ├── spt_evaluation_erm.py  # SPTERMLogicStep
+│   │   │       ├── spt_steps.py           # SPTStatusLabelStep, CommissionDataUpdate 等
+│   │   │       ├── spt_account_prediction.py
+│   │   │       ├── spt_procurement_*.py   # Procurement 系列步驟
+│   │   │       ├── spt_combined_procurement_*.py  # Combined Procurement 步驟
 │   │   │       └── ...
-│   │   ├── spx/
-│   │   │   ├── pipeline_orchestrator.py   # ★ SPXPipelineOrchestrator
-│   │   │   └── steps/                     # SPX 特定步驟
-│   │   └── mob/                           # 待擴充
+│   │   └── spx/
+│   │       ├── pipeline_orchestrator.py   # ★ SPXPipelineOrchestrator
+│   │       └── steps/                     # SPX 特定步驟 (12 檔)
+│   │           ├── spx_loading.py         # SPXDataLoadingStep, SPXPRDataLoadingStep
+│   │           ├── spx_evaluation.py      # StatusStage1Step, SPXERMLogicStep
+│   │           ├── spx_condition_engine.py # SPXConditionEngine
+│   │           ├── spx_ppe_desc.py        # PPE_DESC 步驟
+│   │           └── ...
 │   │
 │   ├── ui/                     # Web UI 完整實作
 │   │   ├── app.py              # Session state 初始化
@@ -165,6 +174,7 @@ project_root/
 │   │   │   ├── entity_selector.py
 │   │   │   ├── file_uploader.py
 │   │   │   ├── progress_tracker.py
+│   │   │   ├── step_preview.py
 │   │   │   └── data_preview.py
 │   │   ├── pages/              # 實際業務邏輯頁面（標準檔名）
 │   │   │   ├── 1_configuration.py
@@ -178,14 +188,24 @@ project_root/
 │   │
 │   ├── utils/                  # 跨切面工具（可直接搬移至新專案）
 │   │   ├── config/
-│   │   │   └── config_manager.py   # ★ 執行緒安全設定管理器（單例）
-│   │   └── logging/
-│   │       └── logger.py           # ★ 統一日誌框架
+│   │   │   ├── config_manager.py   # ★ 執行緒安全設定管理器（單例）
+│   │   │   └── constants.py        # 共用常數
+│   │   ├── helpers/
+│   │   │   ├── column_utils.py     # ColumnResolver
+│   │   │   ├── data_utils.py       # TOML 載入、正則模式
+│   │   │   └── file_utils.py       # 檔案驗證、複製、雜湊
+│   │   ├── logging/
+│   │   │   └── logger.py           # ★ 統一日誌框架
+│   │   ├── duckdb_manager/         # DuckDB 操作、遷移、設定
+│   │   └── metadata_builder/       # Schema 設定、處理器、轉換器
 │   │
 │   └── config/                 # 設定檔
 │       ├── config.ini           # 一般設定、正則表達式、憑證
 │       ├── paths.toml           # 檔案路徑模板（含變數替換）
-│       └── stagging.toml        # Pipeline 步驟啟用清單 + 業務規則
+│       ├── run_config.toml      # 執行時組態
+│       ├── stagging.toml        # 共用設定（路徑、日期模式、分類模式）
+│       ├── stagging_spt.toml    # SPT Pipeline 步驟 + 業務規則
+│       └── stagging_spx.toml    # SPX Pipeline 步驟 + 條件引擎規則
 │
 ├── tests/
 │   ├── conftest.py
@@ -445,7 +465,7 @@ class BasePipelineOrchestrator:
     編排器共用介面（非強制繼承，可作為設計規範）
     """
 
-    config: Dict              # 從 stagging.toml 讀取
+    config: Dict              # 從 stagging_{entity}.toml 讀取
     entity_type: str          # 'SPT' | 'SPX'
 
     def build_po_pipeline(self, file_paths: Dict, custom_steps=None) -> Pipeline
@@ -637,13 +657,16 @@ await pool.close_all()
 
 ## 6. 配置驅動機制
 
-### 6.1 三層配置體系
+### 6.1 配置體系
 
 ```
 config/
 ├── config.ini          ← 一般設定（正則表達式、憑證、資源路徑）
 ├── paths.toml          ← ★ 檔案路徑模板（支援變數替換）
-└── stagging.toml       ← ★ Pipeline 步驟清單 + 業務規則
+├── run_config.toml     ← 執行時組態
+├── stagging.toml       ← 共用設定（路徑、日期模式、分類模式）
+├── stagging_spt.toml   ← ★ SPT Pipeline 步驟清單 + 業務規則
+└── stagging_spx.toml   ← ★ SPX Pipeline 步驟清單 + 條件引擎規則
 ```
 
 ### 6.2 paths.toml — 檔案路徑模板
@@ -672,11 +695,12 @@ ops_validation = { sheet_name = "智取櫃驗收明細", header = 3, usecols = "
 - 不同月份處理只需改 `processing_date`
 - 檔案讀取參數集中管理，不散落在程式碼中
 
-### 6.3 stagging.toml — 步驟啟用清單
+### 6.3 stagging_{entity}.toml — 步驟啟用清單
 
-**核心設計**：步驟序列由設定檔控制，可在不改程式碼的情況下啟用/停用步驟。
+**核心設計**：步驟序列由設定檔控制，可在不改程式碼的情況下啟用/停用步驟。每個實體有獨立的 TOML 檔案。
 
 ```toml
+# config/stagging_spt.toml
 [pipeline.spt]
 enabled_po_steps = [
     "SPTDataLoading",
@@ -698,21 +722,29 @@ enabled_po_steps = [
 
 enabled_pr_steps = [...]
 enabled_procurement_po_steps = [...]
+enabled_procurement_combined_steps = [...]
 
+# config/stagging_spx.toml
 [pipeline.spx]
 enabled_po_steps = [
     "SPXDataLoading",
+    "ProductFilter",
     "ColumnAddition",
+    "APInvoiceIntegration",
+    "PreviousWorkpaperIntegration",
+    "ProcurementIntegration",
+    "DateLogic",
     "ClosingListIntegration",
     "StatusStage1",
     "SPXERMLogic",
-    "DepositStatusUpdate",
     "ValidationDataProcessing",
+    "DepositStatusUpdate",
+    "DataReformatting",
     "SPXExport",
+    "DataShapeSummary",
 ]
 
-enabled_pr_steps  = [...]
-enabled_ppe_steps = [...]
+enabled_pr_steps = [...]
 ```
 
 **優點**：
@@ -730,7 +762,7 @@ config = ConfigManager()  # 永遠回傳同一實例
 # 讀取 config.ini
 regex_pattern = config.get('regex', 'date_pattern')
 
-# 讀取 stagging.toml（Pipeline 步驟）
+# 讀取 stagging_spt.toml（Pipeline 步驟）
 enabled_steps = config.get_list('spt', 'enabled_po_steps')
 
 # 讀取 paths.toml（檔案路徑參數）
@@ -758,7 +790,7 @@ main_pipeline.py
     ├─ 3. 建立 Orchestrator + Pipeline
     │      orchestrator = SPTPipelineOrchestrator()
     │      pipeline = orchestrator.build_po_pipeline(file_paths)
-    │      # → Pipeline with 15 steps from stagging.toml
+    │      # → Pipeline with 15 steps from stagging_spt.toml
     │
     ├─ 4. 建立 ProcessingContext
     │      context = ProcessingContext(
@@ -860,8 +892,13 @@ paths.toml
             └── 替換路徑變數後傳給 Orchestrator
 
 stagging.toml
+    └── 共用設定（日期模式、分類模式、路徑）
+            └── 所有模組讀取共用配置
+
+stagging_spt.toml / stagging_spx.toml
     └── orchestrator.get_enabled_steps(proc_type)
             └── 決定 Pipeline 中的步驟序列
+    └── 業務規則（status_label_rules、condition_engine 等）
 
 config.ini
     └── ConfigManager
@@ -873,27 +910,34 @@ config.ini
 ```
 PipelineStep (ABC)
 ├── BaseLoadingStep (ABC)
-│   ├── SPTDataLoadingStep
-│   ├── SPXDataLoadingStep
-│   ├── SPXPRDataLoadingStep
-│   ├── PPEDataLoadingStep
-│   └── SPTProcurementDataLoadingStep
+│   ├── SPTDataLoadingStep           # tasks/spt/steps/spt_loading.py
+│   ├── SPTPRDataLoadingStep         # tasks/spt/steps/spt_loading.py
+│   ├── SPXDataLoadingStep           # tasks/spx/steps/spx_loading.py
+│   ├── SPXPRDataLoadingStep         # tasks/spx/steps/spx_loading.py
+│   ├── PPEDataLoadingStep           # tasks/spx/steps/spx_loading.py
+│   ├── SPTProcurementDataLoadingStep    # tasks/spt/steps/spt_procurement_loading.py
+│   ├── SPTProcurementPRDataLoadingStep  # tasks/spt/steps/spt_procurement_loading.py
+│   └── CombinedProcurementDataLoadingStep  # tasks/spt/steps/spt_combined_procurement_loading.py
 │
 ├── BaseERMEvaluationStep (ABC)
-│   ├── SPTERMLogicStep
-│   ├── SPXERMLogicStep
-│   ├── SPXPRERMLogicStep
-│   └── SPTProcurementStatusEvaluationStep
+│   ├── SPTERMLogicStep              # tasks/spt/steps/spt_evaluation_erm.py
+│   ├── SPXERMLogicStep              # tasks/spx/steps/spx_evaluation.py
+│   ├── SPXPRERMLogicStep            # tasks/spx/steps/spx_pr_evaluation.py
+│   └── SPTProcurementStatusEvaluationStep  # tasks/spt/steps/spt_procurement_evaluation.py
 │
 └── （直接繼承的共用步驟）
-    ├── DateLogicStep
-    ├── AccountCodeMappingStep
-    ├── DataIntegrationStep
-    ├── ProductFilterStep
-    ├── PreviousWorkpaperIntegrationStep
-    ├── APInvoiceIntegrationStep
-    ├── ColumnAdditionStep
-    └── ...（common.py 中的其他步驟）
+    ├── DateLogicStep                # core/pipeline/steps/common.py
+    ├── ProductFilterStep            # core/pipeline/steps/common.py
+    ├── DataIntegrationStep          # core/pipeline/steps/common.py
+    ├── PreviousWorkpaperIntegrationStep  # core/pipeline/steps/common.py
+    ├── ProcurementIntegrationStep   # core/pipeline/steps/common.py
+    ├── AccountCodeMappingStep       # core/pipeline/steps/business.py
+    ├── StatusStage1Step             # tasks/spx/steps/spx_evaluation.py（含 SPXConditionEngine）
+    ├── ColumnAdditionStep           # tasks/spx/steps/spx_steps.py
+    ├── SPTStatusLabelStep           # tasks/spt/steps/spt_steps.py
+    ├── SPTAccountPredictionStep     # tasks/spt/steps/spt_account_prediction.py
+    ├── DataShapeSummaryStep         # tasks/common/data_shape_summary.py
+    └── ...（更多實體特定步驟）
 
 DataSource (ABC)
 ├── ExcelSource
@@ -956,10 +1000,10 @@ class UnifiedPipelineService:
     def build_pipeline(
         self,
         entity: str,           # 'SPT' | 'SPX'
-        proc_type: str,        # 'PO' | 'PR' | 'PPE' | 'PROCUREMENT' | 'PPE_DESC'
+        proc_type: str,        # 'PO' | 'PR' | 'PPE' | 'PPE_DESC' | 'PROCUREMENT'
         file_paths: Dict,      # 使用者上傳的檔案路徑
-        processing_date: int = None,  # YYYYMM（PPE 系列必填）
-        source_type: str = None       # PROCUREMENT 子類型
+        processing_date: int = None,  # YYYYMM（PPE/PPE_DESC 必填）
+        source_type: str = None       # PROCUREMENT 子類型 ('PO'|'PR'|'COMBINED')
     ) -> Pipeline
 
     # 內部方法
@@ -991,15 +1035,23 @@ ENTITY_CONFIG = {
 # 必填/選填檔案定義
 REQUIRED_FILES = {
     ('SPT', 'PO'): ['raw_po'],
+    ('SPT', 'PR'): ['raw_pr'],
     ('SPX', 'PO'): ['raw_po'],
+    ('SPX', 'PR'): ['raw_pr'],
     ('SPX', 'PPE'): ['contract_filing_list'],
+    ('SPX', 'PPE_DESC'): ['workpaper', 'contract_periods'],
     ('SPT', 'PROCUREMENT', 'PO'): ['raw_po'],
+    ('SPT', 'PROCUREMENT', 'PR'): ['raw_pr'],
     ...
 }
 
 OPTIONAL_FILES = {
-    ('SPT', 'PO'): ['previous', 'procurement_po', 'ap_invoice', 'reference_account'],
-    ('SPX', 'PO'): ['previous', 'procurement_po', 'ap_invoice', 'ops_validation', 'closing_list'],
+    ('SPT', 'PO'): ['previous', 'procurement_po', 'ap_invoice', 'previous_pr',
+                     'procurement_pr', 'media_finished', 'media_left', 'media_summary'],
+    ('SPX', 'PO'): ['previous', 'procurement_po', 'ap_invoice', 'previous_pr',
+                     'procurement_pr', 'ops_validation'],
+    ('SPT', 'PROCUREMENT', 'PO'): ['procurement_previous', 'media_finished',
+                                    'media_left', 'media_summary'],
     ...
 }
 
@@ -1059,7 +1111,7 @@ def run_async_in_thread(coro):
 | 1 | `tasks/mob/__init__.py` | 建立模組 |
 | 2 | `tasks/mob/pipeline_orchestrator.py` | 實作 `MOBPipelineOrchestrator` |
 | 3 | `tasks/mob/steps/*.py` | 實體特定步驟（可複用 common.py） |
-| 4 | `config/stagging.toml` | 新增 `[pipeline.mob]` 區段 |
+| 4 | `config/stagging_mob.toml` | 新增 `[pipeline.mob]` 區段 + 業務規則 |
 | 5 | `config/paths.toml` | 新增 `[mob.po]` 等路徑區段 |
 | 6 | `ui/config.py` | 在 `ENTITY_CONFIG` 加入 `MOB` |
 | 7 | `ui/config.py` | 新增 `REQUIRED_FILES[('MOB', 'PO')]` |
@@ -1076,7 +1128,7 @@ def run_async_in_thread(coro):
 | 3 | `ui/config.py` | 新增 `OPTIONAL_FILES[('SPX', 'INV')]` |
 | 4 | `ui/config.py` | 新增 `FILE_LABELS` 標籤 |
 | 5 | `config/paths.toml` | 新增 `[spx.inv]` 和 `[spx.inv.params]` |
-| 6 | `config/stagging.toml` | 新增 `enabled_inv_steps` |
+| 6 | `config/stagging_spx.toml` | 新增 `enabled_inv_steps` |
 | 7 | `tasks/spx/pipeline_orchestrator.py` | 新增 `build_inv_pipeline()` |
 | 8 | `tasks/spx/pipeline_orchestrator.py` | 在 `_create_step()` 註冊新步驟 |
 | 9 | `tasks/spx/pipeline_orchestrator.py` | 在 `get_enabled_steps()` 加 `'INV'` 分支 |
@@ -1145,9 +1197,10 @@ def _create_step(self, step_name, file_paths, processing_type):
         return MOBCustomStep(name=step_name)
 ```
 
-**Step 3**：在 `stagging.toml` 中啟用
+**Step 3**：在 `stagging_mob.toml` 中啟用
 
 ```toml
+# config/stagging_mob.toml
 [pipeline.mob]
 enabled_po_steps = [
     "MOBDataLoading",
@@ -1163,7 +1216,7 @@ enabled_po_steps = [
 
 ### 決策 1：選擇 TOML 而非資料庫儲存業務規則
 
-**選擇**：`stagging.toml` 儲存步驟序列和業務規則
+**選擇**：`stagging_{entity}.toml` 儲存步驟序列和業務規則
 
 **取捨**：
 - ✅ 無需資料庫依賴，部署簡單
@@ -1341,7 +1394,7 @@ logger = get_logger(__name__)
 class MyEntityPipelineOrchestrator:
     """
     [實體名] Pipeline 編排器
-    從 stagging.toml 讀取步驟清單，動態組裝 Pipeline
+    從 stagging_{entity}.toml 讀取步驟清單，動態組裝 Pipeline
     """
 
     def __init__(self):
@@ -1443,7 +1496,7 @@ elif '刪' in row['Remarked by 上月 FN'] or '關' in row['Remarked by 上月 F
 **核心概念**：將規則的「形式」（如何判斷）寫在程式，規則的「內容」（判斷什麼）寫在 TOML。
 
 ```
-stagging.toml                          SPXConditionEngine
+stagging_spx.toml                      SPXConditionEngine
 ┌─────────────────────────────┐        ┌─────────────────────────────┐
 │ [[spx_erm_status_rules       │  載入  │                             │
 │   .conditions]]              │ ─────▶ │  _load_rules()              │
@@ -1465,7 +1518,7 @@ stagging.toml                          SPXConditionEngine
 ```python
 class SPXConditionEngine:
     """
-    從 stagging.toml 讀取規則，動態建構 pandas boolean mask 並依序應用。
+    從 stagging_spx.toml 讀取規則，動態建構 pandas boolean mask 並依序應用。
 
     支援兩個規則區段：
     - spx_status_stage1_rules  → StatusStage1Step（第一階段：押金/租金/關單等特殊狀態）
@@ -1831,7 +1884,7 @@ for rule in sorted(rules, key=lambda r: r['rule_id']):
 #### Step 1：定義 TOML 規則
 
 ```toml
-# config/stagging.toml
+# config/stagging_my_entity.toml
 
 # 參考資料（供規則引用）
 [my_entity]
@@ -1905,7 +1958,7 @@ type = "erm_gt_date"
 ```python
 from accrual_bot.core.pipeline.base import PipelineStep, StepResult, StepStatus
 from accrual_bot.core.pipeline.context import ProcessingContext
-from accrual_bot.core.pipeline.steps.spx_condition_engine import SPXConditionEngine
+from accrual_bot.tasks.spx.steps.spx_condition_engine import SPXConditionEngine
 import pandas as pd
 
 class MyEntityStage1Step(PipelineStep):
@@ -1973,7 +2026,7 @@ class MyEntityStage1Step(PipelineStep):
 from accrual_bot.core.pipeline.steps.base_evaluation import (
     BaseERMEvaluationStep, BaseERMConditions
 )
-from accrual_bot.core.pipeline.steps.spx_condition_engine import SPXConditionEngine
+from accrual_bot.tasks.spx.steps.spx_condition_engine import SPXConditionEngine
 
 class MyEntityERMStep(BaseERMEvaluationStep):
     """
@@ -2023,9 +2076,10 @@ class MyEntityERMStep(BaseERMEvaluationStep):
         return df
 ```
 
-#### Step 4：在 stagging.toml 啟用步驟
+#### Step 4：在 stagging_my_entity.toml 啟用步驟
 
 ```toml
+# config/stagging_my_entity.toml
 [pipeline.my_entity]
 enabled_po_steps = [
     "MyEntityDataLoading",
@@ -2069,5 +2123,5 @@ apply_rules(df, status_column, context)
 
 ---
 
-*本文件最後更新：2026-03-05*
-*對應專案版本：Accrual Bot（January 2026 架構重構後）*
+*本文件最後更新：2026-03-07*
+*對應專案版本：Accrual Bot（March 2026 — Entity Config Split + Procurement Pipeline）*
