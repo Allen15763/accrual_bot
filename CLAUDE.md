@@ -814,6 +814,10 @@ The codebase underwent significant refactoring to improve code quality and maint
 - **SPT PROCUREMENT**: New pipeline type for procurement staff (PO/PR/COMBINED variants)
 - **SPX PPE_DESC**: New pipeline type for PO/PR description extraction with contract period mapping
 
+### Phase 8: Utils Layer Bug Fixes (2026-03-14)
+- **metadata_builder (3 fixes)**: `validate_only()` silent-pass bug (exception swallowed, `cb_result is None` incorrectly treated as success); `cast_failures` counted pre-existing NULLs rather than conversion-induced NULLs; `ColumnMappingError` defined but never raised (Regex errors silently returned `None`)
+- **duckdb_manager (5 fixes)**: `clean_and_convert_column()` ignored `_validate_conversion()` return value (transaction started unconditionally); `upsert_df_into_table()` and `backup_table()` used manual string escaping instead of existing `SafeSQL` utilities; `execute_transaction()` called `conn.sql("BEGIN/COMMIT/ROLLBACK")` directly, bypassing `OperationMixin._rollback()`'s built-in silent try/except; `connection_timeout: int = 30` was dead config (DuckDB Python API does not support this parameter) — field removed from `DuckDBConfig`
+
 ### Benefits
 - **Maintainability**: Single source of truth for shared logic reduces bug surface area
 - **Extensibility**: New entities/types can be added via configuration + orchestrator updates

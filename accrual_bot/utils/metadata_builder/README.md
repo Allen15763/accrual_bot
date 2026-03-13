@@ -255,4 +255,5 @@ metadata_builder/
 
 ## 版本
 
+- v1.1.0 (2026-03-14) - Bug 修復：`validate_only()` 靜默通過問題（DEFECT-1）、`cast_failures` 計算誤導性（DEFECT-2）、`ColumnMappingError` 從未拋出（DEFECT-3）
 - v1.0.0 - 初始版本

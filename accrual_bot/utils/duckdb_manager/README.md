@@ -1,7 +1,7 @@
 # DuckDB Manager 模組使用文件
 
-> **版本**: 2.1.0
-> **更新日期**: 2026-02
+> **版本**: 2.2.0
+> **更新日期**: 2026-03-14
 > **作者**: SPE Bank Recon Team
 
 ## 目錄
@@ -166,7 +166,6 @@ config = DuckDBConfig(
     timezone='Asia/Taipei',
     log_level='INFO',
     read_only=False,
-    connection_timeout=30,
     enable_query_logging=True,
 )
 db = DuckDBManager(config)
@@ -197,7 +196,6 @@ database:
   timezone: "Asia/Taipei"
   log_level: "INFO"
   read_only: false
-  connection_timeout: 30
   enable_query_logging: true
 ```
 
@@ -215,10 +213,11 @@ db = DuckDBManager(config)
 | `db_path` | str | `:memory:` | 資料庫路徑 |
 | `timezone` | str | `Asia/Taipei` | 時區設定 |
 | `read_only` | bool | `False` | 唯讀模式 |
-| `connection_timeout` | int | `30` | 連線逾時秒數 |
 | `log_level` | str | `INFO` | 日誌級別 |
 | `enable_query_logging` | bool | `True` | 是否記錄 SQL 查詢 |
 | `logger` | Logger | `None` | 外部日誌器 |
+
+> **注意**：`connection_timeout` 已於 v2.2.0 移除。DuckDB Python API 不支援連線逾時參數，此欄位為無效配置（dead config），設定任何值均不產生效果。
 
 ---
 
@@ -901,6 +900,15 @@ with DuckDBManager('./data.duckdb') as db:
 ---
 
 ## 變更日誌
+
+### v2.2.0 (2026-03-14)
+
+**Bug 修復**:
+- `data_cleaning.py`：`clean_and_convert_column()` 的 `_validate_conversion()` 回傳值從未被判斷，事務無條件啟動 → 加入 `if not validation_success: return False` 確保驗證失敗時提前返回
+- `crud.py`：`upsert_df_into_table()` 使用手動字串轉義而非 `SafeSQL` → 改用 `SafeSQL.build_in_clause()`
+- `table_management.py`：`backup_table()` 使用手動路徑轉義 → 改用 `SafeSQL.escape_string()`
+- `transaction.py`：`execute_transaction()` 直接呼叫 `conn.sql("BEGIN/COMMIT/ROLLBACK")`，繞過 `OperationMixin._rollback()` 的靜默 try/except 保護 → 改用 `_begin()/_commit()/_rollback()`
+- `config.py`：移除無效的 `connection_timeout: int = 30` 欄位（DuckDB Python API 不支援此參數）；`manager.py` 的 `_connect()` docstring 加入說明
 
 ### v2.1.0 (2026-02)
 
