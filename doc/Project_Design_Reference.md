@@ -1738,8 +1738,9 @@ s_logger.log_operation_end('data_loading', success=True, duration=2.3)
 
 | 嚴重度 | 位置 | 問題說明 |
 |--------|------|---------|
-| 🔴 | `utils/logging/logger.py:71` | `sys.stderr.write(err)` 應為 `sys.stderr.write(str(err))`，當 `err` 不是字串時拋出 TypeError |
-| 🟡 | `utils/logging/logger.py` `_setup_root_logger()` | 缺少 `_logger_lock` 保護，多執行緒同時初始化可能造成 race condition |
+| ✅ | `utils/logging/logger.py:71` | ~~`sys.stderr.write(err)` 拋出 TypeError~~ — **已修復（2026-03-14）**：改為 `f"{err}\n"` |
+| ✅ | `utils/logging/logger.py` `__init__()` | ~~`_initialized` 讀寫跨鎖域，多執行緒同時初始化 race condition~~ — **已修復（2026-03-14）**：`__init__` 加 `with Logger._lock:`，`_setup_root_logger()` 無鎖問題同時消除 |
+| ✅ | `utils/logging/logger.py` `add_custom_handler()` | ~~添加至所有子記錄器導致 log 重複輸出~~ — **已修復（2026-03-14）**：改為只添加至 root logger，`propagate` 自然分發 |
 | 🔴 | `utils/helpers/data_utils.py` `extract_date_range_from_description()` | 當 `description` 為空且 `logger=None` 時，`logger.warning()` 呼叫會拋出 `AttributeError` |
 | 🔴 | `utils/helpers/data_utils.py` `give_account_by_keyword()` | `rules` 參數被立即覆蓋為 `ACCOUNT_RULES` 硬編碼常數，傳入的規則參數完全無效 |
 | 🟡 | `utils/helpers/data_utils.py` `safe_string_operation()` | `astype(str)` 將 NaN 轉為字串 `'nan'`，後續 `fillna('')` 無法再還原，`'nan'` 字串流入下游 |

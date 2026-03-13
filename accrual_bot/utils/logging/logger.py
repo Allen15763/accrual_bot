@@ -68,7 +68,7 @@ class ColoredFormatter(logging.Formatter):
                 kernel32.SetConsoleMode(kernel32.GetStdHandle(-11), 7)
                 return True
             except Exception as err:
-                sys.stderr.write(err)
+                sys.stderr.write(f"{err}\n")
                 return False
         # Unix/Linux/Mac 通常支援
         return hasattr(sys.stdout, 'isatty') and sys.stdout.isatty()
@@ -139,13 +139,14 @@ class Logger:
         return cls._instance
     
     def __init__(self):
-        if self._initialized:
-            return
-            
-        self._loggers: Dict[str, logging.Logger] = {}
-        self._handlers: Dict[str, logging.Handler] = {}
-        self._setup_logging()
-        self._initialized = True
+        with Logger._lock:
+            if self._initialized:
+                return
+
+            self._loggers: Dict[str, logging.Logger] = {}
+            self._handlers: Dict[str, logging.Handler] = {}
+            self._setup_logging()
+            self._initialized = True
     
     def _setup_logging(self) -> None:
         """設置日誌系統"""
@@ -304,10 +305,12 @@ class Logger:
         """
         with Logger._logger_lock:
             self._handlers[name] = handler
-            
-            # 將處理器添加到所有現有記錄器
-            for logger in self._loggers.values():
-                logger.addHandler(handler)
+
+            # 只將處理器添加到 root logger
+            # 子記錄器的 propagate=True 會自然將訊息傳至 root，避免重複輸出
+            root = self._loggers.get('root')
+            if root and handler not in root.handlers:
+                root.addHandler(handler)
     
     def remove_handler(self, name: str) -> None:
         """
