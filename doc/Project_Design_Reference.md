@@ -1019,7 +1019,7 @@ Pipeline 執行時：
 
 **Checkpoint 儲存格式**：Parquet 優先，Pickle 備援（Parquet-first with Pickle fallback）。若 DataFrame 包含 `list`、`dict` 等 Parquet 不支援的欄位型別，則自動降級為 Pickle 格式。
 
-**已知問題**：`PipelineWithCheckpoint.execute_with_checkpoint()` 直接呼叫 `step.execute(context)` 而非 `step(context)`（即繞過 `__call__` 包裝器），導致步驟的重試邏輯（`max_retries`）、前置/後置鉤子（hooks）在 Checkpoint 模式下不生效。
+**執行路徑**：`checkpoint.py:439` 呼叫 `await step(context)`（透過 `__call__` 包裝器），重試邏輯（`retry_count`）、前置/後置鉤子（hooks）在 Checkpoint 模式下均正常生效。
 
 ### 7.4 Runner 模組 CLI 執行流程（詳細）
 
@@ -1728,7 +1728,7 @@ s_logger.log_operation_end('data_loading', success=True, duration=2.3)
 
 | 嚴重度 | 位置 | 問題說明 |
 |--------|------|---------|
-| 🔴 | `core/pipeline/checkpoint.py` `PipelineWithCheckpoint.execute_with_checkpoint()` | 直接呼叫 `step.execute(context)` 而非 `step(context)`，繞過 `__call__` 包裝器，導致重試邏輯（`max_retries`）、前置/後置鉤子在 Checkpoint 模式下不生效 |
+| ✅ | `core/pipeline/checkpoint.py` `PipelineWithCheckpoint.execute_with_checkpoint()` | ~~直接呼叫 `step.execute(context)` 繞過 `__call__` 包裝器~~ — **已修復（2026-03-14）**：改為 `await step(context)`，重試邏輯與 hooks 恢復正常 |
 | 🟡 | `core/pipeline/pipeline.py` `Pipeline.execute_multiple()` | 函數名稱暗示並發，實際是順序執行（sequential for loop），非並行 |
 | 🟡 | `core/pipeline/base.py` `StepResult.data` | 欄位定義但從未在 Pipeline 執行流程中被使用（context.data 才是步驟間資料傳遞的媒介） |
 | ⚪ | `core/pipeline/base.py` `PipelineStep[T]` | 類別定義為泛型 `PipelineStep[T]` 但泛型參數 `T` 從未被任何子類使用 |

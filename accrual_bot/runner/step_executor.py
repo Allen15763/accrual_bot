@@ -93,8 +93,7 @@ class StepByStepExecutor:
             # 執行步驟
             step_start = time.time()
             try:
-                result = await step.execute(self.context)
-                result.duration = time.time() - step_start
+                result = await step(self.context)
             except Exception as e:
                 result = StepResult(
                     step_name=step.name,

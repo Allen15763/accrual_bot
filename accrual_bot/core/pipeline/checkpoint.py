@@ -436,7 +436,7 @@ class PipelineWithCheckpoint:
                 f"{'='*60}"
             )
 
-            result = await step.execute(context)
+            result = await step(context)
             results.append(result)
 
             # 記錄到上下文歷史

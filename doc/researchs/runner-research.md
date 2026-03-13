@@ -703,19 +703,21 @@ while True:
 async def run(self) -> Dict[str, Any]:
     for i, step in enumerate(self.pipeline.steps):  # 直接迭代步驟列表
         ...
-        result = await step.execute(self.context)    # 直接呼叫步驟
+        result = await step(self.context)    # ✅ 已修復（2026-03-14）：改為透過 __call__ 呼叫
         ...
 ```
+
+> **注意**：原始實作使用 `await step.execute(self.context)` 繞過 `__call__` 包裝器，導致重試、hooks 等功能失效。此問題已於 2026-03-14 修復。
 
 **Pipeline.execute() 做了什麼而 StepByStepExecutor 沒做**：
 
 根據系統架構，`Pipeline.execute()` 通常包含：
-1. 執行前驗證（`validate_input()`）
+1. 執行前驗證（`validate_input()`）——**`step(context)` 修復後已補回此功能**
 2. `stop_on_error` 旗標判斷
 3. 結果的統一收集與格式化
 4. 執行歷史記錄（`context.execution_history`）
 
-`StepByStepExecutor` 重新實作了部分邏輯（步驟迭代、異常捕捉、計時），但**跳過了 `validate_input()`**——這意味著步驟的前置條件驗證不會在逐步執行時進行。
+`StepByStepExecutor` 重新實作了部分邏輯（步驟迭代、異常捕捉），但 `stop_on_error` 和 Pipeline 級別的 hooks 仍需自行處理。
 
 **抽象洩漏（Abstraction Leak）**：直接存取 `pipeline.steps`（列表）暴露了 Pipeline 的內部實作細節。若日後 `Pipeline` 改為延遲初始化步驟，或步驟列表變為 generator，`StepByStepExecutor` 需要同步修改。
 
@@ -1191,9 +1193,11 @@ raw_po = "{resources}/{YYYMM}/..."  # YYYMM 是錯誤的，應為 YYMM
 # 後續 I/O 失敗時的錯誤訊息與根本原因相距甚遠
 ```
 
-**6. `StepByStepExecutor` 繞過 `pipeline.execute()`（P2 - 低嚴重性）**
+**6. `StepByStepExecutor` 繞過 `pipeline.execute()`（P2 - 低嚴重性，部分修復）**
 
-直接迭代 `pipeline.steps` 跳過了 Pipeline 自身的執行邏輯，包括 `stop_on_error` 行為和潛在的 pre/post hooks。這制造了一個維護陷阱：`Pipeline.execute()` 行為改變時，`StepByStepExecutor` 不會自動同步。
+直接迭代 `pipeline.steps` 跳過了 Pipeline 自身的執行邏輯，包括 `stop_on_error` 行為和潛在的 pre/post hooks。這製造了一個維護陷阱：`Pipeline.execute()` 行為改變時，`StepByStepExecutor` 不會自動同步。
+
+> **部分修復（2026-03-14）**：`step.execute(context)` → `step(context)` 已修復，`__call__` 包裝器的重試、hooks、計時功能現已正常。**未修復部分**：`StepByStepExecutor` 仍直接迭代 `pipeline.steps` 而非呼叫 `pipeline.execute()`，`stop_on_error` 和 Pipeline 級別語義仍不一致，屬架構層面問題。
 
 **7. 雙執行路徑結果字典結構不一致（P2 - 低嚴重性）**
 
