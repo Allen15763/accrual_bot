@@ -18,6 +18,8 @@
 10. [擴充指南](#10-擴充指南)
 11. [關鍵決策與取捨](#11-關鍵決策與取捨)
 12. [可複用的程式碼模板](#12-可複用的程式碼模板)
+13. [業務邏輯配置驅動：SPX 完整範例](#13-業務邏輯配置驅動spx-完整範例)
+14. [已知問題與技術債清單](#14-已知問題與技術債清單)
 
 ---
 
@@ -364,7 +366,7 @@ class DataSource(ABC):
     def get_metadata() -> Dict
 
     # 提供預設實作
-    async def read_with_cache(query, **kwargs) -> pd.DataFrame
+    async def read_with_cache(query, **kwargs) -> pd.DataFrame   # LRU 快取（TTL=300s, max=10）
     async def validate_connection() -> bool
     async def get_row_count() -> int
     async def get_column_names() -> List[str]
@@ -374,11 +376,14 @@ ExcelSource          # .xlsx / .xls（支援 sheet_name, header, usecols 等）
 CSVSource            # .csv（支援 encoding, sep, dtype 等）
 ParquetSource        # .parquet（Checkpoint 儲存用）
 DuckDBSource         # DuckDB（含記憶體 DB）
+                     # 雙連線策略：記憶體 DB（:memory:）直接執行，檔案 DB 使用 DataSourcePool
 GoogleSheetsSource   # Google 試算表（gspread + Service Account JSON 認證）
                      # 整合 GoogleSheetsImporter / GoogleSheetsManager
                      # 支援 async read/write、並發多工作表讀取、工作表管理
                      # ZIP 備援路徑、credentials_config 向後相容
 ```
+
+> **設計問題**：`DataSourceType` 枚舉在 `base.py` 和 `config.py` 中各定義一次，兩者應合併。
 
 ### 4.5 BaseLoadingStep（載入步驟模板）
 
@@ -421,7 +426,15 @@ class BaseLoadingStep(PipelineStep):
 ```python
 @dataclass
 class BaseERMConditions:
-    """共用條件集合，子類可擴充欄位"""
+    """
+    共用條件集合，子類可擴充欄位。
+
+    ★ 設計重點：每個 boolean Series 只計算一次，可在多個狀態條件中複用，
+    避免在 _apply_status_conditions() 中重複計算相同的 mask。
+
+    ★ 可變狀態設計：no_status 在每個條件賦值後需更新，
+    確保已有狀態的列不會被後續條件覆蓋（需特別注意使用時序）。
+    """
     no_status: pd.Series
     in_date_range: pd.Series
     erm_before_or_equal_file_date: pd.Series
@@ -661,6 +674,114 @@ results = await pool.execute_on_all('read')
 await pool.close_all()
 ```
 
+> **注意**：`DataSourcePool` 的 `ConnectionPool` dataclass 是一個名稱具誤導性的設計——它的欄位（`max_size`、`timeout`）均未被實際使用，實質上只是 metadata holder，並沒有真正的連接池邏輯。
+
+---
+
+### 5.9 組合模式（Composite Pattern）
+
+`Pipeline` 支援三種可巢狀的步驟容器：
+
+```python
+# ConditionalStep：只在條件成立時執行子步驟
+cond_step = ConditionalStep(
+    name="OptionalIntegration",
+    condition=lambda ctx: ctx.get_variable('has_ap_invoice', False),
+    steps=[APInvoiceIntegrationStep(...)]
+)
+
+# ParallelStep：並發執行多個子步驟
+parallel = ParallelStep(
+    name="ConcurrentLoading",
+    steps=[LoadRefA(), LoadRefB(), LoadRefC()]
+)
+
+# SequentialStep：強制順序執行（與 Pipeline 本身類似，但可嵌套）
+seq = SequentialStep(name="SubSequence", steps=[StepA(), StepB()])
+```
+
+這三種容器允許 Pipeline 結構在必要時超越線性序列。
+
+---
+
+### 5.10 Mixin 組合（Mixin Composition）
+
+`DuckDBManager` 使用 Mixin 組合（非繼承深度）實現功能模組化：
+
+```python
+class DuckDBManager(CRUDMixin, TableManagementMixin, QueryOptimizationMixin,
+                    OperationMixin, MigrationMixin):
+    """透過 Mixin 組合各功能模組，避免單一龐大類別"""
+    pass
+```
+
+**優點**：
+- 每個 Mixin 可獨立測試
+- 功能模組可在其他管理器中複用
+- 相比深度繼承，Mixin 組合的職責邊界更清晰
+
+**注意**：`OperationMixin.logger: any`（小寫 `any`）是無效的型別標注，應為 `Any`（從 `typing` 匯入）。
+
+---
+
+### 5.11 向後相容 Shim 模式（Backward Compatibility Shims）
+
+`core/pipeline/steps/` 目錄下有 **15 個 shim 檔案**，內容僅為 re-export：
+
+```python
+# core/pipeline/steps/spt_loading.py（shim 範例）
+# 向後相容：保留舊匯入路徑
+from accrual_bot.tasks.spt.steps.spt_loading import (
+    SPTDataLoadingStep,
+    SPTPRDataLoadingStep
+)
+__all__ = ['SPTDataLoadingStep', 'SPTPRDataLoadingStep']
+```
+
+**目的**：在重構過程中（步驟從 `core/pipeline/steps/` 遷移至 `tasks/`），不破壞既有的 import 路徑。
+
+**維護建議**：Shim 檔案應被視為過渡性設計，長期目標是讓所有呼叫方改用新路徑後將其移除。
+
+---
+
+### 5.12 快照分離模式（Snapshot Separation Pattern）
+
+`DataShapeSummaryStep` 使用快照分離模式進行資料完整性驗證：
+
+```python
+# Loading Step（存入快照）
+context.add_auxiliary_data('raw_data_snapshot', df.copy())  # 原始資料快照
+
+# DataShapeSummaryStep（管道末端讀取比對）
+raw_snapshot = context.get_auxiliary_data('raw_data_snapshot')
+# → 產生「原始 vs 處理後」三項指標比較報告
+```
+
+**設計要點**：
+- 使用 `df.copy()` 防禦性地建立深拷貝，避免快照被後續步驟的 in-place 修改污染
+- `DataShapeSummaryStep` 設為 `required=False`，驗證失敗不阻斷主業務流程
+- 支援**獨立執行模式**（`run_standalone_summary()`），可從 checkpoint parquet 或原始檔案直接載入分析
+
+---
+
+### 5.13 Sub-Context 隔離模式（Sub-Context Isolation）
+
+COMBINED 採購模式（`CombinedProcurementProcessingStep`）引入 Sub-Context 模式：
+
+```python
+# 為 PO 和 PR 各建立獨立的子 Context，直接複用現有步驟
+sub_context_po = ProcessingContext()
+sub_context_po.update_data(po_data.copy())
+sub_context_po.set_variable('file_date', parent_context.metadata.processing_date)
+
+for step in po_steps:
+    result = await step.execute(sub_context_po)
+```
+
+**優點**：PO 和 PR 可共用完全相同的步驟類別，不需要為 COMBINED 模式撰寫特殊邏輯。
+
+**缺點**：子步驟的日誌和 metadata 被完全捨棄（除失敗狀態外），執行記錄不如單一模式完整。
+
 ---
 
 ## 6. 配置驅動機制
@@ -777,6 +898,44 @@ enabled_steps = config.get_list('spt', 'enabled_po_steps')
 path_params = config.get_paths_config('spt', 'po', 'params')
 ```
 
+### 6.5 配置管理器的深層細節
+
+#### 三檔深合併策略（Deep-Merge TOML Strategy）
+
+ConfigManager 將三個 TOML 檔案深合併為單一的 `_config_toml` 字典：
+
+```
+stagging.toml（共用設定）
+    + stagging_spt.toml（SPT 覆蓋/追加）
+    + stagging_spx.toml（SPX 覆蓋/追加）
+    → 合併為 self._config_toml（多層巢狀 dict）
+```
+
+**重要**：合併順序代表優先級——後合併的 key 會覆蓋先合併的。若 SPT 和 SPX 在 `stagging.toml` 有同名頂層 key，後者會覆蓋前者（雖然目前的 key 命名設計上避免了此衝突）。
+
+#### `run_config.toml` 不在 ConfigManager 管理範圍內
+
+`run_config.toml` 由 `runner/config_loader.py` 的 `load_run_config()` 函數獨立載入，**不經過 ConfigManager**：
+
+```python
+# runner/config_loader.py — 獨立的 TOML 載入
+with open(run_config_path, "rb") as f:
+    config = tomllib.load(f)
+```
+
+這意味著 `ConfigManager.reload_config()` 不會重新載入 `run_config.toml`。
+
+#### 直接存取私有屬性的問題
+
+目前 Orchestrator、LoadingStep 等多處程式碼直接存取 `ConfigManager._config_toml`（私有屬性）：
+
+```python
+# 常見但不建議的用法
+self.config = config_manager._config_toml.get('pipeline', {}).get('spt', {})
+```
+
+這違反封裝原則，正確做法應透過公開的 `get()`、`get_list()`、`get_paths_config()` 等方法存取。
+
 ---
 
 ## 7. 資料流與執行流程
@@ -858,6 +1017,39 @@ Pipeline 執行時：
   → 節省重新載入和前 5 步的時間
 ```
 
+**Checkpoint 儲存格式**：Parquet 優先，Pickle 備援（Parquet-first with Pickle fallback）。若 DataFrame 包含 `list`、`dict` 等 Parquet 不支援的欄位型別，則自動降級為 Pickle 格式。
+
+**已知問題**：`PipelineWithCheckpoint.execute_with_checkpoint()` 直接呼叫 `step.execute(context)` 而非 `step(context)`（即繞過 `__call__` 包裝器），導致步驟的重試邏輯（`max_retries`）、前置/後置鉤子（hooks）在 Checkpoint 模式下不生效。
+
+### 7.4 Runner 模組 CLI 執行流程（詳細）
+
+`runner/` 模組是 CLI 模式的額外協調層，不屬於四層架構的正式一層：
+
+```
+main_pipeline.py
+    │
+    ├─ load_run_config()         # 讀取 run_config.toml → RunConfig dataclass
+    │      RunConfig: entity, processing_type, processing_date,
+    │                source_type, step_by_step, save_checkpoints, ...
+    │
+    ├─ load_file_paths()         # 讀取 paths.toml
+    │      → _calculate_date_vars(date)  # YYYYMM 整數算術（不依賴 datetime）
+    │      → _resolve_path_template()    # str.replace() 替換 {YYYYMM} 等佔位符
+    │      → glob(resolved_path)[-1]     # 萬用字元 → 字典序最大者（假設越新越大）
+    │      → _convert_params()           # TOML 型別 → Python 型別（"str" → str）
+    │
+    ├─ (一般模式) PipelineExecutor.run()
+    │      → orchestrator.build_*_pipeline(file_paths)
+    │      → execute_pipeline_with_checkpoint(...)
+    │
+    └─ (逐步模式 step_by_step=True) StepByStepExecutor.run()
+           → 直接迭代 pipeline.steps（繞過 Pipeline.execute()）
+           → 每步驟前等待 [Enter/s/q] 輸入
+           → EOFError 捕捉 → 自動繼續（非互動式環境的優雅降級）
+```
+
+**逐步模式與恢復模式互斥**：當 `step_by_step=True` 時，即使同時設定了 `resume_from`，也以逐步模式優先。
+
 ---
 
 ## 8. 依賴關係圖
@@ -918,8 +1110,8 @@ config.ini
 ```
 PipelineStep (ABC)
 ├── BaseLoadingStep (ABC)
-│   ├── SPTDataLoadingStep           # tasks/spt/steps/spt_loading.py
-│   ├── SPTPRDataLoadingStep         # tasks/spt/steps/spt_loading.py
+│   ├── SPTDataLoadingStep           # ⚠️ 實際上直接繼承 PipelineStep（非 BaseLoadingStep）
+│   ├── SPTPRDataLoadingStep         # ⚠️ 同上，DRY 違反：兩者相差不超過 50 行但各 ~450 行
 │   ├── SPXDataLoadingStep           # tasks/spx/steps/spx_loading.py
 │   ├── SPXPRDataLoadingStep         # tasks/spx/steps/spx_loading.py
 │   ├── PPEDataLoadingStep           # tasks/spx/steps/spx_loading.py
@@ -1078,34 +1270,48 @@ FILE_LABELS = {
 Streamlit 在同步環境執行，Pipeline 是非同步的，需要橋接：
 
 ```python
-# ui/utils/async_bridge.py
-import asyncio
-import threading
+# ui/utils/async_bridge.py — 實際使用的版本（含 Queue + timeout）
+@staticmethod
+def run_async(coro) -> Any:
+    import threading, queue
 
-def run_async_in_thread(coro):
-    """在新執行緒中執行非同步協程（解決 Streamlit event loop 問題）"""
-    result = None
-    exception = None
+    result_queue = queue.Queue()
+    exception_queue = queue.Queue()
 
-    def thread_target():
-        nonlocal result, exception
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
+    def run_in_thread():
+        new_loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(new_loop)
         try:
-            result = loop.run_until_complete(coro)
+            result = new_loop.run_until_complete(coro)
+            result_queue.put(result)
         except Exception as e:
-            exception = e
+            exception_queue.put(e)
         finally:
-            loop.close()
+            new_loop.close()
 
-    thread = threading.Thread(target=thread_target)
+    thread = threading.Thread(target=run_in_thread, daemon=True)
     thread.start()
-    thread.join()
+    thread.join(timeout=300)   # 5 分鐘超時
 
-    if exception:
-        raise exception
-    return result
+    if not exception_queue.empty():
+        raise exception_queue.get()
+    if thread.is_alive():
+        raise TimeoutError("Pipeline 執行超時（5分鐘）")
+    if not result_queue.empty():
+        return result_queue.get()
 ```
+
+**為何用 Queue 而非共享變數**：子執行緒的 exception 不會自動傳播到父執行緒，`queue.Queue` 是跨執行緒安全傳遞結果/例外的標準模式。
+
+**超時機制的副作用**：`thread.join(timeout=300)` 是單方面的——Streamlit 主執行緒在超時後繼續執行（顯示超時錯誤），但 `daemon=True` 的子執行緒中的 pipeline 仍在後台運行，直到進程結束。
+
+### 9.5 UI 已知限制（進度與中斷）
+
+**進度回報非即時**：`pipeline.execute(context)` 一次性執行所有步驟，沒有逐步回調鉤子。`_execute_with_progress()` 中的步驟名稱是在執行**前**預先批量輸出的，完成後才批量更新狀態——使用者在執行期間看到的是凍結的 UI。
+
+**停止按鈕無效**：Page 3 有「停止」按鈕，但 `AsyncBridge.run_async()` 在 `thread.join()` 期間阻塞了 Streamlit 主執行緒，任何使用者輸入都不會被處理，停止按鈕永遠無法觸發。
+
+**改善方向**：需要在 `Pipeline.execute()` 加入 `on_step_complete` 回調，並搭配 Streamlit 的輪詢機制（定期 `st.rerun()`）才能實現真正的即時進度顯示。
 
 ---
 
@@ -1125,6 +1331,24 @@ def run_async_in_thread(coro):
 | 6 | `ui/config.py` | 在 `ENTITY_CONFIG` 加入 `MOB` |
 | 7 | `ui/config.py` | 新增 `REQUIRED_FILES[('MOB', 'PO')]` |
 | 8 | `ui/services/unified_pipeline_service.py` | 在 `_get_orchestrator()` 加入 `'MOB'` |
+
+### 10.1.1 注意：tasks/spt 對 tasks/spx 的直接依賴
+
+SPT Orchestrator 匯入了 4 個 SPX 模組的步驟：
+
+```python
+# tasks/spt/pipeline_orchestrator.py
+from accrual_bot.tasks.spx.steps import (
+    SPXPRExportStep,           # SPT PR Export 複用 SPX 實作
+    SPXPRERMLogicStep,         # SPT PR ERM 邏輯複用 SPX PR 邏輯
+    ColumnAdditionStep,        # 欄位新增共用
+    APInvoiceIntegrationStep,  # AP Invoice 整合共用
+)
+```
+
+**風險**：若 SPX 的這些步驟發生破壞性變更，SPT 功能也會受到影響。理想上這些共用步驟應提升至 `tasks/common/` 或 `core/pipeline/steps/common.py`，而非在 tasks 層橫向依賴。
+
+---
 
 ### 10.2 新增處理類型（如 INV）
 
@@ -1287,6 +1511,45 @@ enabled_po_steps = [
 - Metaclass Singleton：過度工程化
 
 **建議**：Python 3.3+ 可改用 `importlib.import_module` 的模組級單例（更簡潔）。
+
+**已知問題**：
+- `utils/__init__.py` 的匯入順序（config → logging）是關鍵但僅隱式保證的依賴
+- 模組頂層的 `config_manager = ConfigManager()` 在 import 時觸發 I/O
+- `reload_config()` 方法在多執行緒環境下不是執行緒安全的
+
+---
+
+### 決策 6：Checkpoint 儲存格式 — Parquet 優先 + Pickle 備援
+
+**選擇**：先嘗試 Parquet，若 DataFrame 含不支援的欄位型別則降級為 Pickle
+
+```python
+try:
+    df.to_parquet(checkpoint_path)  # 首選：型別安全、壓縮比高、讀寫快
+except Exception:
+    import pickle
+    with open(checkpoint_path.with_suffix('.pkl'), 'wb') as f:
+        pickle.dump(context, f)     # 備援：支援任意 Python 物件
+```
+
+**取捨**：
+- ✅ Parquet：型別安全、讀寫速度快、壓縮比高
+- ✅ Pickle 備援：支援 list/dict 欄位等 Parquet 不支援的型別
+- ❌ Pickle 備援：安全性低（反序列化任意物件）、人工不可讀
+- ❌ 兩種格式並存：恢復時需要判斷格式，增加複雜度
+
+---
+
+### 決策 7：DataSource 近似 LRU 快取（Write-Time Based Eviction）
+
+快取驅逐策略使用**寫入時間**而非**存取時間**（標準 LRU 使用存取時間）：
+
+```python
+# 接近 TTL 時驅逐最早寫入的項目（非最久未存取的項目）
+oldest_key = min(self._cache, key=lambda k: self._write_times[k])
+```
+
+**結果**：高頻讀取但很久前寫入的項目，可能在仍有查詢需求時被驅逐。這是實作上的捷徑，對本系統（檔案讀取快取、短期管道執行）影響有限，但在通用場景下不是正確的 LRU 語意。
 
 ---
 
@@ -1454,6 +1717,65 @@ s_logger.log_data_processing('purchase_orders', record_count=4000, processing_ti
 s_logger.log_file_operation('read', file_path='/path/to/file.csv', success=True)
 s_logger.log_operation_end('data_loading', success=True, duration=2.3)
 ```
+
+---
+
+## 14. 已知問題與技術債清單
+
+> 本章彙整研究文件中識別到的具體程式碼問題，供維護者參考。嚴重度分三級：🔴 高（可能產生錯誤結果）、🟡 中（影響維護性/效能）、⚪ 低（程式碼品質問題）。
+
+### 14.1 Core Pipeline
+
+| 嚴重度 | 位置 | 問題說明 |
+|--------|------|---------|
+| 🔴 | `core/pipeline/checkpoint.py` `PipelineWithCheckpoint.execute_with_checkpoint()` | 直接呼叫 `step.execute(context)` 而非 `step(context)`，繞過 `__call__` 包裝器，導致重試邏輯（`max_retries`）、前置/後置鉤子在 Checkpoint 模式下不生效 |
+| 🟡 | `core/pipeline/pipeline.py` `Pipeline.execute_multiple()` | 函數名稱暗示並發，實際是順序執行（sequential for loop），非並行 |
+| 🟡 | `core/pipeline/base.py` `StepResult.data` | 欄位定義但從未在 Pipeline 執行流程中被使用（context.data 才是步驟間資料傳遞的媒介） |
+| ⚪ | `core/pipeline/base.py` `PipelineStep[T]` | 類別定義為泛型 `PipelineStep[T]` 但泛型參數 `T` 從未被任何子類使用 |
+| 🔴 | `core/pipeline/steps/business.py` `StatusEvaluationStep._evaluate_row_status()` | 回傳 stub 值 `"待評估"` 而非實際評估邏輯 |
+
+### 14.2 Utils 層
+
+| 嚴重度 | 位置 | 問題說明 |
+|--------|------|---------|
+| 🔴 | `utils/logging/logger.py:71` | `sys.stderr.write(err)` 應為 `sys.stderr.write(str(err))`，當 `err` 不是字串時拋出 TypeError |
+| 🟡 | `utils/logging/logger.py` `_setup_root_logger()` | 缺少 `_logger_lock` 保護，多執行緒同時初始化可能造成 race condition |
+| 🔴 | `utils/helpers/data_utils.py` `extract_date_range_from_description()` | 當 `description` 為空且 `logger=None` 時，`logger.warning()` 呼叫會拋出 `AttributeError` |
+| 🔴 | `utils/helpers/data_utils.py` `give_account_by_keyword()` | `rules` 參數被立即覆蓋為 `ACCOUNT_RULES` 硬編碼常數，傳入的規則參數完全無效 |
+| 🟡 | `utils/helpers/data_utils.py` `safe_string_operation()` | `astype(str)` 將 NaN 轉為字串 `'nan'`，後續 `fillna('')` 無法再還原，`'nan'` 字串流入下游 |
+| 🟡 | `utils/config/config_manager.py` | 硬編碼 Windows 路徑 `r'C:\SEA\Accrual\...\accrual_bot.zip'`（ZIP fallback），在非 Windows 環境無效 |
+| 🟡 | `utils/duckdb_manager/` `check_null_values()` / `list_tables_with_info()` | N+1 查詢問題（每個欄位/每張資料表各執行一次查詢） |
+| ⚪ | `utils/duckdb_manager/operations/` `OperationMixin.logger: any` | 型別標注應為 `Any`（大寫，從 `typing` 匯入）而非 `any`（Python 內建函數） |
+
+### 14.3 Tasks 層
+
+| 嚴重度 | 位置 | 問題說明 |
+|--------|------|---------|
+| 🔴 | `tasks/spt/steps/spt_loading.py` `_load_ap_invoice()` | 使用 `'SPX'` 識別碼讀取 `ap_columns` 配置，但這是 SPT 的載入步驟，應使用 `'SPT'` |
+| 🟡 | `tasks/spt/steps/spt_loading.py` / `spt_pr_loading.py` | `SPTDataLoadingStep` 和 `SPTPRDataLoadingStep` 都直接繼承 `PipelineStep`（而非 `BaseLoadingStep`），約 900 行中差異不超過 50 行，嚴重違反 DRY |
+| 🔴 | `tasks/spt/steps/spt_loading.py` `_load_raw_po_file()` | `df.rename(columns={'Project Number': 'Project'})` 缺少 `inplace=True` 或賦值，實際上不會生效 |
+| 🟡 | `tasks/spx/steps/spx_evaluation.py` / `spx_steps.py` | `spx_steps.py` 中的 6 個孤立步驟（`SPXDepositCheckStep` 等）在 `__all__` 中但不在 Orchestrator step registry，容易造成混淆 |
+| 🔴 | `tasks/spx/steps/spx_integration.py` `ClosingListIntegrationStep` | 硬編碼 Google Sheets Spreadsheet ID，跨年時需手動在程式碼新增 sheet 年份 |
+| 🔴 | `tasks/spx/steps/spx_evaluation_2.py` `SPXExportStep` | `context.get_auxiliary_data('locker_non_discount').to_excel(...)` 若驗收步驟被跳過，此處會拋出 `AttributeError` |
+| 🟡 | `tasks/spx/steps/spx_loading.py` `PPEDataLoadingStep._load_renewal_list()` | 在 `async def` 中直接呼叫同步的 Google Sheets `get_sheet_data()`，阻塞 asyncio event loop |
+| 🟡 | `tasks/spt/pipeline_orchestrator.py` `_create_step()` | 未知步驟使用 `print()` 而非 `self.logger.warning()`，日誌層級不一致 |
+
+### 14.4 Data Importers
+
+| 嚴重度 | 位置 | 問題說明 |
+|--------|------|---------|
+| 🔴 | `data/importers/google_sheets_importer.py` `import_spx_closing_list()` | 從 `GOOGLE_SHEETS` 常數讀取，但 SPX closing list 資料實際在 `SPX_CONSTANTS` 中 |
+| ⚪ | `data/importers/google_sheets_importer.py` `AsyncGoogleSheetsImporter` | 空殼類別，繼承 `GoogleSheetsImporter` 但未新增任何功能，且造成雙重 DeprecationWarning |
+
+### 14.5 UI 層
+
+| 嚴重度 | 位置 | 問題說明 |
+|--------|------|---------|
+| 🟡 | `ui/components/entity_selector.py` | Cascade reset 邏輯完全相同的 10 行程式碼重複三次 |
+| 🟡 | `ui/pages/5_checkpoint.py` | Checkpoint 載入功能僅顯示 TODO 訊息，後端 `CheckpointManager` 已支援但 UI 未串接 |
+| ⚪ | `ui/models/state_models.py` `ResultState.checkpoint_path` | 欄位定義但整個 UI 中從未被設定（孤兒欄位） |
+| ⚪ | `ui/services/unified_pipeline_service.py` `_enrich_file_paths()` | 例外處理使用 `print()` 而非 `get_logger()` |
+| 🟡 | `ui/utils/async_bridge.py` | `run_in_thread()` 非阻塞方法定義了但 UI 中完全未使用；`ExecutionStatus.PAUSED` 定義了但沒有任何程式碼設定它 |
 
 ---
 
@@ -2132,5 +2454,5 @@ apply_rules(df, status_column, context)
 
 ---
 
-*本文件最後更新：2026-03-07*
+*本文件最後更新：2026-03-13*
 *對應專案版本：Accrual Bot（March 2026 — Entity Config Split + Procurement Pipeline）*
