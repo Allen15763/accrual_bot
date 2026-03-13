@@ -438,24 +438,52 @@ except UnicodeDecodeError:
 
 ### 4.12 `validate_only()` 的 Exception 吞噬問題
 
-```python
-# silver.py:190-201
-def validate_only(self, df, schema_config) -> dict:
-    ...
-    try:
-        df_mapped = self.column_mapper.map_columns(...)
-        df_casted = self.type_caster.cast_columns(df_mapped, schema_config.columns)
-        cb_result = breaker.check(df_casted, schema_config.columns)
-    except Exception as e:
-        cb_result = None  # ← 異常被吞噬，cb_result 設為 None
+> ✅ **已修復（2026-03-14）**
 
-    return {
-        "valid": len(missing_required) == 0 and (cb_result is None or cb_result.is_ok),
-        ...
-    }
+**原始問題：**
+
+```python
+# 舊實作（已移除）
+except Exception as e:
+    cb_result = None  # ← 異常被吞噬
+
+return {
+    "valid": len(missing_required) == 0 and (cb_result is None or cb_result.is_ok),
+    # cb_result is None → True → 驗證過程出錯反而被誤判為「通過」
+}
 ```
 
-當異常發生時，`cb_result = None`，而 `return` 中的 `cb_result is None or cb_result.is_ok` 等同於 `True`，這意味著**驗證失敗時反而被視為「通過」**。這是一個設計缺陷：異常應被記錄並在 `circuit_breaker_result` 中反映，而非靜默設為 `None`。
+**修復後（silver.py:164–204）：**
+
+```python
+cb_result = None
+validation_error = None
+try:
+    df_mapped = self.column_mapper.map_columns(
+        df, schema_config.columns, preserve_unmapped=True
+    )
+    df_casted = self.type_caster.cast_columns(df_mapped, schema_config.columns)
+    breaker = self.circuit_breaker or CircuitBreaker(
+        threshold=schema_config.circuit_breaker_threshold
+    )
+    cb_result = breaker.check(df_casted, schema_config.columns)
+except Exception as e:
+    validation_error = str(e)  # ← 保留錯誤訊息供呼叫者診斷
+
+return {
+    "valid": (
+        len(missing_required) == 0
+        and validation_error is None     # ← 驗證過程本身未出錯
+        and cb_result is not None        # ← cb_result 必須被成功賦值
+        and cb_result.is_ok
+    ),
+    "missing_required_columns": missing_required,
+    "circuit_breaker_result": cb_result,
+    "validation_error": validation_error,  # ← 新增：描述過程中的意外錯誤
+}
+```
+
+**修復重點：** `cb_result is None` 的語意從「通過」改為「未知/失敗」，同時新增 `validation_error` 欄位讓呼叫者看到為何無法完成驗證。
 
 ---
 
@@ -728,7 +756,7 @@ MetadataBuilderError（基礎）
 ├── SchemaValidationError（Schema 驗證）
 ├── CircuitBreakerError（資料品質）
 ├── TypeCastingError（定義但未使用）
-└── ColumnMappingError（定義但未使用）
+└── ColumnMappingError（Regex 語法錯誤，✅ 2026-03-14 啟用）
 ```
 
 呼叫者可以按粒度捕獲：`except SourceFileError` 只處理檔案問題，`except MetadataBuilderError` 處理所有情況。
@@ -748,40 +776,29 @@ result.message        # 人類可讀的說明
 
 ### 6.2 缺點與設計問題
 
-#### 🔴 DEFECT-1（嚴重）：`validate_only()` 的靜默通過問題
+#### ~~🔴 DEFECT-1（嚴重）：`validate_only()` 的靜默通過問題~~ ✅ 已修復（2026-03-14）
 
-**位置**：`silver.py:196-201`
+**位置**：`silver.py` `validate_only()`
 
-當 `column_mapper.map_columns()` 或 `type_caster.cast_columns()` 拋出異常時，`cb_result = None`，而 `valid` 的計算 `cb_result is None or cb_result.is_ok` 等於 `True`，導致**驗證失敗被誤報為通過**。
+~~當 `column_mapper.map_columns()` 或 `type_caster.cast_columns()` 拋出異常時，`cb_result = None`，而 `valid` 的計算 `cb_result is None or cb_result.is_ok` 等於 `True`，導致**驗證失敗被誤報為通過**。~~
 
-```python
-# 問題程式碼
-except Exception as e:
-    cb_result = None  # 異常被吞噬
+修復：`cb_result is None` 語意改為「失敗」；新增 `validation_error` 欄位記錄異常訊息；`valid` 條件改為明確要求 `cb_result is not None and cb_result.is_ok`。詳見 §4.12。
 
-return {
-    "valid": len(missing_required) == 0 and (cb_result is None or cb_result.is_ok),
-    # cb_result is None → True → valid 可能為 True（即使 exception 發生）
-}
-```
+#### ~~🟡 DEFECT-2（中等）：`cast_failures` 計算的誤導性~~ ✅ 已修復（2026-03-14）
 
-#### 🟡 DEFECT-2（中等）：`cast_failures` 計算的誤導性
+**位置**：`type_caster.py` `cast_columns()`
 
-**位置**：`type_caster.py:102-105`
+~~這個計數包含了**原本就是 NULL 的值**，不只是轉換失敗的值。名稱 `cast_failures` 暗示是「轉換失敗的筆數」，但實際是「轉換後的 NULL 總數」。~~
 
-```python
-null_count = df[spec.target].isna().sum()  # 統計轉換後的 NULL 數
-if null_count > 0:
-    self.cast_failures[spec.target] = int(null_count)
-```
+修復：在每個 `match case` 前記錄 `pre_null_count`，改用差值（`null_after - null_before`）計算，只統計轉換新引入的 NULL。
 
-這個計數包含了**原本就是 NULL 的值**（Bronze 層已存在的空值），不只是轉換失敗的值。名稱 `cast_failures` 暗示是「轉換失敗的筆數」，但實際是「轉換後的 NULL 總數」，容易誤解。
+#### ~~🟡 DEFECT-3（中等）：`ColumnMappingError` 定義但從未拋出~~ ✅ 已修復（2026-03-14）
 
-#### 🟡 DEFECT-3（中等）：`ColumnMappingError` 定義但從未拋出
+**位置**：`exceptions.py` `ColumnMappingError`、`column_mapper.py` `find_matching_column()`
 
-**位置**：`exceptions.py:106-123`、`column_mapper.py`
+~~`ColumnMappingError` 在 `column_mapper.py` 中被 import 但從未被 `raise`，成為死碼（dead code）。~~
 
-`ColumnMappingError` 在 `column_mapper.py` 中被 import 但從未被 `raise`。當 optional 欄位找不到時，程式只記錄 debug log 並 `continue`；當 required 欄位缺失時，拋出的是 `SchemaValidationError`。`ColumnMappingError` 成為死碼（dead code）。
+修復：`find_matching_column()` 的 `re.error` 捕獲改為 `raise ColumnMappingError(source_pattern, columns, reason=f"Regex 語法錯誤: {e}")`；`exceptions.py` 加入可選 `reason` 參數，使錯誤訊息更清晰。
 
 #### 🟡 DEFECT-4（中等）：`extract()` 靜默忽略 `read_as_string=False`
 
@@ -1053,8 +1070,8 @@ MetadataBuilderError
 ├── TypeCastingError（column_name, target_type, failed_count 屬性）
 │   └── ⚠️ 定義但未使用（SafeTypeCaster 不拋出此異常）
 │
-└── ColumnMappingError（source_pattern, available_columns 屬性）
-    └── ⚠️ 定義但未使用（ColumnMapper 使用 SchemaValidationError）
+└── ColumnMappingError（source_pattern, available_columns, reason 屬性）
+    └── ✅ 已啟用（2026-03-14）：find_matching_column() Regex 語法錯誤時觸發
 ```
 
 ### 8.5 `MetadataBuilder` 與 `StepMetadataBuilder` 的概念辨析
@@ -1087,4 +1104,4 @@ __version__ = "1.0.0"  # utils/metadata_builder/__init__.py
 
 ---
 
-*文件版本：1.0.0 | 最後更新：2026-03-12*
+*文件版本：1.1.0 | 最後更新：2026-03-14（修復 DEFECT-1/2/3）*

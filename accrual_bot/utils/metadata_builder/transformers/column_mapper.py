@@ -155,7 +155,11 @@ class ColumnMapper:
                 if regex.search(col):
                     return col
         except re.error as e:
-            self.logger.warning(f"Regex 編譯失敗: {pattern} ({e})")
+            raise ColumnMappingError(
+                source_pattern=pattern,
+                available_columns=columns,
+                reason=f"Regex 語法錯誤: {e}"
+            ) from e
 
         return None
 

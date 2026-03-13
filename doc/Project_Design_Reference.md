@@ -1741,6 +1741,9 @@ s_logger.log_operation_end('data_loading', success=True, duration=2.3)
 | ✅ | `utils/logging/logger.py:71` | ~~`sys.stderr.write(err)` 拋出 TypeError~~ — **已修復（2026-03-14）**：改為 `f"{err}\n"` |
 | ✅ | `utils/logging/logger.py` `__init__()` | ~~`_initialized` 讀寫跨鎖域，多執行緒同時初始化 race condition~~ — **已修復（2026-03-14）**：`__init__` 加 `with Logger._lock:`，`_setup_root_logger()` 無鎖問題同時消除 |
 | ✅ | `utils/logging/logger.py` `add_custom_handler()` | ~~添加至所有子記錄器導致 log 重複輸出~~ — **已修復（2026-03-14）**：改為只添加至 root logger，`propagate` 自然分發 |
+| ✅ | `utils/metadata_builder/processors/silver.py` `validate_only()` | ~~`except Exception` 吞噬異常，`cb_result is None` 被誤判為「通過」~~ — **已修復（2026-03-14）**：加入 `validation_error` 欄位；`valid` 條件改為 `cb_result is not None and cb_result.is_ok` |
+| ✅ | `utils/metadata_builder/transformers/type_caster.py` `cast_columns()` | ~~`cast_failures` 記錄轉換後總 NULL 數（含原始空值），名實不符~~ — **已修復（2026-03-14）**：改用差值（`null_after - null_before`）只統計轉換新引入的 NULL |
+| ✅ | `utils/metadata_builder/transformers/column_mapper.py` `find_matching_column()` | ~~`ColumnMappingError` 定義但從未拋出；Regex 語法錯誤只 `logger.warning` 靜默返回 `None`~~ — **已修復（2026-03-14）**：`re.error` 改為 `raise ColumnMappingError(reason=...)`；`exceptions.py` 加入 `reason` 參數 |
 | 🔴 | `utils/helpers/data_utils.py` `extract_date_range_from_description()` | 當 `description` 為空且 `logger=None` 時，`logger.warning()` 呼叫會拋出 `AttributeError` |
 | 🔴 | `utils/helpers/data_utils.py` `give_account_by_keyword()` | `rules` 參數被立即覆蓋為 `ACCOUNT_RULES` 硬編碼常數，傳入的規則參數完全無效 |
 | 🟡 | `utils/helpers/data_utils.py` `safe_string_operation()` | `astype(str)` 將 NaN 轉為字串 `'nan'`，後續 `fillna('')` 無法再還原，`'nan'` 字串流入下游 |

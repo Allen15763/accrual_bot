@@ -70,6 +70,9 @@ class SafeTypeCaster:
 
             dtype = spec.dtype.upper()
 
+            # 記錄轉換前的 NULL 數，用於計算因轉換引入的新 NULL（排除原本就是空值的資料）
+            pre_null_count = df[spec.target].isna().sum()
+
             # 根據目標類型選擇轉換方法
             match dtype:
                 case "VARCHAR" | "STRING" | "TEXT":
@@ -99,10 +102,10 @@ class SafeTypeCaster:
                 case _:
                     self.logger.warning(f"未知類型 {dtype}，保持原樣")
 
-            # 記錄失敗筆數
-            null_count = df[spec.target].isna().sum()
-            if null_count > 0:
-                self.cast_failures[spec.target] = int(null_count)
+            # 只記錄轉換新引入的 NULL，不含原本就是空值的資料
+            new_failures = int(df[spec.target].isna().sum() - pre_null_count)
+            if new_failures > 0:
+                self.cast_failures[spec.target] = new_failures
 
         return df
 

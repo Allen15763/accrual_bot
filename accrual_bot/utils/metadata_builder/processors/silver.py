@@ -181,23 +181,31 @@ class SilverProcessor:
             df, schema_config.columns
         )
 
-        # 檢查 NULL 比例
-        breaker = self.circuit_breaker or CircuitBreaker(
-            threshold=schema_config.circuit_breaker_threshold
-        )
-
-        # 先做映射以便正確計算
+        # 先做映射、轉換，再執行 Circuit Breaker 檢查
+        cb_result = None
+        validation_error = None
         try:
             df_mapped = self.column_mapper.map_columns(
                 df, schema_config.columns, preserve_unmapped=True
             )
             df_casted = self.type_caster.cast_columns(df_mapped, schema_config.columns)
+            breaker = self.circuit_breaker or CircuitBreaker(
+                threshold=schema_config.circuit_breaker_threshold
+            )
             cb_result = breaker.check(df_casted, schema_config.columns)
         except Exception as e:
-            cb_result = None
+            # 保留錯誤訊息供呼叫者診斷；cb_result 保持 None 代表驗證無法完成
+            validation_error = str(e)
 
         return {
-            "valid": len(missing_required) == 0 and (cb_result is None or cb_result.is_ok),
+            # cb_result is None 代表驗證過程失敗，不等同於「通過」
+            "valid": (
+                len(missing_required) == 0
+                and validation_error is None
+                and cb_result is not None
+                and cb_result.is_ok
+            ),
             "missing_required_columns": missing_required,
             "circuit_breaker_result": cb_result,
+            "validation_error": validation_error,
         }

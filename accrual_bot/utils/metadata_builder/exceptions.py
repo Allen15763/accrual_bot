@@ -110,14 +110,19 @@ class ColumnMappingError(MetadataBuilderError):
     Attributes:
         source_pattern: 來源欄位 pattern
         available_columns: 可用的欄位列表
+        reason: 失敗原因（可選，用於 regex 語法錯誤等情況）
     """
 
-    def __init__(self, source_pattern: str, available_columns: list[str]):
+    def __init__(self, source_pattern: str, available_columns: list[str], reason: str = None):
         self.source_pattern = source_pattern
         self.available_columns = available_columns
-        self.message = (
-            f"找不到匹配 '{source_pattern}' 的欄位。"
-            f"可用欄位: {available_columns[:10]}"
-            + ("..." if len(available_columns) > 10 else "")
-        )
+        self.reason = reason
+        if reason:
+            self.message = f"欄位映射失敗 '{source_pattern}': {reason}"
+        else:
+            self.message = (
+                f"找不到匹配 '{source_pattern}' 的欄位。"
+                f"可用欄位: {available_columns[:10]}"
+                + ("..." if len(available_columns) > 10 else "")
+            )
         super().__init__(self.message)
