@@ -33,8 +33,7 @@ class TransactionMixin(OperationMixin):
         try:
             self.logger.info(f"開始執行事務操作 (共 {len(operations)} 個操作)")
 
-            # 開始事務
-            self.conn.sql("BEGIN TRANSACTION")
+            self._begin()
 
             for i, operation in enumerate(operations, 1):
                 try:
@@ -44,12 +43,11 @@ class TransactionMixin(OperationMixin):
                     self.conn.sql(operation)
                 except Exception as e:
                     self.logger.error(f"操作 {i} 失敗: {e}")
-                    self.conn.sql("ROLLBACK")
+                    self._rollback()
                     self.logger.error("事務已回滾")
                     raise DuckDBTransactionError(i, str(e))
 
-            # 提交事務
-            self.conn.sql("COMMIT")
+            self._commit()
             self.logger.info(f"成功執行所有 {len(operations)} 個操作")
             return True
 
@@ -57,11 +55,8 @@ class TransactionMixin(OperationMixin):
             raise
         except Exception as e:
             self.logger.error(f"事務執行失敗: {e}")
-            try:
-                self.conn.sql("ROLLBACK")
-                self.logger.error("事務已回滾")
-            except Exception:
-                pass
+            self._rollback()
+            self.logger.error("事務已回滾")
             return False
 
     def validate_data_integrity(

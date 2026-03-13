@@ -13,6 +13,7 @@ from ..exceptions import (
     DuckDBTableNotFoundError,
 )
 from ..utils.type_mapping import get_duckdb_dtype
+from ..utils.query_builder import SafeSQL
 
 
 class CRUDMixin(OperationMixin):
@@ -171,12 +172,9 @@ class CRUDMixin(OperationMixin):
             for key_col in key_columns:
                 unique_values = df[key_col].unique()
                 if len(unique_values) > 0:
-                    # 安全轉義值
-                    escaped_values = [
-                        str(v).replace("'", "''") for v in unique_values
-                    ]
-                    values_str = "', '".join(escaped_values)
-                    key_conditions.append(f'"{key_col}" IN (\'{values_str}\')')
+                    key_conditions.append(
+                        SafeSQL.build_in_clause(key_col, list(unique_values))
+                    )
 
             # 原子操作: DELETE + INSERT
             with self._atomic():

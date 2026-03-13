@@ -9,6 +9,7 @@ from typing import Optional, Dict, Any
 from datetime import datetime
 
 from .base import OperationMixin
+from ..utils.query_builder import SafeSQL
 
 
 class TableManagementMixin(OperationMixin):
@@ -196,8 +197,7 @@ class TableManagementMixin(OperationMixin):
                 self.logger.error(f"表格 '{table_name}' 不存在")
                 return False
 
-            # 安全轉義路徑
-            safe_path = backup_path.replace("'", "''")
+            safe_path = SafeSQL.escape_string(backup_path)
 
             # 執行備份
             if backup_format.lower() == 'parquet':

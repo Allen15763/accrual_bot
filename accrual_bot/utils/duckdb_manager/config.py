@@ -24,7 +24,6 @@ class DuckDBConfig:
         db_path: 資料庫檔案路徑，預設為 ":memory:" (記憶體模式)
         timezone: 時區設定，預設為 "Asia/Taipei"
         read_only: 是否以唯讀模式開啟資料庫
-        connection_timeout: 連線逾時秒數
         logger: 外部注入的日誌器，為 None 時使用內建日誌
         log_level: 日誌級別 ("DEBUG", "INFO", "WARNING", "ERROR")
         enable_query_logging: 是否記錄 SQL 查詢
@@ -36,7 +35,6 @@ class DuckDBConfig:
 
     # 連線設定
     read_only: bool = False
-    connection_timeout: int = 30
 
     # 日誌設定 (可插拔)
     logger: Optional[logging.Logger] = field(default=None, repr=False)
@@ -200,7 +198,6 @@ class DuckDBConfig:
             "db_path": self.db_path,
             "timezone": self.timezone,
             "read_only": self.read_only,
-            "connection_timeout": self.connection_timeout,
             "log_level": self.log_level,
             "enable_query_logging": self.enable_query_logging,
         }

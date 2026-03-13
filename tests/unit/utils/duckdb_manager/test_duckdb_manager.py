@@ -17,7 +17,6 @@ class TestDuckDBConfig:
         assert config.db_path == ":memory:"
         assert config.timezone == "Asia/Taipei"
         assert config.read_only is False
-        assert config.connection_timeout == 30
         assert config.log_level == "INFO"
         assert config.enable_query_logging is True
 

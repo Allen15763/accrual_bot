@@ -258,10 +258,12 @@ class DataCleaningMixin(OperationMixin):
             if remove_chars is None:
                 remove_chars = [',', '$', '€', '¥', ' ', '￥', '₩', '£', '_', '-']
 
-            # 先驗證 (在事務外，只讀操作)
+            # 先驗證 (在事務外，只讀操作)；失敗立即返回，不啟動事務
             validation_success = self._validate_conversion(
                 table_name, column_name, target_type
             )
+            if not validation_success:
+                return False
 
             # 建立清理 SQL
             cleaned_expression = f'"{column_name}"'

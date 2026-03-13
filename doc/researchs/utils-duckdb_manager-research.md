@@ -1,7 +1,8 @@
 # DuckDB Manager 模組深度研究文件
 
-> **版本**: 基於 duckdb_manager v2.1.0
+> **版本**: 基於 duckdb_manager v2.1.0（Bug 修復記錄更新至 2026-03-14）
 > **研究日期**: 2026-03-13
+> **最後更新**: 2026-03-14（記錄四個 Bug 修復：§6.2.1、§6.2.2、§6.2.3、§6.2.6）
 > **研究範圍**: `accrual_bot/utils/duckdb_manager/` 所有 15 個 Python 檔案
 
 ---
@@ -623,9 +624,9 @@ class ExtendedManager(DuckDBManager, MyCustomMixin):
 
 ### 6.2 缺點與問題
 
-#### 6.2.1 **Bug：`validation_success` 結果從未使用**
+#### 6.2.1 ✅ **已修復（2026-03-14）：`validation_success` 結果從未使用**
 
-`data_cleaning.py:262-264`：
+`data_cleaning.py:262-264`（修復前）：
 
 ```python
 # 先驗證 (在事務外，只讀操作)
@@ -637,9 +638,22 @@ validation_success = self._validate_conversion(
 
 `_validate_conversion()` 的回傳值（`True`/`False`）存入 `validation_success`，但程式碼繼續往下執行，沒有 `if not validation_success: return False`。這意味著即使驗證失敗，`_atomic()` 事務仍會開始執行，直到事務內的第二次驗證（第 303-318 行）才真正阻止問題——但此時日誌輸出可能已誤導使用者。
 
-#### 6.2.2 **SQL 安全工具使用不一致**
+**修復**：加入提前返回判斷（`data_cleaning.py`，`_validate_conversion()` 呼叫後）：
 
-模組有完整的 `SafeSQL` 類，但部分地方仍使用手動字串拼接：
+```python
+validation_success = self._validate_conversion(
+    table_name, column_name, target_type
+)
+if not validation_success:   # ← 新增：事務外的 fail-fast
+    return False
+
+with self._atomic():
+    ...
+```
+
+#### 6.2.2 ✅ **已修復（2026-03-14）：SQL 安全工具使用不一致**
+
+模組有完整的 `SafeSQL` 類，但部分地方仍使用手動字串拼接（修復前）：
 
 ```python
 # crud.py:177-179 — upsert_df_into_table 中的手動轉義
@@ -654,14 +668,24 @@ safe_path = backup_path.replace("'", "''")
 1. 將來若 `SafeSQL` 修改轉義邏輯，這些地方會不同步
 2. 審查程式碼的人需要額外確認手動轉義是否正確
 
-#### 6.2.3 **`connection_timeout` 是無效配置**
+**修復**：統一改用 `SafeSQL` 工具：
 
-`config.py:39`：
+```python
+# crud.py — 3 行手動轉義 → 1 行
+key_conditions.append(SafeSQL.build_in_clause(key_col, list(unique_values)))
+
+# table_management.py
+safe_path = SafeSQL.escape_string(backup_path)
+```
+
+#### 6.2.3 ✅ **已修復（2026-03-14）：`connection_timeout` 是無效配置**
+
+`config.py:39`（修復前）：
 ```python
 connection_timeout: int = 30
 ```
 
-`manager.py:197-200`：
+`manager.py:197-200`（修復前）：
 ```python
 self.conn = duckdb.connect(
     self.config.db_path,
@@ -671,6 +695,16 @@ self.conn = duckdb.connect(
 ```
 
 DuckDB 的 `duckdb.connect()` 本身不支援 `timeout` 參數，因此此配置項無論設定什麼值都完全沒有效果。這是一個「死設定」，可能給使用者造成誤導（以為設定了逾時保護，但實際上沒有）。
+
+**修復**：刪除 `DuckDBConfig` 中的 `connection_timeout` 欄位（含 docstring 和 `to_dict()` 中的引用），並在 `_connect()` docstring 加注釋說明設計決定：
+
+```python
+# manager.py _connect() 新增說明
+"""
+注意：DuckDB Python API 不支援 connection_timeout 參數，
+連線逾時無法直接配置。
+"""
+```
 
 #### 6.2.4 **N+1 查詢問題**
 
@@ -699,9 +733,9 @@ logger: any  # 可以是 logging.Logger 或任何符合 LoggerProtocol 的物件
 
 `any`（小寫）不是有效的 Python 型別標注。應使用 `Any`（`from typing import Any`）或更精確的 `Union[logging.Logger, LoggerProtocol]`。這個錯誤雖然在執行期無影響，但對靜態分析工具（mypy、pyright）會造成困惑。
 
-#### 6.2.6 **事務處理的重複 BEGIN/COMMIT 邏輯**
+#### 6.2.6 ✅ **已修復（2026-03-14）：事務處理的重複 BEGIN/COMMIT 邏輯**
 
-`execute_transaction()` 在 `transaction.py` 中直接使用字串呼叫 `BEGIN`/`COMMIT`/`ROLLBACK`，而沒有使用 `OperationMixin` 中已定義的 `_begin()`/`_commit()`/`_rollback()` 輔助方法：
+`execute_transaction()` 在 `transaction.py` 中直接使用字串呼叫 `BEGIN`/`COMMIT`/`ROLLBACK`，而沒有使用 `OperationMixin` 中已定義的 `_begin()`/`_commit()`/`_rollback()` 輔助方法（修復前）：
 
 ```python
 # transaction.py:37 — 應使用 self._begin() 但直接呼叫
@@ -710,7 +744,18 @@ self.conn.sql("BEGIN TRANSACTION")
 self.conn.sql("ROLLBACK")
 ```
 
-這造成 `_rollback()` 的靜默處理邏輯（`except Exception: pass`）在 `execute_transaction` 中不一致——此方法直接呼叫 `ROLLBACK` 而不用 try/except 包裹。
+這造成 `_rollback()` 的靜默處理邏輯（`except Exception: pass`）在 `execute_transaction` 中不一致——此方法直接呼叫 `ROLLBACK` 而不用 try/except 包裹。此外，外層 except 的 `try: conn.sql("ROLLBACK") except: pass` 樣板是 `_rollback()` 已實現的功能重複。
+
+**修復**：統一改用 `OperationMixin` helper：
+
+```python
+# 所有直接 conn.sql() 調用均替換：
+self._begin()      # 取代 self.conn.sql("BEGIN TRANSACTION")
+self._rollback()   # 取代 self.conn.sql("ROLLBACK")（含 try/except 的版本）
+self._commit()     # 取代 self.conn.sql("COMMIT")
+```
+
+關鍵點：`_rollback()` 內建靜默 try/except，確保即使 rollback 本身失敗，後續的 `raise DuckDBTransactionError(i, ...)` 也必定執行。
 
 #### 6.2.7 **`MigrationStrategy.SAFE` 的邏輯複雜度**
 
@@ -794,8 +839,9 @@ class ChangeType(Enum):
 `DuckDBConfig.__post_init__` 驗證了 `log_level`（必須是有效值）並確保父目錄存在，但沒有驗證：
 
 - `timezone` 是否為有效時區字串（如 `"Invalid/Zone"` 不會在配置時報錯，而是在 `_setup_timezone()` 時才失敗）
-- `connection_timeout` 是否為正整數（負值或零值是允許的但無意義）
 - `db_path` 是否在唯讀模式下確實存在（唯讀打開不存在的檔案會在 `_connect()` 時報錯）
+
+> **注意**：原先提到的 `connection_timeout` 欄位已於 2026-03-14 作為無效配置移除（見 §6.2.3）。
 
 提前驗證（Fail Fast）能提供更友好的錯誤訊息。
 

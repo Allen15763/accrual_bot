@@ -190,6 +190,9 @@ class DuckDBManager(
         """
         建立資料庫連線
 
+        注意：DuckDB Python API 不支援 connection_timeout 參數，
+        連線逾時無法直接配置。
+
         Raises:
             DuckDBConnectionError: 連線失敗時
         """

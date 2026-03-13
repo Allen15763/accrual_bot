@@ -1748,6 +1748,11 @@ s_logger.log_operation_end('data_loading', success=True, duration=2.3)
 | 🔴 | `utils/helpers/data_utils.py` `give_account_by_keyword()` | `rules` 參數被立即覆蓋為 `ACCOUNT_RULES` 硬編碼常數，傳入的規則參數完全無效 |
 | 🟡 | `utils/helpers/data_utils.py` `safe_string_operation()` | `astype(str)` 將 NaN 轉為字串 `'nan'`，後續 `fillna('')` 無法再還原，`'nan'` 字串流入下游 |
 | 🟡 | `utils/config/config_manager.py` | 硬編碼 Windows 路徑 `r'C:\SEA\Accrual\...\accrual_bot.zip'`（ZIP fallback），在非 Windows 環境無效 |
+| ✅ | `utils/duckdb_manager/operations/data_cleaning.py` `clean_and_convert_column()` | ~~`_validate_conversion()` 回傳值存入 `validation_success` 但從未判斷，事務無條件啟動~~ — **已修復（2026-03-14）**：加入 `if not validation_success: return False`，確保驗證失敗時提前返回 |
+| ✅ | `utils/duckdb_manager/operations/crud.py` `upsert_df_into_table()` | ~~手動 `str.replace("'", "''")` 轉義，未使用已存在的 `SafeSQL`~~ — **已修復（2026-03-14）**：改用 `SafeSQL.build_in_clause()` |
+| ✅ | `utils/duckdb_manager/operations/table_management.py` `backup_table()` | ~~手動 `backup_path.replace("'", "''")`，未使用 `SafeSQL`~~ — **已修復（2026-03-14）**：改用 `SafeSQL.escape_string()` |
+| ✅ | `utils/duckdb_manager/operations/transaction.py` `execute_transaction()` | ~~直接呼叫 `self.conn.sql("BEGIN TRANSACTION/COMMIT/ROLLBACK")`，繞過 `OperationMixin._rollback()` 的靜默 try/except 保護~~ — **已修復（2026-03-14）**：改用 `_begin()/_commit()/_rollback()` |
+| ✅ | `utils/duckdb_manager/config.py` `DuckDBConfig` | ~~`connection_timeout: int = 30` 從未傳入 `duckdb.connect()`，DuckDB Python API 不支援此參數，為死設定~~ — **已修復（2026-03-14）**：欄位已移除，`_connect()` 加注釋說明設計決定 |
 | 🟡 | `utils/duckdb_manager/` `check_null_values()` / `list_tables_with_info()` | N+1 查詢問題（每個欄位/每張資料表各執行一次查詢） |
 | ⚪ | `utils/duckdb_manager/operations/` `OperationMixin.logger: any` | 型別標注應為 `Any`（大寫，從 `typing` 匯入）而非 `any`（Python 內建函數） |
 
