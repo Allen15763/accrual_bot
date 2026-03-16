@@ -627,26 +627,29 @@ class PPEDataLoadingStep(PipelineStep):
         # 讀取配置
         spreadsheet_id = config_manager.get('SPX', 'expanded_contract_wb')
         
-        # 讀取三個工作表
-        df_thi = sheets_importer.get_sheet_data(
+        # 讀取三個工作表（使用 asyncio.to_thread 避免同步 I/O 阻塞 event loop）
+        df_thi = await asyncio.to_thread(
+            sheets_importer.get_sheet_data,
             spreadsheet_id,
             config_manager.get('SPX', 'expanded_contract_sheet3'),
             config_manager.get('SPX', 'expanded_contract_range')
         )
         df_thi = df_thi.iloc[:, [0, 2, *range(13, 17)]]
-        
-        df_sec = sheets_importer.get_sheet_data(
+
+        df_sec = await asyncio.to_thread(
+            sheets_importer.get_sheet_data,
             spreadsheet_id,
             config_manager.get('SPX', 'expanded_contract_sheet2'),
             config_manager.get('SPX', 'expanded_contract_range')
         )
         df_sec = df_sec.iloc[:, [0, 2, *range(13, 17)]]
-        
+
         # 統一欄位名稱
         std_cols = df_sec.columns
         df_thi.columns = std_cols
-        
-        df_ft = sheets_importer.get_sheet_data(
+
+        df_ft = await asyncio.to_thread(
+            sheets_importer.get_sheet_data,
             spreadsheet_id,
             config_manager.get('SPX', 'expanded_contract_sheet1'),
             config_manager.get('SPX', 'expanded_contract_range1')

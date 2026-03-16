@@ -5,7 +5,7 @@
 根據最大的 Expected Received Month 判斷是否需要更新為「已完成」狀態
 
 建議放置位置: 在 StatusStage1Step 和 SPXERMLogicStep 之間
-文件位置: accrual_bot/core/pipeline/steps/spx_evaluation.py
+文件位置: accrual_bot/tasks/spx/steps/spx_evaluation_2.py
 """
 
 import time
@@ -39,7 +39,7 @@ class DepositStatusUpdateStep(PipelineStep):
     """
     
     def __init__(self, 
-                 name: str = "Update_Deposit_PO_Status",
+                 name: str = "DepositStatusUpdate",
                  description_column: str = "Item Description",
                  po_column: str = "PO#",
                  date_column: str = "Expected Received Month_轉換格式",

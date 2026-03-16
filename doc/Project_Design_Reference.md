@@ -1763,10 +1763,13 @@ s_logger.log_operation_end('data_loading', success=True, duration=2.3)
 | 🔴 | `tasks/spt/steps/spt_loading.py` `_load_ap_invoice()` | 使用 `'SPX'` 識別碼讀取 `ap_columns` 配置，但這是 SPT 的載入步驟，應使用 `'SPT'` |
 | 🟡 | `tasks/spt/steps/spt_loading.py` / `spt_pr_loading.py` | `SPTDataLoadingStep` 和 `SPTPRDataLoadingStep` 都直接繼承 `PipelineStep`（而非 `BaseLoadingStep`），約 900 行中差異不超過 50 行，嚴重違反 DRY |
 | 🔴 | `tasks/spt/steps/spt_loading.py` `_load_raw_po_file()` | `df.rename(columns={'Project Number': 'Project'})` 缺少 `inplace=True` 或賦值，實際上不會生效 |
-| 🟡 | `tasks/spx/steps/spx_evaluation.py` / `spx_steps.py` | `spx_steps.py` 中的 6 個孤立步驟（`SPXDepositCheckStep` 等）在 `__all__` 中但不在 Orchestrator step registry，容易造成混淆 |
-| 🔴 | `tasks/spx/steps/spx_integration.py` `ClosingListIntegrationStep` | 硬編碼 Google Sheets Spreadsheet ID，跨年時需手動在程式碼新增 sheet 年份 |
+| ✅ | `tasks/spx/steps/spx_evaluation.py` / `spx_steps.py` | ~~`spx_steps.py` 中的 6 個孤立步驟（`SPXDepositCheckStep` 等）在 `__all__` 中但不在 Orchestrator step registry，容易造成混淆~~ — **已修復（2026-03-17）**：從 `__all__` 移除，各類別 docstring 加廢棄標注 |
+| ✅ | `tasks/spx/steps/spx_integration.py` `ClosingListIntegrationStep` | ~~硬編碼 Google Sheets Spreadsheet ID，跨年時需手動在程式碼新增 sheet 年份~~ — **已修復（2026-03-17）**：ID 與 sheet 清單移至 `stagging_spx.toml`，`config_manager.get_list()` 讀取 |
+| ✅ | `tasks/spx/steps/spx_integration.py` `ColumnAdditionStep` | ~~`'raw_pr' in context.get_variable('file_paths').keys()` 隱式耦合，key 名稱變更則欄位重命名靜默失效~~ — **已修復（2026-03-17）**：改用 `context.metadata.processing_type == 'PR'` |
+| ✅ | `tasks/spx/steps/spx_evaluation_2.py` `DepositStatusUpdateStep` | ~~模組 docstring 路徑錯誤（指向 `core/pipeline/steps/spx_evaluation.py`）；step name 為 `Update_Deposit_PO_Status` 與 registry key `DepositStatusUpdate` 不一致~~ — **已修復（2026-03-17）**：docstring 路徑修正；name 預設值統一為 `DepositStatusUpdate` |
+| ✅ | `tasks/spx/pipeline_orchestrator.py` `build_ppe_pipeline()` / `build_ppe_desc_pipeline()` | ~~PPE/PPE_DESC pipeline 硬編碼步驟，無法透過 config 控制，與 PO/PR 的配置驅動架構不一致~~ — **已修復（2026-03-17）**：加入 `enabled_ppe_steps`/`enabled_ppe_desc_steps` 至 TOML，`_create_step()` 新增 PPE factory entries |
+| ✅ | `tasks/spx/steps/spx_loading.py` `PPEDataLoadingStep._load_renewal_list()` | ~~在 `async def` 中直接呼叫同步的 Google Sheets `get_sheet_data()`，阻塞 asyncio event loop~~ — **已修復（2026-03-17）**：改用 `await asyncio.to_thread(sheets_importer.get_sheet_data, ...)` |
 | 🔴 | `tasks/spx/steps/spx_evaluation_2.py` `SPXExportStep` | `context.get_auxiliary_data('locker_non_discount').to_excel(...)` 若驗收步驟被跳過，此處會拋出 `AttributeError` |
-| 🟡 | `tasks/spx/steps/spx_loading.py` `PPEDataLoadingStep._load_renewal_list()` | 在 `async def` 中直接呼叫同步的 Google Sheets `get_sheet_data()`，阻塞 asyncio event loop |
 | 🟡 | `tasks/spt/pipeline_orchestrator.py` `_create_step()` | 未知步驟使用 `print()` 而非 `self.logger.warning()`，日誌層級不一致 |
 
 ### 14.4 Data Importers

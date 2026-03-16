@@ -818,6 +818,14 @@ The codebase underwent significant refactoring to improve code quality and maint
 - **metadata_builder (3 fixes)**: `validate_only()` silent-pass bug (exception swallowed, `cb_result is None` incorrectly treated as success); `cast_failures` counted pre-existing NULLs rather than conversion-induced NULLs; `ColumnMappingError` defined but never raised (Regex errors silently returned `None`)
 - **duckdb_manager (5 fixes)**: `clean_and_convert_column()` ignored `_validate_conversion()` return value (transaction started unconditionally); `upsert_df_into_table()` and `backup_table()` used manual string escaping instead of existing `SafeSQL` utilities; `execute_transaction()` called `conn.sql("BEGIN/COMMIT/ROLLBACK")` directly, bypassing `OperationMixin._rollback()`'s built-in silent try/except; `connection_timeout: int = 30` was dead config (DuckDB Python API does not support this parameter) — field removed from `DuckDBConfig`
 
+### Phase 9: SPX Tasks Bug Fixes (2026-03-17)
+- **Orphaned steps (Fix 1)**: 6 legacy prototype steps in `spx_steps.py` (`SPXDepositCheckStep` etc.) removed from `__all__` and marked deprecated in docstrings — were in public API but absent from orchestrator step registry
+- **Hardcoded Sheets ID (Fix 2)**: `ClosingListIntegrationStep` Spreadsheet ID and sheet name list moved to `stagging_spx.toml` (`closing_list_spreadsheet_id`, `closing_list_sheet_names`, `closing_list_sheet_range`) — adding a new year now requires only a TOML edit
+- **PPE pipeline consistency (Fix 3)**: `build_ppe_pipeline()` and `build_ppe_desc_pipeline()` refactored to config-driven pattern; `enabled_ppe_steps`/`enabled_ppe_desc_steps` added to TOML; PPE step factory entries added to `_create_step()`
+- **Implicit coupling (Fix 4)**: `ColumnAdditionStep` replaced `'raw_pr' in file_paths.keys()` detection with `context.metadata.processing_type == 'PR'` — eliminates silent failure if key name changes
+- **Documentation mismatch (Fix 5)**: `spx_evaluation_2.py` module docstring path corrected; `DepositStatusUpdateStep` default name unified to `"DepositStatusUpdate"` (matches orchestrator registry key)
+- **Async blocking (Fix 6)**: `PPEDataLoadingStep._load_renewal_list()` three synchronous `get_sheet_data()` calls wrapped with `asyncio.to_thread()` — releases event loop during Google Sheets API I/O
+
 ### Benefits
 - **Maintainability**: Single source of truth for shared logic reduces bug surface area
 - **Extensibility**: New entities/types can be added via configuration + orchestrator updates

@@ -192,40 +192,19 @@ class SPXPipelineOrchestrator:
 
         pipeline = Pipeline(pipeline_config)
 
-        # PPE 管道的固定步驟順序
-        contract_filing_list_path = file_paths.get('contract_filing_list', {})
+        # 從配置讀取啟用步驟（與 PO/PR pipeline 相同的配置驅動模式）
+        enabled_steps = self.config.get('enabled_ppe_steps', [
+            'PPEDataLoading', 'PPEDataCleaning', 'PPEDataMerge',
+            'PPEContractDateUpdate', 'PPEMonthDifference',
+        ])
 
-        # 1. PPE Data Loading
-        pipeline.add_step(PPEDataLoadingStep(
-            name="PPEDataLoading",
-            contract_filing_list_url=contract_filing_list_path
-        ))
-
-        # 2. PPE Data Cleaning
-        pipeline.add_step(PPEDataCleaningStep(
-            name="PPEDataCleaning"
-        ))
-
-        # 3. PPE Data Merge
-        merge_keys = config_manager.get_list(
-            'SPX',
-            'key_for_merging_origin_and_renew_contract'
-        )
-        pipeline.add_step(PPEDataMergeStep(
-            name="PPEDataMerge",
-            merge_keys=merge_keys
-        ))
-
-        # 4. PPE Contract Date Update
-        pipeline.add_step(PPEContractDateUpdateStep(
-            name="PPEContractDateUpdate"
-        ))
-
-        # 5. PPE Month Difference Calculation
-        pipeline.add_step(PPEMonthDifferenceStep(
-            name="PPEMonthDifference",
-            current_month=processing_date
-        ))
+        for step_name in enabled_steps:
+            step = self._create_step(
+                step_name, file_paths,
+                processing_type='PPE', processing_date=processing_date
+            )
+            if step:
+                pipeline.add_step(step)
 
         # 添加自定義步驟
         if custom_steps:
@@ -262,28 +241,19 @@ class SPXPipelineOrchestrator:
 
         pipeline = Pipeline(pipeline_config)
 
-        # 固定步驟順序
-        # 1. 載入 PO/PR 底稿和年限表
-        pipeline.add_step(PPEDescDataLoadingStep(
-            name="PPEDescDataLoading",
-            file_paths=file_paths,
-            processing_date=processing_date
-        ))
+        # 從配置讀取啟用步驟（與 PO/PR pipeline 相同的配置驅動模式）
+        enabled_steps = self.config.get('enabled_ppe_desc_steps', [
+            'PPEDescDataLoading', 'DescriptionExtraction',
+            'ContractPeriodMapping', 'PPEDescExport',
+        ])
 
-        # 2. 說明欄位提取（摘要、地址、智取櫃型號）
-        pipeline.add_step(DescriptionExtractionStep(
-            name="DescriptionExtraction"
-        ))
-
-        # 3. 年限對應
-        pipeline.add_step(ContractPeriodMappingStep(
-            name="ContractPeriodMapping"
-        ))
-
-        # 4. 匯出 3-sheet Excel
-        pipeline.add_step(PPEDescExportStep(
-            name="PPEDescExport"
-        ))
+        for step_name in enabled_steps:
+            step = self._create_step(
+                step_name, file_paths,
+                processing_type='PPE_DESC', processing_date=processing_date
+            )
+            if step:
+                pipeline.add_step(step)
 
         # 添加自定義步驟
         if custom_steps:
@@ -296,7 +266,8 @@ class SPXPipelineOrchestrator:
         self,
         step_name: str,
         file_paths: Dict[str, Any],
-        processing_type: str = 'PO'
+        processing_type: str = 'PO',
+        processing_date: Optional[int] = None,
     ) -> Optional[PipelineStep]:
         """
         根據步驟名稱創建步驟實例
@@ -304,7 +275,8 @@ class SPXPipelineOrchestrator:
         Args:
             step_name: 步驟名稱
             file_paths: 文件路徑配置
-            processing_type: 處理類型 (PO/PR)
+            processing_type: 處理類型 (PO/PR/PPE/PPE_DESC)
+            processing_date: 處理日期 YYYYMM（PPE/PPE_DESC pipeline 使用）
 
         Returns:
             Optional[PipelineStep]: 步驟實例或 None
@@ -391,6 +363,44 @@ class SPXPipelineOrchestrator:
                 output_dir="output",
                 required=False
             ),
+
+            # PPE Pipeline Steps
+            'PPEDataLoading': lambda: PPEDataLoadingStep(
+                name="PPEDataLoading",
+                contract_filing_list_url=file_paths.get('contract_filing_list', {})
+            ),
+            'PPEDataCleaning': lambda: PPEDataCleaningStep(
+                name="PPEDataCleaning"
+            ),
+            'PPEDataMerge': lambda: PPEDataMergeStep(
+                name="PPEDataMerge",
+                merge_keys=config_manager.get_list(
+                    'SPX', 'key_for_merging_origin_and_renew_contract'
+                )
+            ),
+            'PPEContractDateUpdate': lambda: PPEContractDateUpdateStep(
+                name="PPEContractDateUpdate"
+            ),
+            'PPEMonthDifference': lambda: PPEMonthDifferenceStep(
+                name="PPEMonthDifference",
+                current_month=processing_date
+            ),
+
+            # PPE_DESC Pipeline Steps
+            'PPEDescDataLoading': lambda: PPEDescDataLoadingStep(
+                name="PPEDescDataLoading",
+                file_paths=file_paths,
+                processing_date=processing_date
+            ),
+            'DescriptionExtraction': lambda: DescriptionExtractionStep(
+                name="DescriptionExtraction"
+            ),
+            'ContractPeriodMapping': lambda: ContractPeriodMappingStep(
+                name="ContractPeriodMapping"
+            ),
+            'PPEDescExport': lambda: PPEDescExportStep(
+                name="PPEDescExport"
+            ),
         }
 
         step_factory = step_registry.get(step_name)
@@ -416,11 +426,9 @@ class SPXPipelineOrchestrator:
         elif processing_type == 'PR':
             return self.config.get('enabled_pr_steps', [])
         elif processing_type == 'PPE_DESC':
-            return [
-                'PPEDescDataLoading',
-                'DescriptionExtraction',
-                'ContractPeriodMapping',
-                'PPEDescExport',
-            ]
+            return self.config.get('enabled_ppe_desc_steps', [
+                'PPEDescDataLoading', 'DescriptionExtraction',
+                'ContractPeriodMapping', 'PPEDescExport',
+            ])
         else:
             return self.config.get('enabled_ppe_steps', [])

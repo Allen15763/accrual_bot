@@ -13,8 +13,12 @@ from accrual_bot.core.pipeline.context import ProcessingContext
 
 class SPXDepositCheckStep(PipelineStep):
     """
-    SPX押金檢查步驟
+    SPX押金檢查步驟（已廢棄）
     識別和處理押金相關項目
+
+    .. deprecated::
+        此步驟為遺留原型，未整合至 pipeline orchestrator。
+        現行功能由 DepositStatusUpdateStep（spx_evaluation_2.py）提供。
     """
     
     def __init__(self,
@@ -104,8 +108,12 @@ class SPXDepositCheckStep(PipelineStep):
 
 class SPXClosingListIntegrationStep(PipelineStep):
     """
-    SPX關單清單整合步驟
+    SPX關單清單整合步驟（已廢棄）
     整合關單清單數據
+
+    .. deprecated::
+        此步驟為遺留原型，未整合至 pipeline orchestrator。
+        現行功能由 ClosingListIntegrationStep（spx_integration.py）提供。
     """
     
     def __init__(self, name: str = "SPXClosingList", **kwargs):
@@ -183,8 +191,12 @@ class SPXClosingListIntegrationStep(PipelineStep):
 
 class SPXRentProcessingStep(PipelineStep):
     """
-    SPX租金處理步驟
+    SPX租金處理步驟（已廢棄）
     處理各種租金相關項目
+
+    .. deprecated::
+        此步驟為遺留原型，未整合至 pipeline orchestrator。
+        保留供倉庫/辦公室/設備租金分類邏輯參考。
     """
     
     def __init__(self, name: str = "SPXRentProcessing", **kwargs):
@@ -322,8 +334,12 @@ class SPXRentProcessingStep(PipelineStep):
 
 class SPXAssetValidationStep(PipelineStep):
     """
-    SPX資產驗收步驟
+    SPX資產驗收步驟（已廢棄）
     處理Kiosk、Locker等資產驗收邏輯
+
+    .. deprecated::
+        此步驟為遺留原型，未整合至 pipeline orchestrator。
+        保留供 Kiosk/Locker 供應商驗收狀態邏輯參考。
     """
     
     def __init__(self, name: str = "SPXAssetValidation", **kwargs):
@@ -443,8 +459,12 @@ class SPXAssetValidationStep(PipelineStep):
 
 class SPXComplexStatusStep(PipelineStep):
     """
-    SPX複雜狀態判斷步驟
+    SPX複雜狀態判斷步驟（已廢棄）
     實現SPX的11個狀態判斷條件
+
+    .. deprecated::
+        此步驟為遺留原型，未整合至 pipeline orchestrator。
+        現行功能由 StatusStage1Step + SPXERMLogicStep（spx_evaluation.py）提供。
     """
     
     def __init__(self, name: str = "SPXComplexStatus", **kwargs):
@@ -568,8 +588,12 @@ class SPXComplexStatusStep(PipelineStep):
 
 class SPXPPEProcessingStep(PipelineStep):
     """
-    SPX PPE處理步驟
+    SPX PPE處理步驟（已廢棄）
     處理固定資產相關邏輯
+
+    .. deprecated::
+        此步驟為遺留原型，未整合至 pipeline orchestrator。
+        保留供 FA 科目識別與資本化門檻（10000）邏輯參考。
     """
     
     def __init__(self, name: str = "SPXPPEProcessing", **kwargs):

@@ -379,7 +379,7 @@ class TestDepositStatusUpdateStep:
         """預設步驟名稱"""
         from accrual_bot.tasks.spx.steps.spx_evaluation_2 import DepositStatusUpdateStep
         step = DepositStatusUpdateStep()
-        assert step.name == "Update_Deposit_PO_Status"
+        assert step.name == "DepositStatusUpdate"
 
     @pytest.mark.asyncio
     @pytest.mark.unit

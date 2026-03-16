@@ -66,8 +66,8 @@ class ColumnAdditionStep(PipelineStep):
             # 更新月份變數
             context.set_variable('processing_month', m)
             
-            # 偵測輸入參數，含有PR的原始檔路徑時，修改欄位名稱為PR
-            if 'raw_pr' in context.get_variable('file_paths').keys():
+            # 依 processing_type 決定欄位名稱（PR pipeline 使用 PR狀態）
+            if context.metadata.processing_type == 'PR':
                 df = df.rename(columns={'PO狀態': 'PR狀態'})
             context.update_data(df)
             
@@ -475,15 +475,12 @@ class ClosingListIntegrationStep(PipelineStep):
             if self.sheets_importer is None:
                 self.sheets_importer = GoogleSheetsImporter(config)
             
-            # 定義要查詢的工作表
-            # Spreadsheet ID: SPX 關單清單
-            spreadsheet_id = '1wuwyyNtU6dhK7JF2AFJfUJC0ChNScrDza6UQtfE7sCE'
-            
-            queries = [
-                (spreadsheet_id, '2023年_done', 'A:J'),
-                (spreadsheet_id, '2024年', 'A:J'),
-                (spreadsheet_id, '2025年', 'A:J')
-            ]
+            # 從配置讀取關單清單 Google Sheets 設定（跨年時只需更新 stagging_spx.toml）
+            spreadsheet_id = config_manager.get('SPX', 'closing_list_spreadsheet_id')
+            sheet_names = config_manager.get_list('SPX', 'closing_list_sheet_names')
+            sheet_range = config_manager.get('SPX', 'closing_list_sheet_range')
+
+            queries = [(spreadsheet_id, name, sheet_range) for name in sheet_names]
             
             dfs = []
             for sheet_id, sheet_name, range_value in queries:

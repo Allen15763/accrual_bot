@@ -30,6 +30,19 @@ enabled_pr_steps = [
     "SPXPRExport",
     "DataShapeSummary",
 ]
+enabled_ppe_steps = [
+    "PPEDataLoading",
+    "PPEDataCleaning",
+    "PPEDataMerge",
+    "PPEContractDateUpdate",
+    "PPEMonthDifference",
+]
+enabled_ppe_desc_steps = [
+    "PPEDescDataLoading",
+    "DescriptionExtraction",
+    "ContractPeriodMapping",
+    "PPEDescExport",
+]
 
 [spx]
 ap_columns = [
@@ -91,6 +104,10 @@ expanded_contract_sheet3 = "第三期續約案件"
 contract_filing_list_sheet = "歸檔清單"
 contract_filing_list_range = "D,H,P"
 key_for_merging_origin_and_renew_contract = ["sp_code", "address"]
+# SPX Closing List Google Sheets 配置（跨年只需在此追加年份，無需改程式碼）
+closing_list_spreadsheet_id = "1wuwyyNtU6dhK7JF2AFJfUJC0ChNScrDza6UQtfE7sCE"
+closing_list_sheet_names = ["2023年_done", "2024年", "2025年", "2026年"]
+closing_list_sheet_range = "A:J"
 
 output_columns_before_nlp = [
     "po_link","po_number","po_submitter",

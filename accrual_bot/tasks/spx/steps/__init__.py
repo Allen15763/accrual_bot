@@ -55,12 +55,9 @@ __all__ = [
     'PPEDataLoadingStep',
     'AccountingOPSDataLoadingStep',
     'SPXPRDataLoadingStep',
-    'SPXDepositCheckStep',
-    'SPXClosingListIntegrationStep',
-    'SPXRentProcessingStep',
-    'SPXAssetValidationStep',
-    'SPXComplexStatusStep',
-    'SPXPPEProcessingStep',
+    # 注意：SPXDepositCheckStep、SPXClosingListIntegrationStep、SPXRentProcessingStep、
+    # SPXAssetValidationStep、SPXComplexStatusStep、SPXPPEProcessingStep
+    # 為遺留原型步驟，未整合至 pipeline orchestrator，保留供業務邏輯參考，不在公開 API 中。
     'StatusStage1Step',
     'ERMConditions',
     'SPXERMLogicStep',
