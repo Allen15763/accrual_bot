@@ -20,6 +20,10 @@ class SPTStatusStep(PipelineStep):
     """
     SPT狀態判斷步驟
     實現SPT特定的狀態評估邏輯
+
+    .. deprecated::
+        （已廢棄）此步驟未整合至 pipeline orchestrator，不在 _create_step() registry 中。
+        功能由 SPTStatusLabelStep + SPTERMLogicStep 提供。保留作業務邏輯參考。
     """
     
     def __init__(self, name: str = "SPTStatus", **kwargs):
@@ -155,6 +159,10 @@ class SPTDepartmentStep(PipelineStep):
     """
     SPT部門處理步驟
     處理SPT特殊的部門代碼轉換邏輯
+
+    .. deprecated::
+        （已廢棄）此步驟未整合至 pipeline orchestrator，不在 _create_step() registry 中。
+        功能由 SPTPostProcessingStep 的部門欄位處理邏輯提供。保留作業務邏輯參考。
     """
     
     def __init__(self, name: str = "SPTDepartment", **kwargs):
@@ -245,6 +253,10 @@ class SPTAccrualStep(PipelineStep):
     """
     SPT預估入帳步驟
     處理SPT特定的預估邏輯
+
+    .. deprecated::
+        （已廢棄）此步驟未整合至 pipeline orchestrator，不在 _create_step() registry 中。
+        功能由 SPTERMLogicStep 的應計判斷邏輯提供。保留作業務邏輯參考。
     """
     
     def __init__(self, name: str = "SPTAccrual", **kwargs):
@@ -339,6 +351,10 @@ class SPTValidationStep(PipelineStep):
     """
     SPT驗證步驟
     執行SPT特定的業務規則驗證
+
+    .. deprecated::
+        （已廢棄）此步驟未整合至 pipeline orchestrator，不在 _create_step() registry 中。
+        驗證邏輯分散於各現行步驟（DateLogicStep、SPTERMLogicStep 等）。保留作業務邏輯參考。
     """
     
     def __init__(self, name: str = "SPTValidation", **kwargs):
@@ -746,6 +762,11 @@ class SPTPostProcessingStep(BasePostProcessingStep):
         return df
     
     def _rearrange_reviewer_col(self, df: pd.DataFrame) -> pd.DataFrame:
+        required_cols = ['previous_month_reviewed_by', 'current_month_reviewed_by']
+        missing = [c for c in required_cols if c not in df.columns]
+        if missing:
+            self.logger.warning(f"_rearrange_reviewer_col: 缺少欄位 {missing}，跳過排序")
+            return df
         a = df.pop('previous_month_reviewed_by')
         b = df.pop('current_month_reviewed_by')
         df = df.assign(

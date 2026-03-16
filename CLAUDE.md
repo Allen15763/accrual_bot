@@ -826,6 +826,15 @@ The codebase underwent significant refactoring to improve code quality and maint
 - **Documentation mismatch (Fix 5)**: `spx_evaluation_2.py` module docstring path corrected; `DepositStatusUpdateStep` default name unified to `"DepositStatusUpdate"` (matches orchestrator registry key)
 - **Async blocking (Fix 6)**: `PPEDataLoadingStep._load_renewal_list()` three synchronous `get_sheet_data()` calls wrapped with `asyncio.to_thread()` — releases event loop during Google Sheets API I/O
 
+### Phase 10: SPT Tasks Bug Fixes (2026-03-17)
+- **KeyError guard (Fix 1)**: `SPTPostProcessingStep._rearrange_reviewer_col()` — added column existence check before `df.pop()`; missing columns now log a warning and return early instead of raising `KeyError`
+- **DRY refactoring (Fix 5, includes Fix 2)**: `spt_loading.py` rewritten from 1164 → 182 lines (84% reduction) — introduced `SPTBaseDataLoadingStep(BaseLoadingStep)` with four template hooks; `SPTDataLoadingStep` and `SPTPRDataLoadingStep` each reduced to `get_required_file_type()` declarations; `df.rename()` silent bug fixed via `BaseLoadingStep._process_common_columns()` which already assigns correctly
+- **IndexError guard (Fix 3)**: `PayrollDetectionStep.execute()` — replaced unsafe `[0]` list index on status column lookup with guard block; empty match now logs warning and skips update gracefully
+- **Logger in orchestrator (Fix 4)**: `SPTPipelineOrchestrator.__init__` now initializes `self.logger = get_logger(__name__)`; unknown-step warning replaced `print()` with `self.logger.warning()`
+- **Orphaned steps (Fix 6)**: 4 legacy prototype steps (`SPTStatusStep`, `SPTDepartmentStep`, `SPTAccrualStep`, `SPTValidationStep`) removed from `spt/steps/__init__.py` `__all__`; deprecation docstrings added to each class
+- **Config-driven commission/payroll (Fix 7)**: `COMMISSION_CONFIG` and `PAYROLL_CONFIG` business rules moved to `stagging_spt.toml` under `[spt.commission.affiliate]`, `[spt.commission.ams]`, `[spt.payroll]`; `__init__` reads from config with class-level constants as fallback
+- **Sub-context metadata propagation (Fix 8)**: `CombinedProcurementProcessingStep._process_po_data()` and `_process_pr_data()` now fully propagate `entity_type`, `processing_type`, and `processing_date` from parent context to sub-context
+
 ### Benefits
 - **Maintainability**: Single source of truth for shared logic reduces bug surface area
 - **Extensibility**: New entities/types can be added via configuration + orchestrator updates

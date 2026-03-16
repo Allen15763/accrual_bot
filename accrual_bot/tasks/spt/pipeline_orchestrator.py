@@ -9,6 +9,7 @@ from typing import List, Dict, Any, Optional
 from accrual_bot.core.pipeline import Pipeline, PipelineConfig
 from accrual_bot.core.pipeline.base import PipelineStep
 from accrual_bot.utils.config import config_manager
+from accrual_bot.utils.logging import get_logger
 
 # Import SPT steps
 from accrual_bot.tasks.spt.steps import (
@@ -66,6 +67,7 @@ class SPTPipelineOrchestrator:
     def __init__(self):
         self.config = config_manager._config_toml.get('pipeline', {}).get('spt', {})
         self.entity_type = 'SPT'
+        self.logger = get_logger(__name__)
 
     def build_po_pipeline(
         self,
@@ -483,7 +485,7 @@ class SPTPipelineOrchestrator:
             return step_factory()
         else:
             # 記錄未知步驟
-            print(f"Warning: Unknown step '{step_name}' for SPT {processing_type} pipeline")
+            self.logger.warning(f"Unknown step '{step_name}' for SPT {processing_type} pipeline")
             return None
 
     def get_enabled_steps(

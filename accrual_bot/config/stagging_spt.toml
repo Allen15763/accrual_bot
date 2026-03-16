@@ -75,6 +75,31 @@ ga_cr_pivot_cols = [
 ]
 pivot_value_col = "Accr. Amount_variable"
 
+# =============================================================================
+# SPT 分潤與 Payroll 業務規則配置（原為程式碼中的硬編碼常數）
+# 更新 GL#、Product Code、關鍵字時只需修改此處，無需改程式碼
+# =============================================================================
+
+[spt.commission.affiliate]
+keywords = '(?i)Affiliate commission|Shopee commission|蝦皮分潤計劃會員分潤金'
+exclude_keywords = ['品牌加碼']
+gl_number = '650022'
+product_code = 'EC_SPE_COM'
+remark = '分潤'
+name = 'Affiliate/Shopee分潤'
+
+[spt.commission.ams]
+keywords = '(?i)AMS commission'
+include_and_keywords = ['Affiliate分潤合作', '品牌加碼']
+gl_number = '650019'
+product_code = 'EC_AMS_COST'
+remark = '分潤'
+name = 'AMS分潤'
+
+[spt.payroll]
+keywords = '(?i)payroll'
+label = 'Payroll'
+
 
 # SPT狀態標籤標記規則配置
 [spt_status_label_rules]

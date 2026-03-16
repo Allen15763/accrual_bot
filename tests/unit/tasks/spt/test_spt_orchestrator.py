@@ -120,12 +120,10 @@ class TestSPTPipelineOrchestrator:
         assert step is not None
         assert step.name == "SPTERMLogic"
 
-    def test_create_step_unknown_step_name(self, orchestrator, file_paths, capsys):
-        """測試未知步驟名稱返回 None"""
+    def test_create_step_unknown_step_name(self, orchestrator, file_paths):
+        """測試未知步驟名稱返回 None（警告已透過 logger 發出而非 print）"""
         step = orchestrator._create_step('UnknownStep', file_paths, 'PO')
         assert step is None
-        captured = capsys.readouterr()
-        assert "Warning: Unknown step 'UnknownStep'" in captured.out
 
     # --- get_enabled_steps 測試 ---
 

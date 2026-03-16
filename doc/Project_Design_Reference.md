@@ -1761,8 +1761,14 @@ s_logger.log_operation_end('data_loading', success=True, duration=2.3)
 | 嚴重度 | 位置 | 問題說明 |
 |--------|------|---------|
 | 🔴 | `tasks/spt/steps/spt_loading.py` `_load_ap_invoice()` | 使用 `'SPX'` 識別碼讀取 `ap_columns` 配置，但這是 SPT 的載入步驟，應使用 `'SPT'` |
-| 🟡 | `tasks/spt/steps/spt_loading.py` / `spt_pr_loading.py` | `SPTDataLoadingStep` 和 `SPTPRDataLoadingStep` 都直接繼承 `PipelineStep`（而非 `BaseLoadingStep`），約 900 行中差異不超過 50 行，嚴重違反 DRY |
-| 🔴 | `tasks/spt/steps/spt_loading.py` `_load_raw_po_file()` | `df.rename(columns={'Project Number': 'Project'})` 缺少 `inplace=True` 或賦值，實際上不會生效 |
+| ✅ | `tasks/spt/steps/spt_loading.py` / `spt_pr_loading.py` | ~~`SPTDataLoadingStep` 和 `SPTPRDataLoadingStep` 都直接繼承 `PipelineStep`（而非 `BaseLoadingStep`），約 1164 行中差異不超過 50 行，嚴重違反 DRY~~ — **已修復（2026-03-17）**：引入 `SPTBaseDataLoadingStep(BaseLoadingStep)` 中間抽象層，檔案從 1164 行縮減至 182 行（84% 減少） |
+| ✅ | `tasks/spt/steps/spt_loading.py` `_load_raw_po_file()` / `_load_raw_pr_file()` | ~~`df.rename(columns={'Project Number': 'Project'})` 缺少賦值，實際上不會生效~~ — **已修復（2026-03-17）**：透過 Fix 5 的重構，改由 `BaseLoadingStep._process_common_columns()` 正確處理（已含賦值） |
+| ✅ | `tasks/spt/steps/spt_steps.py` `SPTPostProcessingStep._rearrange_reviewer_col()` | ~~`df.pop('previous_month_reviewed_by')` 無防護，欄位不存在時拋出 `KeyError` 導致整個後處理步驟失敗~~ — **已修復（2026-03-17）**：加入欄位存在檢查，缺少時 log warning 並提前返回 |
+| ✅ | `tasks/spt/steps/spt_evaluation_affiliate.py` `PayrollDetectionStep.execute()` | ~~`[i for i in df.columns if '狀態' in i][0]` 在無含「狀態」欄位時拋出 `IndexError`~~ — **已修復（2026-03-17）**：改為先取清單，空時 log warning 並跳過狀態更新 |
+| ✅ | `tasks/spt/pipeline_orchestrator.py` `_create_step()` | ~~未知步驟使用 `print()` 而非 `self.logger.warning()`，日誌層級不一致~~ — **已修復（2026-03-17）**：`__init__` 加入 `get_logger(__name__)`，`print()` 改為 `self.logger.warning()` |
+| ✅ | `tasks/spt/steps/__init__.py` / `spt_steps.py` | ~~`SPTStatusStep`、`SPTDepartmentStep`、`SPTAccrualStep`、`SPTValidationStep` 4 個孤兒步驟在 `__all__` 中但不在 Orchestrator step registry~~ — **已修復（2026-03-17）**：從 `__all__` 移除，各類別 docstring 加廢棄標注 |
+| ✅ | `tasks/spt/steps/spt_evaluation_affiliate.py` `CommissionDataUpdateStep` / `PayrollDetectionStep` | ~~`COMMISSION_CONFIG` 和 `PAYROLL_CONFIG` 硬編碼業務規則（GL 號碼、Product Code、薪資關鍵字），變更需修改程式碼~~ — **已修復（2026-03-17）**：規則移至 `stagging_spt.toml` `[spt.commission.*]` / `[spt.payroll]`，`__init__` 從 config 讀取並以類別常數作 fallback |
+| ✅ | `tasks/spt/steps/spt_combined_procurement_processing.py` `_process_po_data()` / `_process_pr_data()` | ~~sub_context 建立後未傳播父 context 的 `entity_type`、`processing_type`、`processing_date`，下游步驟拿到空字串/0~~ — **已修復（2026-03-17）**：三個 metadata 欄位及 `file_date`/`processing_date` 變數均完整傳播 |
 | ✅ | `tasks/spx/steps/spx_evaluation.py` / `spx_steps.py` | ~~`spx_steps.py` 中的 6 個孤立步驟（`SPXDepositCheckStep` 等）在 `__all__` 中但不在 Orchestrator step registry，容易造成混淆~~ — **已修復（2026-03-17）**：從 `__all__` 移除，各類別 docstring 加廢棄標注 |
 | ✅ | `tasks/spx/steps/spx_integration.py` `ClosingListIntegrationStep` | ~~硬編碼 Google Sheets Spreadsheet ID，跨年時需手動在程式碼新增 sheet 年份~~ — **已修復（2026-03-17）**：ID 與 sheet 清單移至 `stagging_spx.toml`，`config_manager.get_list()` 讀取 |
 | ✅ | `tasks/spx/steps/spx_integration.py` `ColumnAdditionStep` | ~~`'raw_pr' in context.get_variable('file_paths').keys()` 隱式耦合，key 名稱變更則欄位重命名靜默失效~~ — **已修復（2026-03-17）**：改用 `context.metadata.processing_type == 'PR'` |
@@ -1770,7 +1776,6 @@ s_logger.log_operation_end('data_loading', success=True, duration=2.3)
 | ✅ | `tasks/spx/pipeline_orchestrator.py` `build_ppe_pipeline()` / `build_ppe_desc_pipeline()` | ~~PPE/PPE_DESC pipeline 硬編碼步驟，無法透過 config 控制，與 PO/PR 的配置驅動架構不一致~~ — **已修復（2026-03-17）**：加入 `enabled_ppe_steps`/`enabled_ppe_desc_steps` 至 TOML，`_create_step()` 新增 PPE factory entries |
 | ✅ | `tasks/spx/steps/spx_loading.py` `PPEDataLoadingStep._load_renewal_list()` | ~~在 `async def` 中直接呼叫同步的 Google Sheets `get_sheet_data()`，阻塞 asyncio event loop~~ — **已修復（2026-03-17）**：改用 `await asyncio.to_thread(sheets_importer.get_sheet_data, ...)` |
 | 🔴 | `tasks/spx/steps/spx_evaluation_2.py` `SPXExportStep` | `context.get_auxiliary_data('locker_non_discount').to_excel(...)` 若驗收步驟被跳過，此處會拋出 `AttributeError` |
-| 🟡 | `tasks/spt/pipeline_orchestrator.py` `_create_step()` | 未知步驟使用 `print()` 而非 `self.logger.warning()`，日誌層級不一致 |
 
 ### 14.4 Data Importers
 

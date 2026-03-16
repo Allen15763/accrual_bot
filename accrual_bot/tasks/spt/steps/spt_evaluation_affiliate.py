@@ -16,6 +16,7 @@ from datetime import datetime
 from accrual_bot.core.pipeline.base import PipelineStep, StepResult, StepStatus
 from accrual_bot.core.pipeline.context import ProcessingContext
 from accrual_bot.core.pipeline.steps.common import StepMetadataBuilder, create_error_metadata
+from accrual_bot.utils.config import config_manager
 
 
 class CommissionDataUpdateStep(PipelineStep):
@@ -73,6 +74,9 @@ class CommissionDataUpdateStep(PipelineStep):
         )
         self.description_column = description_column
         self.status_column = status_column
+        # 優先從 TOML config 讀取；若無配置則 fallback 至 class-level 常數
+        spt_cfg = config_manager._config_toml.get('spt', {})
+        self.commission_config = spt_cfg.get('commission', CommissionDataUpdateStep.COMMISSION_CONFIG)
     
     async def execute(self, context: ProcessingContext) -> StepResult:
         """執行分潤數據更新邏輯"""
@@ -130,7 +134,7 @@ class CommissionDataUpdateStep(PipelineStep):
                     df, 
                     affiliate_mask, 
                     'affiliate',
-                    self.COMMISSION_CONFIG['affiliate']
+                    self.commission_config['affiliate']
                 )
                 self.logger.info(f"✅ 已更新 {affiliate_count:,} 筆 Affiliate/Shopee 分潤")
             
@@ -140,7 +144,7 @@ class CommissionDataUpdateStep(PipelineStep):
                     df, 
                     ams_mask, 
                     'ams',
-                    self.COMMISSION_CONFIG['ams']
+                    self.commission_config['ams']
                 )
                 self.logger.info(f"✅ 已更新 {ams_count:,} 筆 AMS 分潤")
             
@@ -286,7 +290,7 @@ class CommissionDataUpdateStep(PipelineStep):
             Tuple[pd.Series, pd.Series]: (affiliate_mask, ams_mask)
         """
         # Affiliate/Shopee 分潤
-        affiliate_config = self.COMMISSION_CONFIG['affiliate']
+        affiliate_config = self.commission_config['affiliate']
         affiliate_mask = df[self.description_column].str.contains(
             affiliate_config['keywords'], 
             na=False, 
@@ -298,7 +302,7 @@ class CommissionDataUpdateStep(PipelineStep):
             affiliate_mask &= ~df[self.description_column].str.contains(exclude_kw, na=False)
         
         # AMS 分潤 - 情況1: 包含 AMS commission
-        ams_config = self.COMMISSION_CONFIG['ams']
+        ams_config = self.commission_config['ams']
         ams_mask_1 = df[self.description_column].str.contains(
             ams_config['keywords'], 
             na=False, 
@@ -486,7 +490,10 @@ class PayrollDetectionStep(PipelineStep):
         self.ebs_task_column = ebs_task_column
         self.description_column = description_column
         self.remark_column = remark_column
-    
+        # 優先從 TOML config 讀取；若無配置則 fallback 至 class-level 常數
+        spt_cfg = config_manager._config_toml.get('spt', {})
+        self.payroll_config = spt_cfg.get('payroll', PayrollDetectionStep.PAYROLL_CONFIG)
+
     async def execute(self, context: ProcessingContext) -> StepResult:
         """執行 Payroll 偵測邏輯"""
         start_time = time.time()
@@ -549,11 +556,15 @@ class PayrollDetectionStep(PipelineStep):
             
             # === 階段 4: 更新標籤 ===
             self.logger.info("🔄 開始更新 Payroll 標籤...")
-            df.loc[update_mask, self.remark_column] = self.PAYROLL_CONFIG['label']
+            df.loc[update_mask, self.remark_column] = self.payroll_config['label']
 
-            status_column = [i for i in df.columns if '狀態' in i][0]
-            is_status_na = df[status_column].isna()
-            df.loc[update_mask & is_status_na, status_column] = self.PAYROLL_CONFIG['label']
+            status_cols = [i for i in df.columns if '狀態' in i]
+            if not status_cols:
+                self.logger.warning("未找到含'狀態'的欄位，跳過狀態欄位更新")
+            else:
+                status_column = status_cols[0]
+                is_status_na = df[status_column].isna()
+                df.loc[update_mask & is_status_na, status_column] = self.payroll_config['label']
             self.logger.info(f"✅ 已更新 {update_count:,} 筆 Payroll 記錄")
             
             # === 階段 5: 生成統計 ===
@@ -704,7 +715,7 @@ class PayrollDetectionStep(PipelineStep):
         Returns:
             pd.Series: Boolean mask
         """
-        keywords = self.PAYROLL_CONFIG['keywords']
+        keywords = self.payroll_config['keywords']
         
         # 初始化為全 False
         payroll_mask = pd.Series(False, index=df.index)
@@ -750,7 +761,7 @@ class PayrollDetectionStep(PipelineStep):
             'payroll_labeled': update_count,
             'already_labeled': skipped_count,
             'update_rate': f"{update_rate:.2f}%",
-            'label_applied': self.PAYROLL_CONFIG['label']
+            'label_applied': self.payroll_config['label']
         }
     
     def _log_detailed_statistics(self, stats: Dict[str, Any]):

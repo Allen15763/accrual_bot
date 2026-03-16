@@ -151,9 +151,13 @@ class CombinedProcurementProcessingStep(PipelineStep):
             sub_context = ProcessingContext()
             sub_context.update_data(po_data.copy())
 
-            # 複製必要變數
+            # 複製必要變數與 metadata
             file_date = parent_context.metadata.processing_date
+            sub_context.metadata.entity_type = parent_context.metadata.entity_type
+            sub_context.metadata.processing_type = 'PO'
+            sub_context.metadata.processing_date = file_date
             sub_context.set_variable('file_date', file_date)
+            sub_context.set_variable('processing_date', file_date)
 
             # 複製前期底稿
             prev_po = parent_context.get_auxiliary_data('procurement_previous_po')
@@ -203,9 +207,13 @@ class CombinedProcurementProcessingStep(PipelineStep):
             sub_context = ProcessingContext()
             sub_context.update_data(pr_data.copy())
 
-            # 複製必要變數
+            # 複製必要變數與 metadata
             file_date = parent_context.metadata.processing_date
+            sub_context.metadata.entity_type = parent_context.metadata.entity_type
+            sub_context.metadata.processing_type = 'PR'
+            sub_context.metadata.processing_date = file_date
             sub_context.set_variable('file_date', file_date)
+            sub_context.set_variable('processing_date', file_date)
 
             # 複製前期底稿
             prev_pr = parent_context.get_auxiliary_data('procurement_previous_pr')

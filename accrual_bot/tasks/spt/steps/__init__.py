@@ -33,10 +33,8 @@ from .spt_combined_procurement_export import CombinedProcurementExportStep
 __all__ = [
     'SPTDataLoadingStep',
     'SPTPRDataLoadingStep',
-    'SPTStatusStep',
-    'SPTDepartmentStep',
-    'SPTAccrualStep',
-    'SPTValidationStep',
+    # SPTStatusStep, SPTDepartmentStep, SPTAccrualStep, SPTValidationStep 為遺留原型步驟，
+    # 未整合至 pipeline orchestrator，已從公開 API 移除。保留在 spt_steps.py 供業務邏輯參考。
     'SPTPostProcessingStep',
     'SPTERMLogicStep',
     'CommissionDataUpdateStep',
