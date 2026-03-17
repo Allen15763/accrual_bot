@@ -323,6 +323,11 @@ class GoogleSheetsSource(DataSource):
             worksheet = spreadsheet.worksheet(sheet_name)
             values = worksheet.get(cell_range) if cell_range else worksheet.get_all_values()
 
+            # Google Sheets API 會截斷尾端空欄，需補齊每列至相同長度
+            if values:
+                max_cols = max(len(row) for row in values)
+                values = [row + [''] * (max_cols - len(row)) for row in values]
+
             if not values:
                 self.logger.warning(f"工作表 '{sheet_name}' 返回空資料")
                 return pd.DataFrame()
