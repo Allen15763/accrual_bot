@@ -196,14 +196,16 @@ _setup_logging()
 SIMPLE_FORMAT  = '%(asctime)s %(levelname)s: %(message)s'
 # → 用於降級（fallback）情境，最小化輸出
 
-DETAILED_FORMAT = '%(asctime)s | %(levelname)-8s | %(name)s | %(funcName)s:%(lineno)d | %(message)s'
-# → 用於控制台輸出，包含呼叫位置，便於開發除錯
+DETAILED_FORMAT = '%(asctime)s | %(levelname)-8s | %(name)s | %(funcName)s:%(lineno)d | %(process)d-%(thread)d | %(message)s'
+# → 用於控制台輸出，包含呼叫位置與 PID-TID，便於開發除錯與確認並發行為
 
 FILE_FORMAT = '%(asctime)s | %(levelname)-8s | %(name)s | %(module)s.%(funcName)s:%(lineno)d | %(process)d-%(thread)d | %(message)s'
-# → 用於檔案輸出，額外記錄 PID-TID，適合多執行緒問題排查
+# → 用於檔案輸出，額外記錄模組名，適合離線分析
 ```
 
-三層設計的邏輯：終端關注即時可讀性，檔案關注完整可追溯性，降級關注最低可用性。
+三層設計的邏輯：終端關注即時可讀性（含 PID-TID 以確認並發），檔案關注完整可追溯性（加模組名），降級關注最低可用性。
+
+> **2026-03-17 更新**：DETAILED_FORMAT 加入 `%(process)d-%(thread)d`，使控制台與檔案日誌均顯示執行緒資訊，方便確認並發載入是否正常運作。
 
 ---
 
@@ -872,17 +874,19 @@ handler = CloudWatchLogHandler(boto3_client=boto3.client('logs', region_name='ap
 
 ### 8.2 日誌格式範例輸出
 
-**DETAILED_FORMAT（控制台）：**
+**DETAILED_FORMAT（控制台，含 PID-TID）：**
 ```
-2026-03-12 14:30:22 | INFO     | accrual_bot.SPTDataLoadingStep | execute:87 | 開始載入 SPT PO 資料
-2026-03-12 14:30:23 | INFO     | accrual_bot.ProductFilterStep  | execute:42 | 篩選產品，原始: 1,234 筆
-2026-03-12 14:30:23 | WARNING  | accrual_bot.DateLogicStep      | _calc:156 | 找不到交貨日期，使用默認值
-2026-03-12 14:30:24 | ERROR    | accrual_bot.SPTExportStep      | execute:99 | 匯出失敗: FileNotFoundError
+2026-03-17 10:12:45 | INFO     | accrual_bot.datasource.CSVSource   | read_csv_sync:67 | 12345-93908 | Reading CSV file: ...
+2026-03-17 10:12:45 | INFO     | accrual_bot.datasource.ExcelSource | read_excel_sync:67 | 12345-19612 | Reading Excel file: ...
+2026-03-17 10:12:45 | INFO     | accrual_bot.datasource.ExcelSource | read_excel_sync:67 | 12345-16188 | Reading Excel file: ...
+2026-03-17 10:12:46 | INFO     | accrual_bot.datasource.CSVSource   | read_csv_sync:103 | 12345-93908 | Successfully read 47548 rows from CSV
 ```
 
-**FILE_FORMAT（日誌檔案，額外含 PID-TID）：**
+> **2026-03-17 更新**：DETAILED_FORMAT 加入 `%(process)d-%(thread)d`，控制台輸出現可直接確認並發載入是否正常（不同 thread ID = 不同執行緒）。
+
+**FILE_FORMAT（日誌檔案，額外含模組名）：**
 ```
-2026-03-12 14:30:22 | INFO     | accrual_bot.Pipeline | pipeline.execute:201 | 12345-140234567890 | Pipeline 開始執行，共 15 步驟
+2026-03-17 10:12:45 | INFO     | accrual_bot.Pipeline | pipeline.execute:201 | 12345-140234567890 | Pipeline 開始執行，共 15 步驟
 ```
 
 ### 8.3 設定驅動的行為矩陣
@@ -890,7 +894,7 @@ handler = CloudWatchLogHandler(boto3_client=boto3.client('logs', region_name='ap
 | ConfigManager key | 預設值 | 影響 |
 |------------------|--------|------|
 | `LOGGING.level` | `"INFO"` | 根記錄器和 console handler 的最低輸出級別 |
-| `LOGGING.detailed` | `True` | 控制台使用 DETAILED_FORMAT（含位置）還是 SIMPLE_FORMAT |
+| `LOGGING.detailed` | `True` | 控制台使用 DETAILED_FORMAT（含位置與 PID-TID）還是 SIMPLE_FORMAT |
 | `LOGGING.color` | `True` | 是否啟用 ANSI 彩色輸出 |
 | `PATHS.log_path` | `None` | 若設定則建立 RotatingFileHandler；否則只有控制台 |
 
@@ -900,7 +904,7 @@ handler = CloudWatchLogHandler(boto3_client=boto3.client('logs', region_name='ap
 |------|--------------|--------|
 | Singleton 保護 | `_lock` × 1 | `_lock` + `_logger_lock` × 2（更完善） |
 | 測試可重置 | 無 `reset_for_testing()` | 有 `cleanup()` 方法 |
-| `_initialized` 鎖保護 | 讀寫均無鎖（相同問題） | 讀無鎖、寫在 `_logger_lock` 內（部分保護） |
+| `_initialized` 鎖保護 | `__init__` 已加 `_lock`（2026-03-14 修復） | `__init__` 已加 `_lock`（2026-03-14 修復） |
 | Fallback 機制 | 5 層路徑解析 | 2 層日誌降級 |
 | 依賴關係 | 依賴 stdlib `logging`（避免循環） | 依賴 ConfigManager（單向） |
 

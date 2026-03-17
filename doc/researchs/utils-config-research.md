@@ -307,28 +307,51 @@ self._config.read(config_path, encoding='utf-8')
 
 3. **字串型別**：所有 INI 值均為字串，故有 `get_int()`, `get_float()`, `get_boolean()` 等型別轉換方法
 
-### 4.6 `get()` 的雙重行為（INI + TOML dot-notation）
+### 4.6 `get()` 的統一查詢行為（TOML 優先，INI fallback）✅ 已修復（2026-03-17）
+
+> **此問題已修復。** `get()` 現在同時查詢 TOML 和 INI，且支援大小寫不敏感的 TOML 段落查詢。
+
+**歷史紀錄**：原實作的 `get(section, key)` 只查詢 INI `_config_data`，TOML-only 的值（如 `closing_list_spreadsheet_id`）會返回 `None`。
+
+**修復後的實作**：
 
 ```python
+def _get_toml_section(self, section: str) -> Optional[dict]:
+    """從 TOML 配置中取得段落，支援大小寫不敏感查詢"""
+    result = self._config_toml.get(section)
+    if result is not None:
+        return result
+    return self._config_toml.get(section.lower())
+
 def get(self, section: str, key: str = None, fallback: Any = None) -> Any:
     # Case 1: dot-notation TOML 存取
     if key is None and '.' in section:
         parts = section.split('.')
         value = self._config_toml
         for part in parts:
-            value = value.get(part, {})
+            if isinstance(value, dict):
+                value = value.get(part, {})
+            else:
+                return fallback
         return value if value != {} else fallback
 
-    # Case 2: 傳統 INI section + key 存取
+    # Case 2: 兩參數形式 get('SPX', 'key') — TOML 優先，INI fallback
+    if key is not None:
+        toml_section = self._get_toml_section(section)
+        if isinstance(toml_section, dict) and key in toml_section:
+            return toml_section[key]
+        ini_value = self._config_data.get(section, {}).get(key)
+        if ini_value is not None:
+            return ini_value
+        return fallback
+
     return self._config_data.get(section, {}).get(key, fallback)
 ```
 
-這個「雙重行為」是一個 **API 語意不一致**的設計選擇：
-
-- `get('GENERAL', 'pt_ym')` → INI 存取
-- `get('pipeline.spt.enabled_po_steps')` → TOML dot-notation
-
-呼叫端需要知道使用哪個路徑才能選擇正確語法。相比之下，`get_nested()` / `get_all()` 的語意更清晰，是存取 TOML 的推薦方式。
+**關鍵改進**：
+- TOML 段落查詢支援大小寫不敏感（`'SPX'` 可匹配 `[spx]`）
+- 兩參數形式 `get('SPX', 'key')` 先查 TOML 再 fallback 到 INI
+- `get_list()`、`get_boolean()`、`get_section()`、`has_section()`、`has_option()`、`get_all()` 同步修復，均改為 TOML 優先 + INI fallback
 
 ### 4.7 `get_nested()` vs `get_all()` 的差異
 
@@ -611,9 +634,9 @@ def reload_config(self) -> None:
 
 **修正方向**：加鎖整個 reload 過程，或使用讀寫鎖（`threading.RLock`）。
 
-#### ❌ 缺 4：`get()` API 語意不一致（設計缺陷）
+#### ✅ 缺 4：`get()` API 語意不一致（已修復，2026-03-17）
 
-`get(section, key)` 走 INI，`get('a.b.c')` 走 TOML dot-notation，但視覺上難以區分。呼叫端必須記住「有 `.` 且 key=None 才走 TOML」這個隱含規則。更好的設計是分開為 `get_ini(section, key)` 和 `get_toml_dotpath(dotpath)`，或完全廢棄 dot-notation 語法，統一用 `get_nested()`。
+> **此問題已修復。** `get(section, key)` 現在同時查詢 TOML（優先）和 INI（fallback），不再是「只走 INI」。`get('a.b.c')` dot-notation 仍走 TOML，語意差異仍在但實務影響已大幅降低——無論用哪種語法，TOML 值都能被正確讀取。
 
 #### ❌ 缺 5：`_set_default_config()` 的正規表達式雙重轉義
 
@@ -642,28 +665,9 @@ config_manager = ConfigManager()  # ← import 時立即執行！
 
 **修正方向**：採用懶加載（lazy initialization），第一次呼叫 `config_manager.get(...)` 時才初始化。
 
-#### ❌ 缺 8：`get_all()` 的 TOML/INI 雙重查詢邏輯不對稱
+#### ✅ 缺 8：`get_all()` / `get_section()` 的 TOML/INI 查詢不對稱（已修復，2026-03-17）
 
-```python
-def get_all(self, section: str, subsection: str = None) -> Dict:
-    toml_section = self._config_toml.get(section, None)
-    if toml_section is not None:
-        ...
-        return toml_section   # TOML 優先
-
-    # fallback 到 INI
-    ini_section = self._config_data.get(section, {})
-    return ini_section
-```
-
-對比 `get_section()`：
-
-```python
-def get_section(self, section: str) -> Dict[str, str]:
-    return self._config_data.get(section, {})  # 只查 INI，不查 TOML
-```
-
-兩個功能相近的方法，一個查 TOML+INI，另一個只查 INI，命名不傳達此差異。呼叫者很容易誤用 `get_section()` 而遺漏 TOML 配置。
+> **此問題已修復。** `get_section()` 和 `get_all()` 現在都透過 `_get_toml_section()` 先查 TOML（大小寫不敏感），找不到時 fallback 到 INI。`has_section()` 和 `has_option()` 同步修復，行為一致。
 
 ---
 
@@ -799,12 +803,12 @@ accrual_bot/config/
 
 | 方法 | 存取目標 | 說明 |
 |------|---------|------|
-| `get(section, key, fallback)` | INI / TOML dot-notation | 通用讀取，語意雙重 |
-| `get_int(section, key, fallback)` | INI | 型別轉換：整數 |
-| `get_float(section, key, fallback)` | INI | 型別轉換：浮點數 |
-| `get_boolean(section, key, fallback)` | INI | 型別轉換：布林值 |
-| `get_list(section, key, separator, fallback)` | INI | 型別轉換：列表 |
-| `get_section(section)` | INI only | 取整個 section dict |
+| `get(section, key, fallback)` | TOML 優先，INI fallback / TOML dot-notation | 通用讀取（2026-03-17 修復：TOML 優先） |
+| `get_int(section, key, fallback)` | TOML 優先，INI fallback | 型別轉換：整數 |
+| `get_float(section, key, fallback)` | TOML 優先，INI fallback | 型別轉換：浮點數 |
+| `get_boolean(section, key, fallback)` | TOML 優先，INI fallback | 型別轉換：布林值（支援 TOML 原生 bool） |
+| `get_list(section, key, separator, fallback)` | TOML 優先，INI fallback | 型別轉換：列表（支援 TOML 原生陣列） |
+| `get_section(section)` | TOML 優先，INI fallback | 取整個 section dict（2026-03-17 修復） |
 | `get_all(section, subsection)` | TOML 優先，INI fallback | 取整個 section/subsection |
 | `get_nested(*keys, fallback)` | TOML only | 多層巢狀鍵存取 |
 | `get_paths_config(*keys)` | paths.toml only | paths.toml 專屬存取 |
@@ -814,8 +818,8 @@ accrual_bot/config/
 | `get_regex_patterns()` | INI (`GENERAL`) | 正規表達式 dict |
 | `get_credentials_config()` | INI (`CREDENTIALS`) | 憑證配置（含路徑解析） |
 | `get_resolved_path(section, key, fallback)` | INI | 路徑配置（彈性解析） |
-| `has_section(section)` | INI | section 存在性檢查 |
-| `has_option(section, key)` | INI | key 存在性檢查 |
+| `has_section(section)` | TOML + INI | section 存在性檢查（2026-03-17 修復） |
+| `has_option(section, key)` | TOML + INI | key 存在性檢查（2026-03-17 修復） |
 | `set_config(section, key, value)` | INI | 執行期動態設定（不持久化） |
 | `reload_config()` | 所有 | 重新載入所有配置文件 |
 | `to_dict()` | 所有 | 完整配置快照 |
@@ -828,10 +832,10 @@ accrual_bot/config/
 | BUG-2 | 🟡 中 | line 846 | `reload_config()` 非執行緒安全 | 加 `_lock` |
 | BUG-3 | 🟡 中 | line 469 | 預設 regex 雙重反斜線 | 移除多餘 `r'...'` 前綴 |
 | DESIGN-1 | 🟡 中 | line 119 | `_initialized` 無鎖初始化競態 | `__init__` 加鎖 |
-| DESIGN-2 | 🟡 中 | line 484 | `get()` 雙重行為 | 拆分為獨立方法 |
+| DESIGN-2 | ✅ 已修復 | line 484 | ~~`get()` 雙重行為~~ | **已修復（2026-03-17）**：`get()` 統一為 TOML 優先 + INI fallback |
 | DESIGN-3 | 🟢 低 | line 854 | import 時立即執行 I/O | 懶加載 |
 | DESIGN-4 | 🟢 低 | constants.py | `REGEX_PATTERNS` 與 TOML 重複 | 選一為主，刪除另一 |
-| DESIGN-5 | 🟢 低 | `get_section()` | 只查 INI，與 `get_all()` 行為不一致 | 統一文件說明或合併 |
+| DESIGN-5 | ✅ 已修復 | `get_section()` | ~~只查 INI，與 `get_all()` 行為不一致~~ | **已修復（2026-03-17）**：`get_section()` 改為 TOML 優先 + INI fallback |
 
 ### 8.4 constants.py 常數分類
 

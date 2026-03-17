@@ -118,6 +118,7 @@ class Logger:
         '%(asctime)s | %(levelname)-8s | '
         '%(name)s | '
         '%(funcName)s:%(lineno)d | '
+        '%(process)d-%(thread)d | '
         '%(message)s'
     )
     

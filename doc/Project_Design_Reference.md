@@ -888,11 +888,17 @@ from accrual_bot.utils.config import ConfigManager
 
 config = ConfigManager()  # 永遠回傳同一實例
 
-# 讀取 config.ini
-regex_pattern = config.get('regex', 'date_pattern')
+# get() / get_list() / get_boolean() 等方法會先查 TOML，再 fallback 到 INI
+# TOML 段落查詢支援大小寫不敏感（'SPX' 可匹配 [spx]）
 
-# 讀取 stagging_spt.toml（Pipeline 步驟）
-enabled_steps = config.get_list('spt', 'enabled_po_steps')
+# 讀取 TOML 值（SPX 段落，大小寫不敏感）
+spreadsheet_id = config.get('SPX', 'closing_list_spreadsheet_id')
+
+# 讀取 TOML 原生陣列（自動轉為 List[str]）
+sheet_names = config.get_list('SPX', 'closing_list_sheet_names')
+
+# 讀取 config.ini（TOML 中無對應值時 fallback）
+regex_pattern = config.get('GENERAL', 'pt_ym')
 
 # 讀取 paths.toml（檔案路徑參數）
 path_params = config.get_paths_config('spt', 'po', 'params')
@@ -1753,6 +1759,8 @@ s_logger.log_operation_end('data_loading', success=True, duration=2.3)
 | 🔴 | `utils/helpers/data_utils.py` `extract_date_range_from_description()` | 當 `description` 為空且 `logger=None` 時，`logger.warning()` 呼叫會拋出 `AttributeError` |
 | 🔴 | `utils/helpers/data_utils.py` `give_account_by_keyword()` | `rules` 參數被立即覆蓋為 `ACCOUNT_RULES` 硬編碼常數，傳入的規則參數完全無效 |
 | 🟡 | `utils/helpers/data_utils.py` `safe_string_operation()` | `astype(str)` 將 NaN 轉為字串 `'nan'`，後續 `fillna('')` 無法再還原，`'nan'` 字串流入下游 |
+| ✅ | `utils/config/config_manager.py` `get()` / `get_list()` / `get_boolean()` 等 | ~~`get(section, key)` 只查 INI，無法讀取 TOML-only 的值；`get_list()` 對 TOML 原生陣列呼叫 `.split()` 導致 `AttributeError`；TOML 段落名稱大小寫不匹配~~ — **已修復（2026-03-17）**：新增 `_get_toml_section()` 大小寫不敏感查詢；所有 `get*` / `has*` / `get_section` / `get_all` 方法改為 TOML 優先 + INI fallback |
+| ✅ | `utils/logging/logger.py` `DETAILED_FORMAT` | ~~控制台日誌格式不含 thread ID，無法從輸出確認並發載入是否正常~~ — **已修復（2026-03-17）**：`DETAILED_FORMAT` 加入 `%(process)d-%(thread)d`，與 `FILE_FORMAT` 一致 |
 | 🟡 | `utils/config/config_manager.py` | 硬編碼 Windows 路徑 `r'C:\SEA\Accrual\...\accrual_bot.zip'`（ZIP fallback），在非 Windows 環境無效 |
 | ✅ | `utils/duckdb_manager/operations/data_cleaning.py` `clean_and_convert_column()` | ~~`_validate_conversion()` 回傳值存入 `validation_success` 但從未判斷，事務無條件啟動~~ — **已修復（2026-03-14）**：加入 `if not validation_success: return False`，確保驗證失敗時提前返回 |
 | ✅ | `utils/duckdb_manager/operations/crud.py` `upsert_df_into_table()` | ~~手動 `str.replace("'", "''")` 轉義，未使用已存在的 `SafeSQL`~~ — **已修復（2026-03-14）**：改用 `SafeSQL.build_in_clause()` |
