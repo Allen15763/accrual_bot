@@ -70,6 +70,12 @@ async def main() -> Dict[str, Any]:
     config = load_run_config()
     logger.info(f"執行配置: entity={config.entity}, type={config.processing_type}, date={config.processing_date}")
 
+    # Fix 3: 實作 verbose — 啟用時將 accrual_bot logger 調至 DEBUG 等級
+    if config.verbose:
+        import logging
+        logging.getLogger('accrual_bot').setLevel(logging.DEBUG)
+        logger.debug("Verbose mode 已啟用 — DEBUG 日誌輸出中")
+
     # 2. 檢查是否從 checkpoint 恢復執行
     if config.resume_enabled:
         logger.info("從 checkpoint 恢復執行模式")
@@ -164,6 +170,7 @@ async def main() -> Dict[str, Any]:
         result = await pipeline.execute(context)
         # 將 context 加入結果
         result["context"] = context
+        result.setdefault("aborted", False)  # Fix 9: 對齊 StepByStepExecutor 回傳結構
 
     # 7. 顯示結果摘要
     _print_result_summary(result)
@@ -291,16 +298,20 @@ async def resume_from_checkpoint(
 # 向後相容的舊函數 (保留給現有代碼調用)
 # =============================================================================
 
-async def run_spx_po_full_pipeline() -> Dict[str, Any]:
-    """執行 SPX PO Pipeline (向後相容)"""
-    file_paths = load_file_paths("SPX", "PO", 202512)
+async def run_spx_po_full_pipeline(processing_date: int = 202512) -> Dict[str, Any]:
+    """執行 SPX PO Pipeline (向後相容)
+
+    Args:
+        processing_date: 處理日期 (YYYYMM)，預設保留歷史遺留值 202512
+    """
+    file_paths = load_file_paths("SPX", "PO", processing_date)
     orchestrator = SPXPipelineOrchestrator()
     pipeline = orchestrator.build_po_pipeline(file_paths)
 
     context = ProcessingContext(
         data=pd.DataFrame(),
         entity_type="SPX",
-        processing_date=202512,
+        processing_date=processing_date,
         processing_type="PO"
     )
     context.set_variable('file_paths', file_paths)
@@ -310,16 +321,20 @@ async def run_spx_po_full_pipeline() -> Dict[str, Any]:
     return result
 
 
-async def run_spx_pr_full_pipeline() -> Dict[str, Any]:
-    """執行 SPX PR Pipeline (向後相容)"""
-    file_paths = load_file_paths("SPX", "PR", 202512)
+async def run_spx_pr_full_pipeline(processing_date: int = 202512) -> Dict[str, Any]:
+    """執行 SPX PR Pipeline (向後相容)
+
+    Args:
+        processing_date: 處理日期 (YYYYMM)，預設保留歷史遺留值 202512
+    """
+    file_paths = load_file_paths("SPX", "PR", processing_date)
     orchestrator = SPXPipelineOrchestrator()
     pipeline = orchestrator.build_pr_pipeline(file_paths)
 
     context = ProcessingContext(
         data=pd.DataFrame(),
         entity_type="SPX",
-        processing_date=202512,
+        processing_date=processing_date,
         processing_type="PR"
     )
     context.set_variable('file_paths', file_paths)
@@ -329,16 +344,20 @@ async def run_spx_pr_full_pipeline() -> Dict[str, Any]:
     return result
 
 
-async def run_spt_po_full_pipeline() -> Dict[str, Any]:
-    """執行 SPT PO Pipeline (向後相容)"""
-    file_paths = load_file_paths("SPT", "PO", 202512)
+async def run_spt_po_full_pipeline(processing_date: int = 202512) -> Dict[str, Any]:
+    """執行 SPT PO Pipeline (向後相容)
+
+    Args:
+        processing_date: 處理日期 (YYYYMM)，預設保留歷史遺留值 202512
+    """
+    file_paths = load_file_paths("SPT", "PO", processing_date)
     orchestrator = SPTPipelineOrchestrator()
     pipeline = orchestrator.build_po_pipeline(file_paths)
 
     context = ProcessingContext(
         data=pd.DataFrame(),
         entity_type="SPT",
-        processing_date=202512,
+        processing_date=processing_date,
         processing_type="PO"
     )
     context.set_variable('file_paths', file_paths)
@@ -348,16 +367,20 @@ async def run_spt_po_full_pipeline() -> Dict[str, Any]:
     return result
 
 
-async def run_spt_pr_full_pipeline() -> Dict[str, Any]:
-    """執行 SPT PR Pipeline (向後相容)"""
-    file_paths = load_file_paths("SPT", "PR", 202512)
+async def run_spt_pr_full_pipeline(processing_date: int = 202512) -> Dict[str, Any]:
+    """執行 SPT PR Pipeline (向後相容)
+
+    Args:
+        processing_date: 處理日期 (YYYYMM)，預設保留歷史遺留值 202512
+    """
+    file_paths = load_file_paths("SPT", "PR", processing_date)
     orchestrator = SPTPipelineOrchestrator()
     pipeline = orchestrator.build_pr_pipeline(file_paths)
 
     context = ProcessingContext(
         data=pd.DataFrame(),
         entity_type="SPT",
-        processing_date=202512,
+        processing_date=processing_date,
         processing_type="PR"
     )
     context.set_variable('file_paths', file_paths)

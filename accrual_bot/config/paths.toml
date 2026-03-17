@@ -9,6 +9,7 @@
 
 [base]
 # 資源根目錄
+# 本機路徑可建立 accrual_bot/config/paths.local.toml 覆蓋（不進 git），參考 paths.local.toml.example
 resources = "C:/SEA/Accrual/prpo_bot/resources/頂一下"
 
 # 輸出目錄

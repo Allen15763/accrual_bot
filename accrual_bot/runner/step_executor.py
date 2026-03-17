@@ -195,14 +195,8 @@ class StepByStepExecutor:
             return
 
         try:
-            checkpoint_name = (
-                f"{self.context.metadata.entity_type}_"
-                f"{self.context.metadata.processing_type}_"
-                f"{self.context.metadata.processing_date}_"
-                f"after_{step_name}"
-            )
-            self.checkpoint_manager.save_checkpoint(self.context, step_name)
-            logger.debug(f"Checkpoint saved: {checkpoint_name}")
+            saved_name = self.checkpoint_manager.save_checkpoint(self.context, step_name)
+            logger.debug(f"Checkpoint saved: {saved_name}")
         except Exception as e:
             logger.warning(f"Failed to save checkpoint: {e}")
 

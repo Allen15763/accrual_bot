@@ -1,5 +1,6 @@
 .claude/
 .agent/
+accrual_bot/config/paths.local.toml
 .vscode/
 resources/
 checkpoints/

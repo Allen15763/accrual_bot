@@ -1125,53 +1125,74 @@ assert result["aborted"] == False
 
 ### 6.2 缺點與設計問題
 
-**1. `load_file_paths` 的潛在 AttributeError（P0 - 高嚴重性）**
+> **修復摘要（2026-03-17）**：以下 10 個問題中，9 個已於 Phase 11 修復（Issue 6 刻意保留，見說明）。
+> 各條目標注 `✅ 已修復` / `⚠️ 刻意保留` 及修復後的行為描述。
+
+---
+
+**1. `load_file_paths` 的潛在 AttributeError（P0 - 高嚴重性）✅ 已修復（2026-03-17）**
 
 ```python
-# 第 113-114 行：
+# 修復前（非對稱的 .get()）：
 paths_section = paths_config.get(entity_lower, {}).get(type_lower, {})
-# 以上一行安全，但下一行有風險：
 params_section = paths_config.get(entity_lower).get(f"{type_lower}").get('params')
+#                                ↑ 無預設值 → None → AttributeError
 ```
 
 若 `entity_lower` 不在 `paths_config` 中，`paths_config.get(entity_lower)` 回傳 `None`，接著 `None.get(...)` 會 raise `AttributeError`，而不是清楚的錯誤訊息。
 
-> **警告**：這是一個隱性的崩潰點。當用戶輸入了不存在的 entity 名稱時，錯誤訊息是 `AttributeError: 'NoneType' object has no attribute 'get'`，完全無法從錯誤訊息推斷根本原因。
-
-**正確修復**：
+> **修復後**：`load_file_paths()` 於讀取 TOML 後立即驗證 entity/type 是否存在，缺失時拋出明確的 `ValueError`，訊息中列出可用的 entity 或 type 名稱，讓錯誤根因一目了然。
 
 ```python
-# 方案一：鏈式 .get() 加預設值
-entity_section = paths_config.get(entity_lower, {})
-type_section = entity_section.get(type_lower, {})
-params_section = type_section.get('params', {})
-
-# 方案二：提前驗證並給出清楚錯誤訊息
-if entity_lower not in paths_config:
-    raise ValueError(f"paths.toml 中找不到 entity '{entity_lower}'，可用的 entity: {list(paths_config.keys())}")
-```
-
-**2. `_save_checkpoint` 中的死碼（P1 - 中嚴重性）**
-
-```python
-def _save_checkpoint(self, step_name: str):
-    checkpoint_name = (
-        f"{self.context.metadata.entity_type}_"
-        f"{self.context.metadata.processing_type}_"
-        f"{self.context.metadata.processing_date}_"
-        f"after_{step_name}"
+# 修復後（config_loader.py L141-152）：
+entity_config = paths_config.get(entity_lower)
+if entity_config is None:
+    raise ValueError(
+        f"paths.toml 中找不到實體 '{entity_lower}' 的配置。"
+        f"可用實體: {[k for k in paths_config.keys() if k != 'base']}"
     )
-    self.checkpoint_manager.save_checkpoint(self.context, step_name)  # 用 step_name，非 checkpoint_name
-    logger.debug(f"Checkpoint saved: {checkpoint_name}")  # 日誌顯示的名稱與實際不符
+type_config = entity_config.get(type_lower)
+if type_config is None:
+    raise ValueError(
+        f"paths.toml 中找不到 '{entity_lower}.{type_lower}' 的配置。"
+        f"可用類型: {list(entity_config.keys())}"
+    )
 ```
 
-建構的 `checkpoint_name` 完全未使用，導致日誌訊息顯示的名稱與實際 checkpoint 檔案名稱不一致。
+---
 
-**3. `verbose` 欄位定義但未實作（P2 - 低嚴重性）**
+**2. `_save_checkpoint` 中的死碼（P1 - 中嚴重性）✅ 已修復（2026-03-17）**
+
+```python
+# 修復前：5 行建構了 checkpoint_name，卻只傳 step_name 給 save_checkpoint()
+checkpoint_name = (
+    f"{self.context.metadata.entity_type}_"
+    ...
+    f"after_{step_name}"
+)
+self.checkpoint_manager.save_checkpoint(self.context, step_name)  # checkpoint_name 未使用
+logger.debug(f"Checkpoint saved: {checkpoint_name}")  # 日誌顯示的名稱與實際不符
+```
+
+> **修復後**：`save_checkpoint()` 回傳值直接傳給 logger，5 行死碼移除。`CheckpointManager` 是名稱的唯一來源，日誌永遠與磁碟上的實際檔名一致。
+
+```python
+# 修復後（step_executor.py）：
+saved_name = self.checkpoint_manager.save_checkpoint(self.context, step_name)
+logger.debug(f"Checkpoint saved: {saved_name}")
+```
+
+---
+
+**3. `verbose` 欄位定義但未實作（P3 - 低嚴重性）✅ 已修復（2026-03-17）**
 
 `RunConfig` 定義了 `verbose: bool = False`，但 `main_pipeline.py` 從未根據此值調整日誌 level。這是一個**承諾了但未兌現**的功能，會讓使用者誤以為設定 `verbose = true` 會產生更詳細的日誌輸出。
 
-**4. Glob 字典序選擇的隱性假設（P1 - 中嚴重性）**
+> **修復後**：`main()` 在讀取 `RunConfig` 後立即檢查 `config.verbose`，為 `True` 時將 `logging.getLogger('accrual_bot')` 設為 `DEBUG` 等級。
+
+---
+
+**4. Glob 字典序選擇的隱性假設（P2 - 中嚴重性）✅ 已修復（2026-03-17）**
 
 `sorted(matches)[-1]` 隱含假設「字典序最大 = 最新版本」，但這個假設在：
 - 檔名不包含日期
@@ -1180,45 +1201,74 @@ def _save_checkpoint(self, step_name: str):
 
 等情況下會靜默選錯檔案，且沒有任何警告。
 
-**5. 路徑模板無未解析變數驗證（P1 - 中嚴重性）**
+> **修復後**：當 glob 匹配到 2 個以上檔案時，以 `WARNING` 等級記錄被選中的檔名和被排除的所有檔名。選擇策略（字典序最大）不變，但不再靜默。
+
+---
+
+**5. 路徑模板無未解析變數驗證（P2 - 中嚴重性）✅ 已修復（2026-03-17）**
 
 `_resolve_path_template` 靜默忽略未解析的變數：
 
 ```python
 # paths.toml 中拼錯變數名：
 raw_po = "{resources}/{YYYMM}/..."  # YYYMM 是錯誤的，應為 YYMM
-
-# 解析結果：
-# "C:/SEA/Accrual/{YYYMM}/..."  ← {YYYMM} 字面量保留在路徑中
-# 後續 I/O 失敗時的錯誤訊息與根本原因相距甚遠
+# 解析結果：路徑含 {YYYMM} 字面量，後續 I/O 失敗訊息遠離根因
 ```
 
-**6. `StepByStepExecutor` 繞過 `pipeline.execute()`（P2 - 低嚴重性，部分修復）**
+> **修復後**：`_resolve_path_template()` 在替換後用 `re.findall(r'\{[^}]+\}', result)` 偵測殘留的 `{VAR}` token，有殘留時以 `WARNING` 記錄原始模板和未解析的變數名稱。
+
+---
+
+**6. `StepByStepExecutor` 繞過 `pipeline.execute()`（P2 - 架構問題）⚠️ 刻意保留**
 
 直接迭代 `pipeline.steps` 跳過了 Pipeline 自身的執行邏輯，包括 `stop_on_error` 行為和潛在的 pre/post hooks。這製造了一個維護陷阱：`Pipeline.execute()` 行為改變時，`StepByStepExecutor` 不會自動同步。
 
-> **部分修復（2026-03-14）**：`step.execute(context)` → `step(context)` 已修復，`__call__` 包裝器的重試、hooks、計時功能現已正常。**未修復部分**：`StepByStepExecutor` 仍直接迭代 `pipeline.steps` 而非呼叫 `pipeline.execute()`，`stop_on_error` 和 Pipeline 級別語義仍不一致，屬架構層面問題。
+> **部分修復（2026-03-14）**：`step.execute(context)` → `step(context)` 已修復，`__call__` 包裝器的重試、hooks、計時功能現已正常。
+>
+> **保留原因**：`stop_on_error` 的差異是**刻意設計** — 互動式工具的價值在於讓使用者在步驟失敗後**決定**是否繼續，比 `Pipeline.execute()` 的強制終止更有彈性。加入 Pipeline hooks 屬架構擴展，超出 bug fix 範疇。
 
-**7. 雙執行路徑結果字典結構不一致（P2 - 低嚴重性）**
+---
 
-`StepByStepExecutor.run()` 和 `pipeline.execute()` 回傳格式不同，消費端必須做防禦性存取（`result.get("successful_steps")`），暗示了一個**隱性的 interface contract**，缺乏顯式定義。
+**7. 雙執行路徑結果字典結構不一致（P1 - 中嚴重性）✅ 已修復（2026-03-17）**
 
-**8. `_convert_params` 的硬編碼轉換表（P3 - 技術債）**
+`StepByStepExecutor.run()` 回傳包含 `aborted` key；`pipeline.execute()` 回傳不包含此 key，消費端必須做防禦性存取。
 
-目前只硬編碼處理 `dtype="str"` 的轉換，未來若需要支援更多型別轉換（如 `dtype="int64"`），需修改函數本體而非配置，違反開放封閉原則。
+> **修復後**：`main_pipeline.py` 在 `pipeline.execute()` 後加入 `result.setdefault("aborted", False)`，兩條執行路徑的結果字典現在都包含 `aborted` key。
 
-**9. Windows 絕對路徑硬編碼在 `paths.toml`（P2 - 環境依賴）**
+---
+
+**8. `_convert_params` 的硬編碼轉換表（P3 - 技術債）✅ 已修復（2026-03-17）**
+
+```python
+# 修復前：elif 分支與 else 分支行為完全相同（死分支）
+elif key == "keep_default_na" and isinstance(value, bool):
+    result[key] = value  # TOML 原生解析 bool，此行無任何效果
+else:
+    result[key] = value
+```
+
+> **修復後**：死分支移除，函數簡化為只處理 `dtype="str"` → `str` 的轉換。
+
+---
+
+**9. Windows 絕對路徑硬編碼在 `paths.toml`（P2 - 環境依賴）✅ 已修復（2026-03-17）**
 
 ```toml
 [base]
 resources = "C:/SEA/Accrual/prpo_bot/resources/頂一下"
 ```
 
-此路徑在 Linux/macOS 上無效，在容器化部署時需手動修改，缺乏環境變數覆蓋機制。
+此路徑在 Linux/macOS 上無效，在容器化部署時需手動修改。
 
-**10. 向後相容函數的 hardcoded 日期（P3 - 技術債）**
+> **修復後**：引入 `paths.local.toml` 覆蓋機制。`load_file_paths()` 在讀取 `paths.toml` 後，若 `paths.local.toml` 存在則 deep-merge（同 key 以 local 優先）。`paths.local.toml` 已加入 `.gitignore`；`paths.local.toml.example` 提交為模板供參考。
+
+---
+
+**10. 向後相容函數的 hardcoded 日期（P3 - 技術債）✅ 已修復（2026-03-17）**
 
 `main_pipeline.py` 底部的 `run_spx_po_full_pipeline()` 等函數硬編碼 `processing_date = 202512`，在 2026 年後已是過時日期。若有人誤用這些函數，會處理 2025年12月的數據而非當月數據，且不會有任何警告。
+
+> **修復後**：4 個函數均加入 `processing_date: int = 202512` 參數（預設值保留歷史相容性），內部所有 `202512` 字面量改為使用參數值。
 
 ---
 
@@ -1849,12 +1899,16 @@ class TestStepByStepExecutorNonInteractive:
 
 ### 8.4 程式碼統計
 
+> 最後更新：2026-03-17（Phase 11 修復後）
+
 | 檔案 | 行數 | 函數/方法數 | Classes | 主要職責 |
 |------|------|------------|---------|---------|
 | `__init__.py` | 20 | 0 | 0 | 公開 API 匯出 |
-| `config_loader.py` | 240 | 6 | 1（RunConfig dataclass） | 配置載入 + 路徑解析 |
-| `step_executor.py` | 246 | 9 | 1（StepByStepExecutor） | 互動式逐步執行 |
-| **合計** | **506** | **15** | **2** | — |
+| `config_loader.py` | ~289 | 7 | 1（RunConfig dataclass） | 配置載入 + 路徑解析 |
+| `step_executor.py` | ~242 | 9 | 1（StepByStepExecutor） | 互動式逐步執行 |
+| **合計** | **~551** | **16** | **2** | — |
+
+> **行數變化說明**：`config_loader.py` +49 行（Fix 1 早期驗證 +12、Fix 4 glob 警告 +5、Fix 5 模板驗證 +6、Fix 7 deep-merge 邏輯 +16 + `_deep_merge()` 函數 +8、`import re` +1、Fix 10 死分支 -2、路徑覆蓋 +3）；`step_executor.py` -4 行（Fix 2 移除 5 行死碼、新增 1 行 return value）。新增 `config/paths.local.toml.example` 8 行。
 
 **各函數行數分佈**：
 
@@ -1893,3 +1947,22 @@ class TestStepByStepExecutorNonInteractive:
 ---
 
 *本文件涵蓋 `accrual_bot/runner/` 模組的完整技術分析，包含設計決策的背景脈絡、已知缺陷的精確定位、以及具體可行的改進建議。文件中指出的問題嚴重性（P0-P3）僅為參考，實際優先順序應根據業務影響評估。*
+
+---
+
+## 9. Phase 11 修復速查表（2026-03-17）
+
+| # | 問題 | 嚴重性 | 修改檔案 | 狀態 |
+|---|------|--------|---------|------|
+| 1 | `load_file_paths` AttributeError | P0 | `runner/config_loader.py` | ✅ 已修復 |
+| 2 | `_save_checkpoint` 死碼 | P1 | `runner/step_executor.py` | ✅ 已修復 |
+| 3 | `verbose` 未實作 | P3 | `main_pipeline.py` | ✅ 已修復 |
+| 4 | Glob 多匹配靜默選擇 | P2 | `runner/config_loader.py` | ✅ 已修復 |
+| 5 | 路徑模板無未解析變數驗證 | P2 | `runner/config_loader.py` | ✅ 已修復 |
+| 6 | StepByStepExecutor 繞過 `pipeline.execute()` | P2 | — | ⚠️ 刻意保留 |
+| 7 | Windows 絕對路徑硬編碼 | P2 | `config_loader.py`、`paths.toml`、`.gitignore`、新增 `paths.local.toml.example` | ✅ 已修復 |
+| 8 | 向後相容函數硬編碼日期 | P3 | `main_pipeline.py` | ✅ 已修復 |
+| 9 | 雙執行路徑結果字典不一致 | P1 | `main_pipeline.py` | ✅ 已修復 |
+| 10 | `_convert_params` 死分支 | P3 | `runner/config_loader.py` | ✅ 已修復 |
+
+**Issue 6 保留原因**：`stop_on_error` 差異是互動式除錯工具的刻意設計，讓使用者在步驟失敗後自行決定是否繼續，比強制終止更有價值。`step.__call__()` 繞過問題已於 2026-03-14 修復。

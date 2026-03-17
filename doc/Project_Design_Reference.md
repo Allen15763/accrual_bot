@@ -1033,19 +1033,25 @@ main_pipeline.py
     │                source_type, step_by_step, save_checkpoints, ...
     │
     ├─ load_file_paths()         # 讀取 paths.toml
+    │      → deep-merge paths.local.toml（若存在，gitignored 本機覆蓋）
+    │      → 早期 ValueError 驗證（entity/type 不存在時列出可用名稱）
     │      → _calculate_date_vars(date)  # YYYYMM 整數算術（不依賴 datetime）
-    │      → _resolve_path_template()    # str.replace() 替換 {YYYYMM} 等佔位符
-    │      → glob(resolved_path)[-1]     # 萬用字元 → 字典序最大者（假設越新越大）
+    │      → _resolve_path_template()    # str.replace() + re 殘留變數偵測
+    │      → glob(resolved_path)[-1]     # 萬用字元 → 字典序最大者（多匹配時 WARNING）
     │      → _convert_params()           # TOML 型別 → Python 型別（"str" → str）
+    │
+    ├─ (verbose=True) logging.getLogger('accrual_bot').setLevel(DEBUG)
     │
     ├─ (一般模式) PipelineExecutor.run()
     │      → orchestrator.build_*_pipeline(file_paths)
     │      → execute_pipeline_with_checkpoint(...)
+    │      → result.setdefault("aborted", False)  # 對齊 StepByStepExecutor 結構
     │
     └─ (逐步模式 step_by_step=True) StepByStepExecutor.run()
            → 直接迭代 pipeline.steps（繞過 Pipeline.execute()）
            → 每步驟前等待 [Enter/s/q] 輸入
            → EOFError 捕捉 → 自動繼續（非互動式環境的優雅降級）
+           → _save_checkpoint() 使用 save_checkpoint() 回傳值記錄實際檔名
 ```
 
 **逐步模式與恢復模式互斥**：當 `step_by_step=True` 時，即使同時設定了 `resume_from`，也以逐步模式優先。

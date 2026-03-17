@@ -6,6 +6,7 @@ Functions:
     load_file_paths: 載入並解析 paths.toml
 """
 
+import re
 import tomllib
 from dataclasses import dataclass
 from glob import glob
@@ -118,6 +119,14 @@ def load_file_paths(
     with open(paths_file, "rb") as f:
         paths_config = tomllib.load(f)
 
+    # 套用本機路徑覆蓋（gitignored），存在時 deep-merge（同 key 以 local 優先）
+    local_paths_file = paths_file.parent / "paths.local.toml"
+    if local_paths_file.exists():
+        with open(local_paths_file, "rb") as f:
+            local_config = tomllib.load(f)
+        _deep_merge(paths_config, local_config)
+        logger.info(f"已套用本機路徑覆蓋: {local_paths_file}")
+
     # 計算日期變數
     date_vars = _calculate_date_vars(processing_date)
 
@@ -125,12 +134,25 @@ def load_file_paths(
     base = paths_config.get("base", {})
     date_vars["resources"] = base.get("resources", "")
 
-    # 取得實體和類型的路徑配置
+    # 取得實體和類型的路徑配置，提前給出明確的錯誤訊息
     entity_lower = entity.lower()
     type_lower = processing_type.lower()
 
-    paths_section = paths_config.get(entity_lower, {}).get(type_lower, {})
-    params_section = paths_config.get(entity_lower).get(f"{type_lower}").get('params')
+    entity_config = paths_config.get(entity_lower)
+    if entity_config is None:
+        raise ValueError(
+            f"paths.toml 中找不到實體 '{entity_lower}' 的配置。"
+            f"可用實體: {[k for k in paths_config.keys() if k != 'base']}"
+        )
+    type_config = entity_config.get(type_lower)
+    if type_config is None:
+        raise ValueError(
+            f"paths.toml 中找不到 '{entity_lower}.{type_lower}' 的配置。"
+            f"可用類型: {list(entity_config.keys())}"
+        )
+
+    paths_section = type_config
+    params_section = entity_config.get(type_lower, {}).get('params', {})
 
     # 解析路徑模板
     file_paths: Dict[str, Any] = {}
@@ -143,11 +165,18 @@ def load_file_paths(
         # 替換變數
         resolved_path = _resolve_path_template(path_template, date_vars)
 
-        # 處理萬用字元 (選擇最新的檔案)
+        # 處理萬用字元 (選擇字典序最大的檔案)
         if "*" in resolved_path:
             matches = glob(resolved_path)
             if matches:
-                resolved_path = sorted(matches)[-1]
+                sorted_matches = sorted(matches)
+                if len(matches) > 1:
+                    logger.warning(
+                        f"  '{key}' 找到 {len(matches)} 個符合檔案，"
+                        f"以字典序選擇: {Path(sorted_matches[-1]).name}"
+                        f"（排除: {[Path(m).name for m in sorted_matches[:-1]]}）"
+                    )
+                resolved_path = sorted_matches[-1]
                 logger.debug(f"  萬用字元解析: {key} -> {resolved_path}")
             else:
                 logger.warning(f"  找不到符合的檔案: {path_template}")
@@ -213,6 +242,13 @@ def _resolve_path_template(template: str, vars: Dict[str, str]) -> str:
     result = template
     for var_name, var_value in vars.items():
         result = result.replace(f"{{{var_name}}}", var_value)
+    # 檢查殘留的未解析變數（通常是拼錯的變數名，如 {YYYMM} 而非 {YYMM}）
+    unreplaced = re.findall(r'\{[^}]+\}', result)
+    if unreplaced:
+        logger.warning(
+            f"路徑模板含有未解析變數 {unreplaced}，"
+            f"請確認模板語法正確（原始模板: {template}）"
+        )
     return result
 
 
@@ -231,9 +267,15 @@ def _convert_params(params: Dict[str, Any]) -> Dict[str, Any]:
         # 處理 dtype = "str" -> dtype = str
         if key == "dtype" and value == "str":
             result[key] = str
-        # 處理布林值
-        elif key == "keep_default_na" and isinstance(value, bool):
-            result[key] = value
         else:
             result[key] = value
     return result
+
+
+def _deep_merge(base: dict, override: dict) -> None:
+    """遞迴將 override 的值合併至 base（同 key 以 override 優先）"""
+    for key, value in override.items():
+        if key in base and isinstance(base[key], dict) and isinstance(value, dict):
+            _deep_merge(base[key], value)
+        else:
+            base[key] = value

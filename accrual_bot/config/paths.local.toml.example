@@ -1,0 +1,7 @@
+# paths.local.toml.example
+# 複製此檔案為 paths.local.toml 並修改為本機實際路徑（paths.local.toml 不進 git）
+#
+# deep-merge 規則：同 key 以 local 優先，其餘繼承 paths.toml 的設定。
+
+[base]
+resources = "D:/MyLocalData/accrual"    # 修改為本機實際的資源根目錄

@@ -835,6 +835,17 @@ The codebase underwent significant refactoring to improve code quality and maint
 - **Config-driven commission/payroll (Fix 7)**: `COMMISSION_CONFIG` and `PAYROLL_CONFIG` business rules moved to `stagging_spt.toml` under `[spt.commission.affiliate]`, `[spt.commission.ams]`, `[spt.payroll]`; `__init__` reads from config with class-level constants as fallback
 - **Sub-context metadata propagation (Fix 8)**: `CombinedProcurementProcessingStep._process_po_data()` and `_process_pr_data()` now fully propagate `entity_type`, `processing_type`, and `processing_date` from parent context to sub-context
 
+### Phase 11: Runner Module Bug Fixes (2026-03-17)
+- **AttributeError prevention (Fix 1, P0)**: `load_file_paths()` now performs early entity/type validation with explicit `ValueError` (message lists available entities/types), replacing the silent `AttributeError: 'NoneType' object has no attribute 'get'` when an unknown entity or type is passed
+- **Dead code removal (Fix 2, P1)**: `StepByStepExecutor._save_checkpoint()` — removed 5-line redundant `checkpoint_name` construction; now uses the return value of `save_checkpoint()` directly, ensuring the debug log matches the actual file saved on disk
+- **Verbose mode implemented (Fix 3, P3)**: `RunConfig.verbose = True` now sets `logging.getLogger('accrual_bot')` to `DEBUG` level — the previously-documented but unimplemented feature now works
+- **Glob multi-match warning (Fix 4, P2)**: When a wildcard path matches multiple files, a `WARNING` log now names the selected file and lists the excluded ones — silent lexicographic selection still applies but is no longer invisible
+- **Template unresolved-variable detection (Fix 5, P2)**: `_resolve_path_template()` uses `re.findall` to detect leftover `{VAR}` tokens after substitution; typos like `{YYYMM}` now emit a `WARNING` with the original template, instead of silently passing a malformed path to downstream I/O
+- **Local path override (Fix 7, P2)**: `load_file_paths()` deep-merges a gitignored `accrual_bot/config/paths.local.toml` when present; `paths.local.toml.example` committed as a template; `_deep_merge()` helper added; `.gitignore` updated — eliminates hardcoded Windows paths for cross-machine use
+- **Backward-compat functions accept date (Fix 8, P3)**: `run_spx_po_full_pipeline()`, `run_spx_pr_full_pipeline()`, `run_spt_po_full_pipeline()`, `run_spt_pr_full_pipeline()` all accept `processing_date: int = 202512` — callers can now specify a month without editing source code
+- **Result dict alignment (Fix 9, P1)**: Normal execution path adds `result.setdefault("aborted", False)` after `pipeline.execute()`, aligning with `StepByStepExecutor`'s result structure and eliminating `KeyError` for callers that check `result["aborted"]`
+- **Dead branch removed (Fix 10, P3)**: `_convert_params()` `elif key == "keep_default_na"` branch deleted — it was identical to the `else` branch and TOML already parses booleans natively
+
 ### Benefits
 - **Maintainability**: Single source of truth for shared logic reduces bug surface area
 - **Extensibility**: New entities/types can be added via configuration + orchestrator updates
