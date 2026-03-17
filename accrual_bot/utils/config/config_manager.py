@@ -481,9 +481,33 @@ class ConfigManager:
             }
         }
     
+    def _get_toml_section(self, section: str) -> Optional[dict]:
+        """
+        從 TOML 配置中取得段落，支援大小寫不敏感查詢
+
+        TOML 段落名稱通常為小寫（如 [spx]），但呼叫端常使用大寫（如 'SPX'）。
+        此方法依序嘗試原始名稱與小寫名稱。
+
+        Args:
+            section: 段落名稱
+
+        Returns:
+            Optional[dict]: 找到的段落字典，找不到時返回 None
+        """
+        # 嘗試原始名稱
+        result = self._config_toml.get(section)
+        if result is not None:
+            return result
+        # 嘗試小寫名稱
+        result = self._config_toml.get(section.lower())
+        return result
+
     def get(self, section: str, key: str = None, fallback: Any = None) -> Any:
         """
         獲取配置值，支援 dot-notation 語法
+
+        同時查詢 TOML 配置（優先）與 INI 配置（fallback）。
+        TOML 段落查詢支援大小寫不敏感（如 'SPX' 可匹配 [spx]）。
 
         Args:
             section: 配置段落名稱，或 dot-notation 路徑（如 'pipeline.spt.enabled_po_steps'）
@@ -504,6 +528,20 @@ class ConfigManager:
                     else:
                         return fallback
                 return value if value != {} else fallback
+
+            # 兩參數形式：get('SPX', 'key')
+            if key is not None:
+                # 優先查詢 TOML（大小寫不敏感）
+                toml_section = self._get_toml_section(section)
+                if isinstance(toml_section, dict) and key in toml_section:
+                    return toml_section[key]
+
+                # Fallback 到 INI
+                ini_value = self._config_data.get(section, {}).get(key)
+                if ini_value is not None:
+                    return ini_value
+
+                return fallback
 
             return self._config_data.get(section, {}).get(key, fallback)
         except Exception:
@@ -548,12 +586,12 @@ class ConfigManager:
     def get_boolean(self, section: str, key: str, fallback: bool = False) -> bool:
         """
         獲取布林配置值
-        
+
         Args:
             section: 配置段落名稱
             key: 配置鍵名
             fallback: 預設值
-            
+
         Returns:
             bool: 配置值
         """
@@ -561,69 +599,88 @@ class ConfigManager:
             value = self.get(section, key)
             if value is None:
                 return fallback
-            return value.lower() in ('true', '1', 'yes', 'on')
+            # TOML 原生布林值直接回傳
+            if isinstance(value, bool):
+                return value
+            return str(value).lower() in ('true', '1', 'yes', 'on')
         except (AttributeError, TypeError):
             return fallback
     
     def get_list(self, section: str, key: str, separator: str = ',', fallback: List = None) -> List[str]:
         """
         獲取列表配置值
-        
+
+        支援 TOML 原生陣列（直接回傳）與 INI 逗號分隔字串（自動拆分）。
+
         Args:
             section: 配置段落名稱
             key: 配置鍵名
-            separator: 分隔符
+            separator: 分隔符（僅用於 INI 字串值）
             fallback: 預設值
-            
+
         Returns:
             List[str]: 配置值列表
         """
         if fallback is None:
             fallback = []
-            
+
         try:
             value = self.get(section, key)
             if value is None:
                 return fallback
-            return [item.strip() for item in value.split(separator) if item.strip()]
+            # TOML 原生陣列：直接轉為字串列表
+            if isinstance(value, list):
+                return [str(item).strip() for item in value]
+            # INI 逗號分隔字串：拆分
+            return [item.strip() for item in str(value).split(separator) if item.strip()]
         except (AttributeError, TypeError):
             return fallback
     
     def get_section(self, section: str) -> Dict[str, str]:
         """
         獲取整個配置段落
-        
+
+        優先查詢 TOML 配置（大小寫不敏感），找不到時查詢 INI 配置。
+
         Args:
             section: 配置段落名稱
-            
+
         Returns:
             Dict[str, str]: 配置段落字典
         """
+        toml_section = self._get_toml_section(section)
+        if toml_section is not None and isinstance(toml_section, dict):
+            return toml_section
         return self._config_data.get(section, {})
     
     def has_section(self, section: str) -> bool:
         """
-        檢查是否存在配置段落
-        
+        檢查是否存在配置段落（TOML + INI）
+
         Args:
             section: 配置段落名稱
-            
+
         Returns:
             bool: 是否存在
         """
+        if self._get_toml_section(section) is not None:
+            return True
         return section in self._config_data
-    
+
     def has_option(self, section: str, key: str) -> bool:
         """
-        檢查是否存在配置選項
-        
+        檢查是否存在配置選項（TOML + INI）
+
         Args:
             section: 配置段落名稱
             key: 配置鍵名
-            
+
         Returns:
             bool: 是否存在
         """
+        toml_section = self._get_toml_section(section)
+        if isinstance(toml_section, dict) and key in toml_section:
+            return True
         return section in self._config_data and key in self._config_data[section]
     
     def set_config(self, section: str, key: str, value: str) -> None:
@@ -807,7 +864,7 @@ class ConfigManager:
         """
         取得整個配置段落或子段落的字典
 
-        優先查詢 TOML 配置（_config_toml），找不到時查詢 INI 配置（_config_data）。
+        優先查詢 TOML 配置（大小寫不敏感），找不到時查詢 INI 配置（_config_data）。
 
         Args:
             section: 段落名稱
@@ -816,8 +873,8 @@ class ConfigManager:
         Returns:
             Dict: 配置字典（找不到時回傳空字典）
         """
-        # 優先從 TOML 查詢
-        toml_section = self._config_toml.get(section, None)
+        # 優先從 TOML 查詢（大小寫不敏感）
+        toml_section = self._get_toml_section(section)
         if toml_section is not None:
             if subsection:
                 return toml_section.get(subsection, {})
