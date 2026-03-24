@@ -391,7 +391,7 @@ class ConfigManager:
                 self._config_toml = tomllib.load(f)
 
             # 加載任務特定 TOML 文件（可選，不存在則 skip）
-            for _task_name in ('stagging_spt.toml', 'stagging_spx.toml'):
+            for _task_name in ('stagging_spt.toml', 'stagging_spx.toml', 'stagging_sct.toml'):
                 _task_path = get_toml_path(_task_name)
                 if _task_path.exists():
                     with open(_task_path, 'rb') as _f:

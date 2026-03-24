@@ -5,6 +5,7 @@
 
 from typing import List, Dict, Optional, Any
 from datetime import datetime
+import functools
 import time
 import os
 import traceback
@@ -560,6 +561,70 @@ class ProductFilterStep(PipelineStep):
         return True
 
 
+def ensure_line_key_columns(func):
+    """
+    確保 df 和 source_df 包含 PO Line / PR Line 欄位的裝飾器。
+
+    當前期底稿非由系統產出時，可能缺少 PO Line 或 PR Line 組合鍵欄位。
+    此裝飾器在 _apply_field_mappings 執行前，自動從 PO#/PR# + Line# 組合出該欄位。
+    """
+    @functools.wraps(func)
+    def wrapper(self, df, source_df, mappings, key_type, entity=None):
+        from accrual_bot.utils.helpers.column_utils import ColumnResolver
+
+        canonical = f'{key_type}_line'
+        line_col = 'PO Line' if key_type == 'po' else 'PR Line'
+        id_col = 'PO#' if key_type == 'po' else 'PR#'
+        num_col = 'Line#'
+
+        for label, target_df in [('df', df), ('source_df', source_df)]:
+            if ColumnResolver.resolve(target_df, canonical) is None:
+                if id_col in target_df.columns and num_col in target_df.columns:
+                    target_df[line_col] = (
+                        target_df[id_col].astype('string') + '-' + target_df[num_col].astype('string')
+                    )
+                    self.logger.info(
+                        f"Composed '{line_col}' in {label} from '{id_col}' + '{num_col}'"
+                    )
+
+        return func(self, df, source_df, mappings, key_type, entity)
+
+    return wrapper
+
+def ensure_remarked_column_names(func):
+    """
+    確保 source_df 包含 remarked_by_fn / remarked_by_procurement 欄位的裝飾器。
+
+    當前期底稿非由系統產出時，可能缺少 remarked_by_fn 或 remarked_by_procurement 等備註欄位。
+    此裝飾器在 _apply_field_mappings 執行前。
+    """
+    @functools.wraps(func)
+    def wrapper(self, df, source_df, mappings, key_type, entity=None):
+        from accrual_bot.utils.helpers.column_utils import ColumnResolver
+
+        remark_fn = ColumnResolver.resolve(source_df, 'Remark By FN')
+        remark_procurement = ColumnResolver.resolve(source_df, 'Remark By 採購')
+
+        if remark_fn:
+            source_df = source_df.rename(columns={
+                remark_fn: 'remarked_by_fn'
+            })
+            self.logger.info(
+                f"Renamed Column {remark_fn} to remarked_by_fn"
+            )
+
+        if remark_procurement:
+            source_df = source_df.rename(columns={
+                remark_procurement: 'remarked_by_procurement'
+            })
+            self.logger.info(
+                f"Renamed Column {remark_procurement} to remarked_by_procurement"
+            )
+        return func(self, df, source_df, mappings, key_type, entity)
+
+    return wrapper
+
+
 class PreviousWorkpaperIntegrationStep(PipelineStep):
     """
     前期底稿整合步驟 - 配置驅動版本
@@ -667,6 +732,8 @@ class PreviousWorkpaperIntegrationStep(PipelineStep):
 
     # ========== 通用映射方法 (配置驅動) ==========
 
+    @ensure_remarked_column_names
+    @ensure_line_key_columns
     def _apply_field_mappings(
         self,
         df: pd.DataFrame,

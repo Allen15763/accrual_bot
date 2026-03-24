@@ -8,6 +8,7 @@ Unified Pipeline Service
 from typing import Dict, List, Optional, Any
 from accrual_bot.tasks.spt import SPTPipelineOrchestrator
 from accrual_bot.tasks.spx import SPXPipelineOrchestrator
+from accrual_bot.tasks.sct import SCTPipelineOrchestrator
 from accrual_bot.core.pipeline import Pipeline
 from accrual_bot.ui.config import ENTITY_CONFIG
 from accrual_bot.utils.config import ConfigManager
@@ -138,6 +139,7 @@ class UnifiedPipelineService:
         orchestrators = {
             'SPT': SPTPipelineOrchestrator,
             'SPX': SPXPipelineOrchestrator,
+            'SCT': SCTPipelineOrchestrator,
         }
 
         orchestrator_class = orchestrators.get(entity)

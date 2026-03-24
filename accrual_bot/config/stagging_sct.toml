@@ -1,0 +1,39 @@
+# =============================================================================
+# stagging_sct.toml - SCT entity-specific configuration
+# =============================================================================
+# SCT Pipeline 配置、業務規則、步驟啟用設定
+# 此檔案會透過 ConfigManager._deep_merge() 合併至 _config_toml
+
+# =============================================================================
+# Pipeline 配置
+# =============================================================================
+[pipeline.sct]
+enabled_po_steps = [
+    "SCTDataLoading",
+    "SCTColumnAddition",
+    "APInvoiceIntegration",
+    "PreviousWorkpaperIntegration",
+    "ProcurementIntegration",
+]
+
+enabled_pr_steps = [
+    "SCTPRDataLoading",
+    "SCTColumnAddition",
+    "PreviousWorkpaperIntegration",
+    "ProcurementIntegration",
+]
+
+
+# =============================================================================
+# SCT Column Defaults
+# =============================================================================
+[sct_column_defaults]
+# S&M 科目清單（用於 SCTColumnAdditionStep._determine_sm_status）
+sm_accounts = ["650003", "450014"]
+
+[sct]
+ap_columns = [
+    "Company", "Period", "Vendor Name", "Invoice Number", 
+    "Invoice Amount", "PO_LINE_NUMBER", "PO Number", 
+    "Receipt Number", "Match Type"
+]

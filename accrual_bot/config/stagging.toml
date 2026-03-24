@@ -1,6 +1,7 @@
 [paths]
 ref_path_mob = "accrual_bot/config/ref.xlsx"
 ref_path_spt = "accrual_bot/config/ref_SPTTW.xlsx"
+ref_path_sct = "accrual_bot/config/ref_SCTTW.xlsx"
 log_path = "./logs"
 colab_zip = "/content/drive/Shareddrives/INT_TWN_SEA_FN_Shared_Resources/15_FBA/Allen/accrual_bot.zip"
 
@@ -86,6 +87,7 @@ pivot_value_col = "Accr. Amount_variable"
 mob = [199999, 530016, 610303]
 spt = [199999]
 spx = [199999]
+sct = [199999]
 
 [logging]
 level = "INFO"
