@@ -1137,8 +1137,8 @@ class DateLogicStep(PipelineStep):
                 
                 df.loc[mask_profit_sharing & mask_no_status, get_status_column()] = '分潤'
                 
-            # 處理已入帳
-            if 'PO Entry full invoiced status' in df.columns and context.metadata.entity_type != 'SPX':
+            # 處理已入帳 SPT only
+            if 'PO Entry full invoiced status' in df.columns and context.metadata.entity_type == 'SPT':
                 mask_posted = (
                     (df['PO狀態'].isna() | (df['PO狀態'] == 'nan')) & 
                     (df['PO Entry full invoiced status'].astype('string') == '1')

@@ -58,7 +58,6 @@ class SCTColumnAdditionStep(PipelineStep):
             df, previous_month = self._add_basic_columns(df, m)
 
             # 添加 SCT 特定欄位（不含 SPX 的「累計至本期驗收數量/金額」）
-            df['GL DATE'] = None
             df['Remarked by Procurement PR'] = None
             df['Noted by Procurement PR'] = None
             df['Remarked by 上月 FN PR'] = None

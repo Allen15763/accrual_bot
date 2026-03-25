@@ -4,8 +4,7 @@ SCT Pipeline Orchestrator
 Manages SCT-specific pipeline configuration and construction.
 Supports configuration-driven step loading for flexible pipeline composition.
 
-目前支援 PO/PR 兩種處理類型，步驟建到 ProcurementIntegration 為止。
-後續核心邏輯（ERM、狀態判斷、匯出等）待後續擴充。
+支援 PO/PR 兩種處理類型，包含 ERM 邏輯判斷步驟。
 """
 
 from typing import List, Dict, Any, Optional
@@ -19,10 +18,9 @@ from accrual_bot.tasks.sct.steps import (
     SCTDataLoadingStep,
     SCTPRDataLoadingStep,
     SCTColumnAdditionStep,
-)
-
-from accrual_bot.tasks.spx.steps import (
-    APInvoiceIntegrationStep,
+    SCTERMLogicStep,
+    SCTPRERMLogicStep,
+    APInvoiceIntegrationStep
 )
 
 # Import shared steps from core
@@ -195,9 +193,19 @@ class SCTPipelineOrchestrator:
                 required=True
             ),
 
-            # 先註冊但目前不啟用
+            # 日期邏輯
             'DateLogic': lambda: DateLogicStep(
                 name="DateLogic",
+                required=True
+            ),
+
+            # ERM 邏輯判斷
+            'SCTERMLogic': lambda: SCTERMLogicStep(
+                name="SCTERMLogic",
+                required=True
+            ),
+            'SCTPRERMLogic': lambda: SCTPRERMLogicStep(
+                name="SCTPRERMLogic",
                 required=True
             ),
         }
