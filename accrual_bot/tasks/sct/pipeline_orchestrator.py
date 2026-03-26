@@ -20,6 +20,7 @@ from accrual_bot.tasks.sct.steps import (
     SCTColumnAdditionStep,
     SCTERMLogicStep,
     SCTPRERMLogicStep,
+    SCTAssetStatusUpdateStep,
     APInvoiceIntegrationStep
 )
 
@@ -206,6 +207,10 @@ class SCTPipelineOrchestrator:
             ),
             'SCTPRERMLogic': lambda: SCTPRERMLogicStep(
                 name="SCTPRERMLogic",
+                required=True
+            ),
+            'SCTAssetStatusUpdate': lambda: SCTAssetStatusUpdateStep(
+                name="SCTAssetStatusUpdate",
                 required=True
             ),
         }

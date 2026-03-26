@@ -6,6 +6,7 @@ from .sct_loading import SCTDataLoadingStep, SCTPRDataLoadingStep
 from .sct_column_addition import SCTColumnAdditionStep
 from .sct_evaluation import SCTERMLogicStep, SCTERMConditions
 from .sct_pr_evaluation import SCTPRERMLogicStep
+from .sct_asset_status import SCTAssetStatusUpdateStep
 from .sct_integration import APInvoiceIntegrationStep
 
 __all__ = [
@@ -15,5 +16,6 @@ __all__ = [
     'SCTERMLogicStep',
     'SCTERMConditions',
     'SCTPRERMLogicStep',
+    'SCTAssetStatusUpdateStep',
     'APInvoiceIntegrationStep',
 ]

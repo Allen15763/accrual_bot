@@ -16,6 +16,7 @@ enabled_po_steps = [
     "ProcurementIntegration",
     "DateLogic",
     "SCTERMLogic",
+    "SCTAssetStatusUpdate",
 ]
 
 enabled_pr_steps = [
@@ -37,6 +38,20 @@ sm_accounts = ["650003", "450014"]
 region = "TW"
 default_department = "000"
 prepay_liability = "111112"
+
+# =============================================================================
+# SCT PPE 資產狀態邏輯配置
+# =============================================================================
+[sct.ppe]
+trigger_keywords = ["訂金", "安裝款", "驗收款", "保固"]
+acceptance_keyword = "驗收"
+warranty_keyword = "保固"
+completed_status = "已完成(PPE)"
+incomplete_status = "未完成(PPE)"
+protected_statuses = [
+    "已入帳", "上期已入PPE", "上期FN備註已完成或Voucher number",
+    "Outright", "Consignment", "Outsourcing",
+]
 
 [sct]
 ap_columns = [
@@ -62,9 +77,39 @@ deposit_keywords_label = "摘要內有押金/保證金/Deposit/找零金"
 # =============================================================================
 
 
-# --- ERM 條件 : 供應商名稱中包含Outright ---
+# --- ERM 條件 : Remarked by 上月 FN 或 Remarked by Procurement，包含`刪|關`
 [[sct_erm_status_rules.conditions]]
 priority = 1
+status_value = "需求取消"
+note = "Remarked by 上月 FN 或 Remarked by Procurement，包含 「刪」 或 「關」"
+combine = "or"
+[[sct_erm_status_rules.conditions.checks]]
+field = "Remarked by 上月 FN"
+type = "contains"
+pattern = "(?i)刪|關"
+[[sct_erm_status_rules.conditions.checks]]
+field = "Remarked by Procurement"
+type = "contains"
+pattern = "(?i)刪|關"
+
+# --- ERM 條件 : Remarked by 上月 FN 包含 `已完成` & Remarked by Procurement，包含`現狀結案|需求取消`
+[[sct_erm_status_rules.conditions]]
+priority = 2
+status_value = "現狀結案"
+note = "Remarked by 上月 FN 包含 「已完成」 以及 Remarked by Procurement包含「現狀結案」或「需求取消」"
+combine = "and"
+[[sct_erm_status_rules.conditions.checks]]
+field = "Remarked by 上月 FN"
+type = "contains"
+pattern = "(?i)已完成"
+[[sct_erm_status_rules.conditions.checks]]
+field = "Remarked by Procurement"
+type = "contains"
+pattern = "(?i)現狀結案|需求取消"
+
+# --- ERM 條件 : 供應商名稱中包含Outright ---
+[[sct_erm_status_rules.conditions]]
+priority = 3
 status_value = "Outright"
 apply_to = ["PO", "PR"]
 note = "供應商名稱中包含Outright"
@@ -76,7 +121,7 @@ pattern = "(?i)Outright"
 
 # --- ERM 條件 : 供應商名稱中包含Consignment ---
 [[sct_erm_status_rules.conditions]]
-priority = 2
+priority = 4
 status_value = "Consignment"
 apply_to = ["PO", "PR"]
 note = "供應商名稱中包含Consignment"
@@ -88,7 +133,7 @@ pattern = "(?i)Consignment"
 
 # --- ERM 條件 : 供應商名稱中包含Outsourcing ---
 [[sct_erm_status_rules.conditions]]
-priority = 3
+priority = 5
 status_value = "Outsourcing"
 apply_to = ["PO", "PR"]
 note = "供應商名稱中包含Outsourcing"
@@ -100,7 +145,7 @@ pattern = "(?i)Outsourcing"
 
 # --- ERM 條件 : 上期已入PPE（前期FN標註）---
 [[sct_erm_status_rules.conditions]]
-priority = 4
+priority = 6
 status_value = "上期已入PPE"
 note = "前期FN備註明確標註「上期已入PPE」"
 [[sct_erm_status_rules.conditions.checks]]
@@ -110,7 +155,7 @@ pattern = "(?i)上期已入PPE"
 
 # --- ERM 條件 : 上期已完成（前期FN標註）---
 [[sct_erm_status_rules.conditions]]
-priority = 5
+priority = 7
 status_value = "上期FN備註已完成或Voucher number"
 note = "前期FN備註明確標註「已完成」或 Voucher number"
 [[sct_erm_status_rules.conditions.checks]]
@@ -120,7 +165,7 @@ pattern = "(?i)已完成|\\d{8}"
 
 # --- ERM 條件 : 已入帳（voucher_number）---
 [[sct_erm_status_rules.conditions]]
-priority = 6
+priority = 8
 status_value = "已入帳"
 note = "有voucher_number、ERM在摘要範圍內、ERM<=月結月份、收貨數量匹配、有帳務記錄、採購/FN備註已完成/rent、非FA科目"
 combine = "and"
@@ -144,7 +189,7 @@ type = "not_fa"
 
 # --- ERM 條件 : 已入帳（voucher_number）；排除備註跟billing amt限制---
 [[sct_erm_status_rules.conditions]]
-priority = 7
+priority = 9
 status_value = "已入帳"
 note = "有voucher_number、ERM在摘要範圍內、ERM<=月結月份、收貨數量匹配、非FA科目"
 combine = "and"
@@ -164,7 +209,7 @@ type = "not_fa"
 
 # --- ERM 條件 : 摘要內有物流運費 ---
 [[sct_erm_status_rules.conditions]]
-priority = 8
+priority = 10
 status_value = "AR估"
 apply_to = ["PO", "PR"]
 note = "供應商為供應商為高銓,統一數網,億榮,佳澄,嘉里,福星高,韻達且摘要中包含物流運費/Shipping fee"
@@ -181,7 +226,7 @@ pattern = "(?i)物流運費|Shipping fee|Logistics fee"
 
 # --- 條件 : 押金/保證金識別 ---
 [[sct_erm_status_rules.conditions]]
-priority = 9
+priority = 11
 status_value_key = "sct.deposit_keywords_label"
 apply_to = ["PO", "PR"]
 note = "Item Description包含押金/保證金/Deposit/找零金/定存，且GL#非FA科目(199999)"
@@ -197,7 +242,7 @@ value_key = "fa_accounts.sct"
 
 # --- ERM 條件 : 已完成(not_billed) ---
 [[sct_erm_status_rules.conditions]]
-priority = 10
+priority = 12
 status_value = "已完成(not_billed)"
 note = "採購/FN備註已完成、上月FN PR非未完成、尚未標籤、ERM在範圍內、ERM<=月結、收貨匹配、未入帳(Billed Amount=0)"
 combine = "and"
@@ -295,6 +340,25 @@ type = "no_status"
 [[sct_erm_status_rules.conditions.checks]]
 type = "out_of_range"
 
+# --- ERM 條件 : 採購備註覆蓋 error/未完成 ---
+[[sct_erm_status_rules.conditions]]
+priority = 18
+status_value = "已完成(Procurement備註)"
+override_statuses = [
+    "error(Description Period is out of ERM)",
+    "error(Description Period is out of ERM)_租金",
+    "error(Description Period is out of ERM)_薪資",
+    "未完成",
+    "Check收貨",
+    "格式錯誤，退單",
+]
+note = "採購備註已完成，覆蓋error/未完成/Check收貨/格式錯誤狀態"
+combine = "and"
+[[sct_erm_status_rules.conditions.checks]]
+field = "Remarked by Procurement"
+type = "contains"
+pattern = "(?i)已完成"
+
 
 # =============================================================================
 # SCT PR ERM 狀態規則（配置驅動）
@@ -306,19 +370,94 @@ type = "out_of_range"
 # SCT 目前不使用這些規則，後續如有需要可獨立新增。
 # =============================================================================
 
-# --- PR ERM 條件 1: 已入帳（前期FN標註）---
+
+# --- ERM 條件 : Remarked by 上月 FN 或 Remarked by Procurement，包含`刪|關`
 [[sct_pr_erm_status_rules.conditions]]
 priority = 1
-status_value = "已入帳"
-note = "前期FN備註明確標註「已入帳」"
+status_value = "需求取消"
+note = "Remarked by 上月 FN 或 Remarked by Procurement，包含 「刪」 或 「關」"
+combine = "or"
 [[sct_pr_erm_status_rules.conditions.checks]]
 field = "Remarked by 上月 FN"
 type = "contains"
-pattern = "(?i)已入帳"
+pattern = "(?i)刪|關"
+[[sct_pr_erm_status_rules.conditions.checks]]
+field = "Remarked by Procurement"
+type = "contains"
+pattern = "(?i)刪|關"
 
-# --- PR ERM 條件 2: 已完成（有採購或會計備註）---
+# --- ERM 條件 : Remarked by 上月 FN 包含 `已完成` & Remarked by Procurement，包含`現狀結案|需求取消`
 [[sct_pr_erm_status_rules.conditions]]
 priority = 2
+status_value = "現狀結案"
+note = "Remarked by 上月 FN 包含 「已完成」 以及 Remarked by Procurement包含「現狀結案」或「需求取消」"
+combine = "and"
+[[sct_pr_erm_status_rules.conditions.checks]]
+field = "Remarked by 上月 FN"
+type = "contains"
+pattern = "(?i)已完成"
+[[sct_pr_erm_status_rules.conditions.checks]]
+field = "Remarked by Procurement"
+type = "contains"
+pattern = "(?i)現狀結案|需求取消"
+
+# --- ERM 條件 : 供應商名稱中包含Outright ---
+[[sct_pr_erm_status_rules.conditions]]
+priority = 3
+status_value = "Outright"
+apply_to = ["PO", "PR"]
+note = "供應商名稱中包含Outright"
+combine = "and"
+[[sct_pr_erm_status_rules.conditions.checks]]
+field = "{TYPE} Supplier"
+type = "contains"
+pattern = "(?i)Outright"
+
+# --- ERM 條件 : 供應商名稱中包含Consignment ---
+[[sct_pr_erm_status_rules.conditions]]
+priority = 4
+status_value = "Consignment"
+apply_to = ["PO", "PR"]
+note = "供應商名稱中包含Consignment"
+combine = "and"
+[[sct_pr_erm_status_rules.conditions.checks]]
+field = "{TYPE} Supplier"
+type = "contains"
+pattern = "(?i)Consignment"
+
+# --- ERM 條件 : 供應商名稱中包含Outsourcing ---
+[[sct_pr_erm_status_rules.conditions]]
+priority = 5
+status_value = "Outsourcing"
+apply_to = ["PO", "PR"]
+note = "供應商名稱中包含Outsourcing"
+combine = "and"
+[[sct_pr_erm_status_rules.conditions.checks]]
+field = "{TYPE} Supplier"
+type = "contains"
+pattern = "(?i)Outsourcing"
+
+
+# --- ERM 條件 : 摘要內有物流運費 ---
+[[sct_pr_erm_status_rules.conditions]]
+priority = 6
+status_value = "AR估"
+apply_to = ["PO", "PR"]
+note = "供應商為供應商為高銓,統一數網,億榮,佳澄,嘉里,福星高,韻達且摘要中包含物流運費/Shipping fee"
+combine = "and"
+[[sct_pr_erm_status_rules.conditions.checks]]
+field = "{TYPE} Supplier"
+type = "in_list"
+list_key = "sct.logistics_supplier"
+[[sct_pr_erm_status_rules.conditions.checks]]
+field = "Item Description"
+type = "contains"
+pattern = "(?i)物流運費|Shipping fee|Logistics fee"
+
+
+# --- PR ERM 條件 : 已完成（有採購或會計備註）---
+[[sct_pr_erm_status_rules.conditions]]
+priority = 7
 status_value = "已完成"
 note = "採購/FN備註已完成或Rent、上月FN非未完成、ERM在範圍內、ERM<=月結、採購備註非error"
 combine = "and"
@@ -335,9 +474,9 @@ type = "erm_in_range"
 [[sct_pr_erm_status_rules.conditions.checks]]
 type = "erm_le_date"
 
-# --- PR ERM 條件 2-1: 已完成（沒有採購或會計備註）---
+# --- PR ERM 條件 : 已完成（沒有採購或會計備註）---
 [[sct_pr_erm_status_rules.conditions]]
-priority = 3
+priority = 8
 status_value = "已完成"
 note = "採購備註非未完成/取消、上月FN非未完成、ERM在範圍內、ERM<=月結、採購備註非error"
 combine = "and"
@@ -356,9 +495,9 @@ type = "erm_in_range"
 [[sct_pr_erm_status_rules.conditions.checks]]
 type = "erm_le_date"
 
-# --- PR ERM 條件 3: 未完成 ---
+# --- PR ERM 條件 : 未完成 ---
 [[sct_pr_erm_status_rules.conditions]]
-priority = 4
+priority = 9
 status_value = "未完成"
 note = "採購備註非error、ERM在範圍內、ERM>月結月份"
 combine = "and"
@@ -369,9 +508,9 @@ type = "erm_in_range"
 [[sct_pr_erm_status_rules.conditions.checks]]
 type = "erm_gt_date"
 
-# --- PR ERM 條件 4: 範圍錯誤_薪資 ---
+# --- PR ERM 條件 : 範圍錯誤_薪資 ---
 [[sct_pr_erm_status_rules.conditions]]
-priority = 5
+priority = 10
 status_value = "error(Description Period is out of ERM)_薪資"
 note = "採購備註非error、ERM不在摘要期間內、摘要包含派遣/Salary/Agency Fee"
 combine = "and"
@@ -384,9 +523,9 @@ field = "Item Description"
 type = "contains"
 pattern = "(?i)派遣|Salary|Agency Fee"
 
-# --- PR ERM 條件 5: 範圍錯誤（一般）---
+# --- PR ERM 條件 : 範圍錯誤（一般）---
 [[sct_pr_erm_status_rules.conditions]]
-priority = 6
+priority = 11
 status_value = "error(Description Period is out of ERM)"
 note = "採購備註非error、ERM不在摘要期間內"
 combine = "and"
@@ -394,3 +533,22 @@ combine = "and"
 type = "not_error"
 [[sct_pr_erm_status_rules.conditions.checks]]
 type = "out_of_range"
+
+# --- PR ERM 條件 : 採購備註覆蓋 error/未完成 ---
+[[sct_pr_erm_status_rules.conditions]]
+priority = 12
+status_value = "已完成(Procurement備註)"
+override_statuses = [
+    "error(Description Period is out of ERM)",
+    "error(Description Period is out of ERM)_租金",
+    "error(Description Period is out of ERM)_薪資",
+    "未完成",
+    "Check收貨",
+    "格式錯誤，退單",
+]
+note = "採購備註已完成，覆蓋error/未完成/Check收貨/格式錯誤狀態"
+combine = "and"
+[[sct_pr_erm_status_rules.conditions.checks]]
+field = "Remarked by Procurement"
+type = "contains"
+pattern = "(?i)已完成"

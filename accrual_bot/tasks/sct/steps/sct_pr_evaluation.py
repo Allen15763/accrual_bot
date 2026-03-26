@@ -210,8 +210,7 @@ class SCTPRERMLogicStep(PipelineStep):
         """根據 PR狀態 設置是否估計入帳"""
         df['是否估計入帳'] = 'N'
 
-        accrual_statuses = ['已完成']
-        mask_need_accrual = df[status_column].isin(accrual_statuses)
+        mask_need_accrual = df[status_column].str.contains('已完成', na=False)
 
         df.loc[mask_need_accrual, '是否估計入帳'] = 'Y'
 

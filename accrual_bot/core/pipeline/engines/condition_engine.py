@@ -264,7 +264,7 @@ class ConditionEngine:
             return df[field].isna() | (df[field] == '') | (df[field] == 'nan')
 
         if check_type == 'no_status':
-            return (df[status_column].isna()) | (df[status_column] == 'nan')
+            return (df[status_column].isna()) | (df[status_column] == '') | (df[status_column] == 'nan')
 
         # === ERM/日期類（從 prebuilt_masks 或即時計算）===
         processing_date = context.get('processing_date')

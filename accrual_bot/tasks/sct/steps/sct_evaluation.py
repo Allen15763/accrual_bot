@@ -186,7 +186,7 @@ class SCTERMLogicStep(PipelineStep):
                           status_column: str) -> SCTERMConditions:
         """構建所有判斷條件"""
         # 基礎狀態條件
-        no_status = (df[status_column].isna()) | (df[status_column] == 'nan')
+        no_status = (df[status_column].isna()) | (df[status_column] == '') | (df[status_column] == 'nan')
 
         # 日期範圍條件
         ym_start = df['YMs of Item Description'].str[:6].astype('Int32')
@@ -298,7 +298,7 @@ class SCTERMLogicStep(PipelineStep):
         )
 
         # 更新狀態條件遮罩 for _handle_format_errors
-        cond.no_status = df[status_column].isna()
+        cond.no_status = (df[status_column].isna()) | (df[status_column] == '') | (df[status_column] == 'nan')
 
         return df
 
