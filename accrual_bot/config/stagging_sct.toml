@@ -454,10 +454,20 @@ field = "Item Description"
 type = "contains"
 pattern = "(?i)物流運費|Shipping fee|Logistics fee"
 
+# --- PR ERM 條件 : 摘要內有工程 ---
+[[sct_pr_erm_status_rules.conditions]]
+priority = 7
+status_value = "摘要內有工程"
+note = "摘要內有工程"
+combine = "and"
+[[sct_pr_erm_status_rules.conditions.checks]]
+field = "Item Description"
+type = "contains"
+pattern = "(?i)工程"
 
 # --- PR ERM 條件 : 已完成（有採購或會計備註）---
 [[sct_pr_erm_status_rules.conditions]]
-priority = 7
+priority = 8
 status_value = "已完成"
 note = "採購/FN備註已完成或Rent、上月FN非未完成、ERM在範圍內、ERM<=月結、採購備註非error"
 combine = "and"
@@ -476,7 +486,7 @@ type = "erm_le_date"
 
 # --- PR ERM 條件 : 已完成（沒有採購或會計備註）---
 [[sct_pr_erm_status_rules.conditions]]
-priority = 8
+priority = 9
 status_value = "已完成"
 note = "採購備註非未完成/取消、上月FN非未完成、ERM在範圍內、ERM<=月結、採購備註非error"
 combine = "and"
@@ -497,7 +507,7 @@ type = "erm_le_date"
 
 # --- PR ERM 條件 : 未完成 ---
 [[sct_pr_erm_status_rules.conditions]]
-priority = 9
+priority = 10
 status_value = "未完成"
 note = "採購備註非error、ERM在範圍內、ERM>月結月份"
 combine = "and"
@@ -510,7 +520,7 @@ type = "erm_gt_date"
 
 # --- PR ERM 條件 : 範圍錯誤_薪資 ---
 [[sct_pr_erm_status_rules.conditions]]
-priority = 10
+priority = 11
 status_value = "error(Description Period is out of ERM)_薪資"
 note = "採購備註非error、ERM不在摘要期間內、摘要包含派遣/Salary/Agency Fee"
 combine = "and"
@@ -525,7 +535,7 @@ pattern = "(?i)派遣|Salary|Agency Fee"
 
 # --- PR ERM 條件 : 範圍錯誤（一般）---
 [[sct_pr_erm_status_rules.conditions]]
-priority = 11
+priority = 12
 status_value = "error(Description Period is out of ERM)"
 note = "採購備註非error、ERM不在摘要期間內"
 combine = "and"
@@ -536,7 +546,7 @@ type = "out_of_range"
 
 # --- PR ERM 條件 : 採購備註覆蓋 error/未完成 ---
 [[sct_pr_erm_status_rules.conditions]]
-priority = 12
+priority = 13
 status_value = "已完成(Procurement備註)"
 override_statuses = [
     "error(Description Period is out of ERM)",
