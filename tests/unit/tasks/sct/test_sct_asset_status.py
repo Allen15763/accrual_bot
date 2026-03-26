@@ -81,7 +81,7 @@ def _create_ppe_po_df():
             '未完成',
         ],
         'Remarked by Procurement': [
-            pd.NA, pd.NA, pd.NA, pd.NA,
+            '已完成', '已完成', '已完成', '已完成',
             pd.NA, pd.NA,
             pd.NA,
         ],
@@ -213,6 +213,38 @@ class TestSCTAssetStatusUpdateStep:
         assert (po001['是否估計入帳'] == 'Y').all()
 
     @pytest.mark.asyncio
+    async def test_execute_acceptance_erm_ok_but_no_remark(self, mock_asset_deps):
+        """驗收 ERM ≤ processing_date 但無採購備註 → 未完成(PPE)"""
+        from accrual_bot.tasks.sct.steps.sct_asset_status import SCTAssetStatusUpdateStep
+        step = SCTAssetStatusUpdateStep()
+
+        df = pd.DataFrame({
+            'PO#': ['PO-NR', 'PO-NR'],
+            'GL#': ['199999', '199999'],
+            'Item Description': ['驗收款', '訂金'],
+            'Expected Received Month_轉換格式': [202509, 202501],
+            'PO狀態': ['未完成', '未完成'],
+            'Remarked by Procurement': [pd.NA, pd.NA],
+            '是否估計入帳': ['N', 'N'],
+            'matched_condition_on_status': [pd.NA, pd.NA],
+        })
+
+        context = ProcessingContext(
+            data=df, entity_type='SCT',
+            processing_date=202512, processing_type='PO',
+        )
+
+        result = await step.execute(context)
+        assert result.status == StepStatus.SUCCESS
+
+        updated_df = context.data
+        # ERM ≤ date 但採購備註未確認 → 未完成(PPE)
+        assert (updated_df['PO狀態'] == '未完成(PPE)').all()
+        assert (updated_df['是否估計入帳'] == 'N').all()
+        # note 記錄原因
+        assert '採購備註未確認' in updated_df['matched_condition_on_status'].iloc[0]
+
+    @pytest.mark.asyncio
     async def test_execute_acceptance_incomplete(self, mock_asset_deps):
         """驗收 ERM > processing_date → 未完成(PPE)"""
         from accrual_bot.tasks.sct.steps.sct_asset_status import SCTAssetStatusUpdateStep
@@ -269,7 +301,7 @@ class TestSCTAssetStatusUpdateStep:
             'Item Description': ['驗收款', '訂金'],
             'Expected Received Month_轉換格式': [202509, 202501],
             'PO狀態': ['已入帳', '未完成'],
-            'Remarked by Procurement': [pd.NA, pd.NA],
+            'Remarked by Procurement': ['已完成', '已完成'],
             '是否估計入帳': ['N', 'N'],
             'matched_condition_on_status': [pd.NA, pd.NA],
         })
@@ -284,7 +316,7 @@ class TestSCTAssetStatusUpdateStep:
 
         # 「已入帳」不被覆蓋
         assert updated_df.iloc[0]['PO狀態'] == '已入帳'
-        # 「未完成」被更新為「已完成(PPE)」
+        # 「未完成」被更新為「已完成(PPE)」（ERM ≤ date + 採購備註已完成）
         assert updated_df.iloc[1]['PO狀態'] == '已完成(PPE)'
 
     @pytest.mark.asyncio
@@ -374,7 +406,7 @@ class TestSCTAssetStatusUpdateStep:
             'Item Description': ['驗收款-Phase1', '驗收款-Phase2', '訂金'],
             'Expected Received Month_轉換格式': [202506, 202509, 202501],
             'PO狀態': ['未完成', '未完成', '未完成'],
-            'Remarked by Procurement': [pd.NA, pd.NA, pd.NA],
+            'Remarked by Procurement': ['已完成', '已完成', '已完成'],
             '是否估計入帳': ['N', 'N', 'N'],
             'matched_condition_on_status': [pd.NA, pd.NA, pd.NA],
         })
@@ -387,7 +419,7 @@ class TestSCTAssetStatusUpdateStep:
         result = await step.execute(context)
         updated_df = context.data
 
-        # max(202506, 202509) = 202509 ≤ 202512 → 已完成(PPE)
+        # max(202506, 202509) = 202509 ≤ 202512 + 採購備註已完成 → 已完成(PPE)
         assert (updated_df['PO狀態'] == '已完成(PPE)').all()
 
     @pytest.mark.asyncio
@@ -445,7 +477,7 @@ class TestSCTAssetStatusUpdateStep:
             'Item Description': ['驗收款', '訂金'],
             'Expected Received Month_轉換格式': [202509, 202501],
             'PO狀態': ['未完成', '未完成'],
-            'Remarked by Procurement': [pd.NA, pd.NA],
+            'Remarked by Procurement': ['已完成', '已完成'],
             '是否估計入帳': ['N', 'N'],
             'matched_condition_on_status': [pd.NA, pd.NA],
         })

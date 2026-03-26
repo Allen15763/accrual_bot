@@ -212,20 +212,31 @@ class SCTAssetStatusUpdateStep(PipelineStep):
             acceptance_erm = self._find_acceptance_erm(df, po_mask)
 
             if acceptance_erm is not None:
-                # 有驗收品項：以驗收 ERM 判定
-                if acceptance_erm <= processing_date:
+                # 有驗收品項：以驗收 ERM + 採購備註雙重判定
+                procurement_completed = df.loc[
+                    po_mask, 'Remarked by Procurement'
+                ].str.contains('(?i)已完成', na=False).any()
+
+                if acceptance_erm <= processing_date and procurement_completed:
                     status = self.completed_status
                     note = (
                         f"PPE PO 以驗收款 ERM({acceptance_erm}) "
-                        f"≤ 處理日期({processing_date})，判定已完成"
+                        f"≤ 處理日期({processing_date}) + 採購備註已完成，判定已完成"
                     )
                     completed_pos += 1
                 else:
                     status = self.incomplete_status
-                    note = (
-                        f"PPE PO 以驗收款 ERM({acceptance_erm}) "
-                        f"> 處理日期({processing_date})，判定未完成"
-                    )
+                    if acceptance_erm > processing_date:
+                        note = (
+                            f"PPE PO 以驗收款 ERM({acceptance_erm}) "
+                            f"> 處理日期({processing_date})，判定未完成"
+                        )
+                    else:
+                        note = (
+                            f"PPE PO 以驗收款 ERM({acceptance_erm}) "
+                            f"≤ 處理日期({processing_date})，"
+                            f"但採購備註未確認已完成，判定未完成"
+                        )
                     incomplete_pos += 1
 
                 df.loc[updatable, self.status_column] = status
