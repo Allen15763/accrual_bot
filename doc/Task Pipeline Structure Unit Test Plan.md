@@ -647,16 +647,14 @@ class ConcreteLoadingStep(BaseLoadingStep):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._primary_df = pd.DataFrame({'col': [1, 2, 3]})
-        self._date = 202512
-        self._month = 12
 
     def get_required_file_type(self) -> str:
         return 'test_primary'
 
-    async def _load_primary_file(self, source, file_path: str) -> Tuple[pd.DataFrame, int, int]:
-        return self._primary_df, self._date, self._month
+    async def _load_primary_file(self, source, file_path: str) -> pd.DataFrame:
+        return self._primary_df
 
-    def _extract_primary_data(self, primary_result):
+    def _extract_primary_data(self, primary_result: pd.DataFrame) -> pd.DataFrame:
         return primary_result
 
     async def _load_reference_data(self, context: ProcessingContext) -> int:
@@ -915,17 +913,17 @@ class TestBaseLoadingStep:
         assert context.get_auxiliary_data('auxiliary2') is not None
         assert context.get_auxiliary_data('empty') is None
 
-    # --- 日期提取測試 ---
+    # --- 日期提取測試（deprecated：日期不再從檔名提取，改由 context.metadata 提供） ---
 
     def test_extract_date_from_filename_valid(self, step):
-        """測試從文件名提取日期"""
+        """測試從文件名提取日期（deprecated — 保留以驗證向後兼容）"""
         date, month = step._extract_date_from_filename('/path/to/file_202512.xlsx')
 
         assert date == 202512
         assert month == 12
 
     def test_extract_date_from_filename_invalid(self, step):
-        """測試無效文件名使用當前日期"""
+        """測試無效文件名使用當前日期（deprecated — 保留以驗證向後兼容）"""
         date, month = step._extract_date_from_filename('/path/to/file.xlsx')
 
         # 應該使用當前日期（無法準確驗證，只檢查返回值存在）

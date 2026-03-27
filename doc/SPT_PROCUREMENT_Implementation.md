@@ -334,10 +334,9 @@ class SPTProcurementDataLoadingStep(BaseLoadingStep):
     def get_required_file_type(self) -> str:
         return 'raw_po'
 
-    async def _load_primary_file(self, source, path: str) -> Tuple[pd.DataFrame, int, int]:
+    async def _load_primary_file(self, source, path: str) -> pd.DataFrame:
         df = await source.read()
-        date, month = self._extract_date_from_filename(path)
-        return df, date, month
+        return df
 
     async def _load_reference_data(self, context: ProcessingContext) -> int:
         if 'procurement_previous' in self.file_paths:

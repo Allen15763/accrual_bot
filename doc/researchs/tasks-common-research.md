@@ -502,9 +502,8 @@ class NEWPipelineOrchestrator:
 from accrual_bot.utils.config import config_manager
 
 class NEWDataLoadingStep(BaseLoadingStep):
-    async def _load_primary_file(self, source, path: str):
+    async def _load_primary_file(self, source, path: str) -> pd.DataFrame:
         df = await source.read()
-        raw_rows = len(df)
 
         # 存入原始快照（在任何過濾前）
         shape_summary_cfg = config_manager._config_toml.get('data_shape_summary', {})
@@ -512,7 +511,7 @@ class NEWDataLoadingStep(BaseLoadingStep):
             context.add_auxiliary_data('raw_data_snapshot', df.copy())
 
         # ... 後續過濾邏輯 ...
-        return df, raw_rows, len(df)
+        return df  # 日期從 context.metadata.processing_date 取得，不再從檔名擷取
 ```
 
 **注意**：快照應在**任何過濾或轉換之前**存入，確保反映真實的原始資料狀態。

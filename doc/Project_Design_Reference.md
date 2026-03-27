@@ -409,8 +409,8 @@ class BaseLoadingStep(PipelineStep):
     @abstractmethod
     async def _load_primary_file(
         self, source, path: str
-    ) -> Tuple[pd.DataFrame, int, int]:
-        """載入主檔案，回傳 (df, 原始行數, 過濾後行數)"""
+    ) -> pd.DataFrame:
+        """載入主檔案，回傳 DataFrame"""
         ...
 
     @abstractmethod
@@ -1416,7 +1416,7 @@ class MOBDataLoadingStep(BaseLoadingStep):
 
     async def _load_primary_file(self, source, path):
         df = await source.read()
-        return df, len(df), len(df)
+        return df
 
     async def _load_reference_data(self, context) -> int:
         ref = await self._load_reference_file('mob_reference')
@@ -1635,12 +1635,10 @@ class MyEntityDataLoadingStep(BaseLoadingStep):
 
     async def _load_primary_file(
         self, source, file_path: str
-    ) -> Tuple[pd.DataFrame, int, int]:
+    ) -> pd.DataFrame:
         df = await source.read()
-        raw_rows = len(df)
         # 可加入過濾邏輯
-        filtered_rows = len(df)
-        return df, raw_rows, filtered_rows
+        return df
 
     async def _load_reference_data(self, context) -> int:
         # 載入參考表（選填）

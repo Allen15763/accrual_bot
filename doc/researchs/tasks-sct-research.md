@@ -228,7 +228,7 @@ SCT 使用了兩個關鍵的模板方法基類：
 ```
 SCTBaseDataLoadingStep(BaseLoadingStep)
 ├── get_required_file_type()    → 'raw_po' 或 'raw_pr'（子類實作）
-├── _load_primary_file()        → 載入 xlsx + 日期提取（SCT 實作）
+├── _load_primary_file()        → 載入 xlsx + 欄位正規化，回傳 DataFrame（SCT 實作）
 ├── _extract_primary_data()     → 驗證必要欄位（SCT 實作）
 ├── _load_reference_data()      → ref_SCTTW.xlsx（SCT 實作）
 ├── _get_custom_file_loader()   → AP Invoice 自訂載入器（SCT 實作）
@@ -325,8 +325,8 @@ def __init__(self):
 
 | 方法 | 說明 |
 |------|------|
-| `_load_primary_file()` | 透過 `source.read()` 載入 xlsx，呼叫 `_process_common_columns()` 正規化 Line#/GL#/Project，從檔名提取日期 |
-| `_extract_primary_data()` | 驗證 tuple 格式、DataFrame 非空、必要欄位（Product Code, Item Description, GL#） |
+| `_load_primary_file()` | 透過 `source.read()` 載入 xlsx，呼叫 `_process_common_columns()` 正規化 Line#/GL#/Project，回傳 `pd.DataFrame`（processing_date 由 `context.metadata` 提供，不從檔名擷取） |
+| `_extract_primary_data()` | 驗證 DataFrame 非空、必要欄位（Product Code, Item Description, GL#） |
 | `_load_reference_data()` | 從 `ref_SCTTW.xlsx` 載入 `reference_account`（GL# → Account 對應）和 `reference_liability`（Account → Liability 對應），支援 Colab 環境 ZIP fallback |
 | `_get_custom_file_loader()` | AP Invoice 使用自訂載入器（`header=1`, `sheet_name=1`, `usecols` 從 config 讀取） |
 | `_set_additional_context_variables()` | 若 `data_shape_summary.enabled`，保存 `raw_data_snapshot` |

@@ -586,20 +586,22 @@ df_ap = (
 )
 ```
 
-### 4.12 Context Variable 的隱式依賴鏈
+### 4.12 Context Variable / Metadata 的隱式依賴鏈
 
-Steps 之間透過 `ProcessingContext` 傳遞狀態，形成隱式依賴鏈：
+Steps 之間透過 `ProcessingContext` 傳遞狀態，形成隱式依賴鏈。
+處理日期統一從 `context.metadata.processing_date` 讀取（由 UI 使用者選擇或 CLI `run_config.toml` 設定），不再從檔名萃取。
+Loading 步驟仍會將 `processing_date`/`processing_month` 寫入 variables（向後相容），但下游步驟已全部改用 metadata。
 
-| Step | 寫入 | 讀取 |
+| Step | 寫入 (variables / aux) | 讀取 |
 |------|------|------|
-| `SPXDataLoadingStep` | `processing_date`, `processing_month`, `validation_file_path`, `file_paths`, `closing_list`(aux), `reference_account`(aux) | — |
-| `ColumnAdditionStep` | `processing_month`, `PO狀態`/`PR狀態` 欄位重命名 | `processing_month`, `file_paths` |
-| `APInvoiceIntegrationStep` | `GL DATE` 欄位 | `ap_invoice`(aux), `processing_date` |
+| `SPXDataLoadingStep` | `processing_date`(var), `processing_month`(var), `validation_file_path`(var), `file_paths`(var), `closing_list`(aux), `reference_account`(aux) | `context.metadata.processing_date` |
+| `ColumnAdditionStep` | `PO狀態`/`PR狀態` 欄位重命名 | `context.metadata.processing_date` |
+| `APInvoiceIntegrationStep` | `GL DATE` 欄位 | `ap_invoice`(aux), `context.metadata.processing_date` |
 | `ClosingListIntegrationStep` | `closing_list`(aux) | — |
-| `StatusStage1Step` | `PO狀態`/`PR狀態`, `matched_condition_on_status` | `closing_list`(aux), `processing_date` |
-| `SPXERMLogicStep` | `是否估計入帳`, `Accr. Amount`, `Liability` | `reference_account`(aux), `reference_liability`(aux), `processing_date` |
-| `ValidationDataProcessingStep` | `本期驗收數量/金額`, `locker_*`(aux), `kiosk_data`(aux) | `validation_file_path`, `file_paths` |
-| `SPXExportStep` | 檔案系統 | `locker_non_discount`(aux), `locker_discount`(aux), `kiosk_data`(aux) |
+| `StatusStage1Step` | `PO狀態`/`PR狀態`, `matched_condition_on_status` | `closing_list`(aux), `context.metadata.processing_date` |
+| `SPXERMLogicStep` | `是否估計入帳`, `Accr. Amount`, `Liability` | `reference_account`(aux), `reference_liability`(aux), `context.metadata.processing_date` |
+| `ValidationDataProcessingStep` | `本期驗收數量/金額`, `locker_*`(aux), `kiosk_data`(aux) | `validation_file_path`(var), `file_paths`(var), `context.metadata.processing_date` |
+| `SPXExportStep` | 檔案系統 | `locker_non_discount`(aux), `locker_discount`(aux), `kiosk_data`(aux), `context.metadata.processing_date` |
 
 ---
 
