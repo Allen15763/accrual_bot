@@ -17,6 +17,7 @@ enabled_po_steps = [
     "DateLogic",
     "SCTERMLogic",
     "SCTAssetStatusUpdate",
+    "SCTAccountPrediction",
 ]
 
 enabled_pr_steps = [
@@ -26,6 +27,7 @@ enabled_pr_steps = [
     "ProcurementIntegration",
     "DateLogic",
     "SCTPRERMLogic",
+    "SCTAccountPrediction",
 ]
 
 
@@ -562,3 +564,204 @@ combine = "and"
 field = "Remarked by Procurement"
 type = "contains"
 pattern = "(?i)已完成"
+
+
+# =============================================================================
+# SCT 會計科目預測規則配置
+# =============================================================================
+# 使用 config_manager._config_toml.get('sct_account_prediction').get('rules') 取得
+# 規則按 rule_id 順序執行，每筆記錄只匹配第一個符合的條件
+#
+# 規則欄位說明：
+# - rule_id: 規則優先級（數字越小優先級越高）
+# - account: 會計科目代碼
+# - product_code: Product Code（"0" = 不篩選）
+# - department: Department（"0" = 不篩選）
+# - description_keywords: Item Description 關鍵字（不分大小寫，多個關鍵字用 | 分隔）
+# - min_amount: 金額下限（Entry Amount >= 此值）
+# - max_amount: 金額上限（Entry Amount < 此值）
+# - liability_account: 負債科目代碼
+# - condition_desc: 條件描述（顯示在 matched_conditions 欄位）
+# =============================================================================
+
+# --- 規則 1: 固定資產（金額 >= 30,000）---
+[[sct_account_prediction.rules]]
+rule_id = 1
+account = "199999"
+product_code = "0"
+department = "0"
+description_keywords = "路由器|Router|交換器|門市裝修工程|門市招牌安裝工程|冷氣裝修工程|門市智取櫃工程|門市繳費機訂金|門市繳費機交機款|門市繳費機尾款|IT - Computer|配置工程|消防設備缺失改善追加工程|新增工程|增設工程|防護工程|門市HD櫃工程|軟體開發費|系統建置工程"
+min_amount = 30000
+condition_desc = "Item Description包含固定資產關鍵字，且金額>=30,000"
+
+# --- 規則 2: 倉庫租金 ---
+[[sct_account_prediction.rules]]
+rule_id = 2
+account = "520012"
+product_code = "RT_B2C_COM"
+department = "0"
+description_keywords = "warehouse rental fee|停車場租賃"
+liability_account = "200412"
+condition_desc = "Product Code=RT_B2C_COM，Item Description包含\"warehouse rental fee\"或\"停車場租賃\""
+
+# --- 規則 3: 水電租賃 ---
+[[sct_account_prediction.rules]]
+rule_id = 3
+account = "520013"
+product_code = "RT_B2C_COM"
+department = "0"
+description_keywords = "Leased|Utility水費|Water fee"
+liability_account = "200412"
+condition_desc = "Product Code=RT_B2C_COM，Item Description包含\"Leased\"或\"Utility水費\"或\"Water fee\""
+
+# --- 規則 4: 清潔保全 ---
+[[sct_account_prediction.rules]]
+rule_id = 4
+account = "520014"
+product_code = "RT_B2C_COM"
+department = "0"
+description_keywords = "Cleaning fee|消毒|Garbage removal|security service fee|Uniform cleaning|Disinfection|disposal of goods fee|垃圾清運費用|報廢費用|保全警衛費用|保全費用|除塵拖把租賃"
+liability_account = "200412"
+condition_desc = "Product Code=RT_B2C_COM，Item Description包含清潔/保全相關關鍵字"
+
+# --- 規則 5: 文具用品 ---
+[[sct_account_prediction.rules]]
+rule_id = 5
+account = "520016"
+product_code = "RT_B2C_COM"
+department = "0"
+description_keywords = "文具用品|Office Supplies|活動台車|charger|標示牌|空白感應卡|影印紙|copy paper|二維條碼掃描槍|垃圾袋|木板|保護貼|Printing Cost|清潔袋|白色A4紙|延長線|警示膠帶|識別證|大聲公|零件盒|長尾夾|摺疊|對講機|清潔用品|L型夾|瓦楞板|麥克筆|電池|白版筆|奇異筆"
+liability_account = "200412"
+condition_desc = "Product Code=RT_B2C_COM，Item Description包含文具用品相關關鍵字"
+
+# --- 規則 6: 包裝耗材 ---
+[[sct_account_prediction.rules]]
+rule_id = 6
+account = "520017"
+product_code = "RT_B2C_COM"
+department = "0"
+description_keywords = "Label|熱感式貼紙|棧板膠膜|OPP tape|Carton|蝦皮字樣膠帶|宅配標籤貼紙|氣泡袋|銅版貼紙|熱感空白貼紙|氣泡片|熱感貼紙|透明膠膜|可撕式標籤束帶|碳帶|PP編織袋|熱縮膜|packaging"
+liability_account = "200412"
+condition_desc = "Product Code=RT_B2C_COM，Item Description包含包裝耗材相關關鍵字"
+
+# --- 規則 7: 搬運費 ---
+[[sct_account_prediction.rules]]
+rule_id = 7
+account = "520018"
+product_code = "RT_B2C_COM"
+department = "0"
+description_keywords = "搬運費用|Shipping fee|moving fee"
+liability_account = "200412"
+condition_desc = "Product Code=RT_B2C_COM，Item Description包含\"搬運費用\"或\"Shipping fee\"或\"moving fee\""
+
+# --- 規則 8: 設備（金額 >= 3,000 且 < 30,000）---
+[[sct_account_prediction.rules]]
+rule_id = 8
+account = "520019"
+product_code = "RT_B2C_COM"
+department = "0"
+description_keywords = "PDA|refrigerator|Projector|工程|標籤機|列印機"
+min_amount = 3000
+max_amount = 30000
+liability_account = "200412"
+condition_desc = "Product Code=RT_B2C_COM，Item Description包含設備關鍵字，且金額>=3,000且<30,000"
+
+# --- 規則 9: 管理費 ---
+[[sct_account_prediction.rules]]
+rule_id = 9
+account = "520025"
+product_code = "RT_B2C_COM"
+department = "0"
+description_keywords = "management cost|management fee"
+liability_account = "200412"
+condition_desc = "Product Code=RT_B2C_COM，Item Description包含\"management cost\"或\"management fee\""
+
+# --- 規則 10: 維修保養 ---
+[[sct_account_prediction.rules]]
+rule_id = 10
+account = "520026"
+product_code = "RT_B2C_COM"
+department = "0"
+description_keywords = "消防安全|電梯保養|修繕|維修|保養|汙水處理費|設施養護費用"
+liability_account = "200412"
+condition_desc = "Product Code=RT_B2C_COM，Item Description包含維修保養相關關鍵字"
+
+# --- 規則 11: 桶裝水 ---
+[[sct_account_prediction.rules]]
+rule_id = 11
+account = "520028"
+product_code = "RT_B2C_COM"
+department = "0"
+description_keywords = "Bottled water|桶裝水"
+liability_account = "200412"
+condition_desc = "Product Code=RT_B2C_COM，Item Description包含\"Bottled water\"或\"桶裝水\""
+
+# --- 規則 12: 保險 ---
+[[sct_account_prediction.rules]]
+rule_id = 12
+account = "520029"
+product_code = "RT_B2C_COM"
+department = "0"
+description_keywords = "保險|Insurance"
+liability_account = "200412"
+condition_desc = "Product Code=RT_B2C_COM，Item Description包含\"保險\"或\"Insurance\""
+
+# --- 規則 13: 倉儲人力/派車 ---
+[[sct_account_prediction.rules]]
+rule_id = 13
+account = "520030"
+product_code = "RT_B2C_COM"
+department = "0"
+description_keywords = "Warehouse Temp Salary|派車費用"
+liability_account = "200412"
+condition_desc = "Product Code=RT_B2C_COM，Item Description包含\"Warehouse Temp Salary\"或\"派車費用\""
+
+# --- 規則 14: 設備租金 ---
+[[sct_account_prediction.rules]]
+rule_id = 14
+account = "520033"
+product_code = "RT_B2C_COM"
+department = "0"
+description_keywords = "棧板租金|堆高機租金|電動拖板車租金|堆高機|拖板車|印表機|AED cost|點鈔機|飲水機"
+liability_account = "200412"
+condition_desc = "Product Code=RT_B2C_COM，Item Description包含設備租金相關關鍵字"
+
+# --- 規則 15: 員工健檢 ---
+[[sct_account_prediction.rules]]
+rule_id = 15
+account = "600301"
+product_code = "RT_B2C_COM"
+department = "G03 - People (G&A)"
+description_keywords = "employee health check"
+liability_account = "200412"
+condition_desc = "Product Code=RT_B2C_COM，Department=G03，Item Description包含\"employee health check\""
+
+# --- 規則 16: 罰款 ---
+[[sct_account_prediction.rules]]
+rule_id = 16
+account = "610307"
+product_code = "RT_B2C_COM"
+department = "G03 - People (G&A)"
+description_keywords = "Fines"
+liability_account = "200412"
+condition_desc = "Product Code=RT_B2C_COM，Department=G03，Item Description包含\"Fines\""
+
+# --- 規則 17: 人力仲介 ---
+[[sct_account_prediction.rules]]
+rule_id = 17
+account = "620008"
+product_code = "RT_B2C_COM"
+department = "G03 - People (G&A)"
+description_keywords = "Health Nurse|Health Doctor|仲介費|agency fee"
+liability_account = "200406"
+condition_desc = "Product Code=RT_B2C_COM，Department=G03，Item Description包含人力仲介相關關鍵字"
+
+# --- 規則 18: 交通費 ---
+[[sct_account_prediction.rules]]
+rule_id = 18
+account = "630001"
+product_code = "RT_B2C_COM"
+department = "G03 - People (G&A)"
+description_keywords = "transportation expenses|Traveling expense|交通費"
+liability_account = "200412"
+condition_desc = "Product Code=RT_B2C_COM，Department=G03，Item Description包含交通費相關關鍵字"
