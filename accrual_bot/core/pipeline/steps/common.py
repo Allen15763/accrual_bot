@@ -663,7 +663,7 @@ class PreviousWorkpaperIntegrationStep(PipelineStep):
             df = context.data.copy()
             previous_wp = context.get_auxiliary_data('previous')
             previous_wp_pr = context.get_auxiliary_data('previous_pr')
-            m = context.get_variable('processing_month')
+            m = context.metadata.processing_date % 100
             entity = context.metadata.entity_type
 
             if previous_wp is None and previous_wp_pr is None:

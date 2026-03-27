@@ -176,22 +176,19 @@ class TestSPXDataLoadingStepExtract:
             'Item Description': ['Test'],
             'GL#': ['100000'],
         })
-        result = po_loading_step._extract_raw_po_data((test_df, 202512, 12))
-        df, date, m = result
-        assert len(df) == 1
-        assert date == 202512
-        assert m == 12
+        result = po_loading_step._extract_raw_po_data(test_df)
+        assert len(result) == 1
 
     def test_extract_raw_po_data_empty_raises(self, po_loading_step):
         """空的 DataFrame 應拋出 ValueError"""
         with pytest.raises(ValueError, match="Raw PO data is empty"):
-            po_loading_step._extract_raw_po_data((pd.DataFrame(), 202512, 12))
+            po_loading_step._extract_raw_po_data(pd.DataFrame())
 
     def test_extract_raw_po_data_missing_columns_raises(self, po_loading_step):
         """缺少必要欄位應拋出 ValueError"""
         test_df = pd.DataFrame({'SomeCol': ['val']})
         with pytest.raises(ValueError, match="Missing required columns"):
-            po_loading_step._extract_raw_po_data((test_df, 202512, 12))
+            po_loading_step._extract_raw_po_data(test_df)
 
 
 # ============================================================

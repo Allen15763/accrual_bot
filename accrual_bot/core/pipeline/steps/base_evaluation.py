@@ -124,7 +124,7 @@ class BaseERMEvaluationStep(PipelineStep):
 
         try:
             df = context.data.copy()
-            processing_date = context.get_variable('processing_date')
+            processing_date = context.metadata.processing_date
 
             # 獲取參考數據
             ref_account = context.get_auxiliary_data('reference_account')
@@ -395,9 +395,9 @@ class BaseERMEvaluationStep(PipelineStep):
             context.add_error("缺少參考數據")
             return False
 
-        # 檢查處理日期
-        processing_date = context.get_variable('processing_date')
-        if processing_date is None:
+        # 檢查處理日期（來源：context.metadata，由 UI/CLI 設定）
+        processing_date = context.metadata.processing_date
+        if not processing_date:
             self.logger.error("缺少處理日期")
             context.add_error("缺少處理日期")
             return False

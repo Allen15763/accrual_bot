@@ -24,19 +24,17 @@ class SPTProcurementDataLoadingStep(BaseLoadingStep):
         """返回主要檔案類型"""
         return 'raw_po'
 
-    async def _load_primary_file(self, source, path: str) -> Tuple[pd.DataFrame, int, int]:
+    async def _load_primary_file(self, source, path: str) -> pd.DataFrame:
         """
         載入主要 PO 檔案
 
         Returns:
-            Tuple[DataFrame, date_YYYYMM, month]
+            pd.DataFrame: 載入的 PO 數據
         """
         df = await source.read()
-        # 從檔名提取日期
-        date, month = self._extract_date_from_filename(path)
-        return df, date, month
+        return df
 
-    def _extract_primary_data(self, primary_result) -> Tuple[pd.DataFrame, int, int]:
+    def _extract_primary_data(self, primary_result: pd.DataFrame) -> pd.DataFrame:
         """提取主要資料"""
         return primary_result
 
@@ -89,19 +87,17 @@ class SPTProcurementPRDataLoadingStep(BaseLoadingStep):
         """返回主要檔案類型"""
         return 'raw_pr'
 
-    async def _load_primary_file(self, source, path: str) -> Tuple[pd.DataFrame, int, int]:
+    async def _load_primary_file(self, source, path: str) -> pd.DataFrame:
         """
         載入主要 PR 檔案
 
         Returns:
-            Tuple[DataFrame, date_YYYYMM, month]
+            pd.DataFrame: 載入的 PR 數據
         """
         df = await source.read()
-        # 從檔名提取日期
-        date, month = self._extract_date_from_filename(path)
-        return df, date, month
+        return df
 
-    def _extract_primary_data(self, primary_result) -> Tuple[pd.DataFrame, int, int]:
+    def _extract_primary_data(self, primary_result: pd.DataFrame) -> pd.DataFrame:
         """提取主要資料"""
         return primary_result
 

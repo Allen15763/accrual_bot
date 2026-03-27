@@ -38,7 +38,7 @@ class APInvoiceIntegrationStep(PipelineStep):
             df = context.data.copy()
             input_count = len(df)
             df_ap = context.get_auxiliary_data('ap_invoice')
-            yyyymm = context.get_variable('processing_date')
+            yyyymm = context.metadata.processing_date
             
             if df_ap is None or df_ap.empty:
                 self.logger.warning("No AP Invoice data available, skipping")

@@ -17,16 +17,14 @@ class ConcreteLoadingStep(BaseLoadingStep):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._primary_df = pd.DataFrame({'col': [1, 2, 3]})
-        self._date = 202512
-        self._month = 12
 
     def get_required_file_type(self) -> str:
         return 'test_primary'
 
-    async def _load_primary_file(self, source, file_path: str) -> Tuple[pd.DataFrame, int, int]:
-        return self._primary_df, self._date, self._month
+    async def _load_primary_file(self, source, file_path: str) -> pd.DataFrame:
+        return self._primary_df
 
-    def _extract_primary_data(self, primary_result):
+    def _extract_primary_data(self, primary_result: pd.DataFrame) -> pd.DataFrame:
         return primary_result
 
     async def _load_reference_data(self, context: ProcessingContext) -> int:
@@ -178,8 +176,8 @@ class TestBaseLoadingStep:
 
         assert 'test_primary' in loaded_data
         assert 'file2' in loaded_data
-        # test_primary 返回 tuple (df, date, month)
-        assert isinstance(loaded_data['test_primary'], tuple)
+        # test_primary 返回 pd.DataFrame
+        assert isinstance(loaded_data['test_primary'], pd.DataFrame)
 
     @pytest.mark.asyncio
     async def test_load_all_files_concurrent_primary_fails(
@@ -294,7 +292,7 @@ class TestBaseLoadingStep:
     def test_add_auxiliary_data_to_context(self, step, context):
         """測試輔助數據添加到 context"""
         loaded_data = {
-            'test_primary': (pd.DataFrame({'col': [1, 2]}), 202512, 12),
+            'test_primary': pd.DataFrame({'col': [1, 2]}),
             'auxiliary1': pd.DataFrame({'col': ['a', 'b']}),
             'auxiliary2': pd.DataFrame({'col': [10, 20]}),
             'empty': pd.DataFrame()  # 空 DataFrame 應該被過濾
