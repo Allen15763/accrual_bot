@@ -50,7 +50,7 @@ class SCTColumnAdditionStep(PipelineStep):
         try:
             df = context.data.copy()
             input_count = len(df)
-            m = context.get_variable('processing_month')
+            m = context.metadata.processing_date % 100
 
             original_columns = set(df.columns)
 

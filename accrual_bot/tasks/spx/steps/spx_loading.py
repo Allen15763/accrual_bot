@@ -118,8 +118,12 @@ class SPXDataLoadingStep(PipelineStep):
             if 'raw_po' not in loaded_data:
                 raise ValueError("Failed to load raw PO data")
             
-            df, date, m = self._extract_raw_po_data(loaded_data['raw_po'])
-            
+            df = self._extract_raw_po_data(loaded_data['raw_po'])
+
+            # 從 metadata 取得處理日期（單一來源：UI 使用者選擇 / CLI run_config.toml）
+            date = context.metadata.processing_date
+            m = date % 100
+
             # 更新 Context 主數據
             context.update_data(df)
             context.set_variable('processing_date', date)
@@ -278,7 +282,7 @@ class SPXDataLoadingStep(PipelineStep):
             
             # 根據文件類型決定載入策略
             if file_type == 'raw_po':
-                # 主 PO 數據需要提取日期和月份
+                # 主 PO 數據載入（日期由 context.metadata 提供）
                 return await self._load_raw_po_file(source, file_path)
             elif file_type == 'ap_invoice':
                 return await self._load_ap_invoice(source)
@@ -295,56 +299,38 @@ class SPXDataLoadingStep(PipelineStep):
             raise
     
     async def _load_raw_po_file(
-        self, 
-        source, 
+        self,
+        source,
         file_path: str
-    ) -> Tuple[pd.DataFrame, int, int]:
+    ) -> pd.DataFrame:
         """
-        載入原始 PO 文件並提取日期信息
-        
+        載入原始 PO 文件
+
+        processing_date 由 context.metadata 提供，不從檔名擷取。
+
         Args:
             source: 數據源實例
             file_path: 文件路徑
-            
+
         Returns:
-            Tuple[pd.DataFrame, int, int]: (DataFrame, date, month)
+            pd.DataFrame: 載入並清洗後的 PO 數據
         """
         # 讀取數據
         df = await source.read()
         # 基本數據處理
         if 'Line#' in df.columns:
             df['Line#'] = df['Line#'].astype('Float64').round(0).astype('Int64').astype('string')
-        
+
         if 'GL#' in df.columns:
             df['GL#'] = np.where(df['GL#'] == 'N.A.', '666666', df['GL#'])
             df['GL#'] = df['GL#'].fillna('666666').astype('Float64').round(0).astype('Int64').astype('string')
-        
+
         if 'Project Number' in df.columns:
             df.rename(columns={'Project Number': 'Project'})
 
         self.logger.debug(f"成功導入PO數據, 數據維度: {df.shape}")
-        
-        # 從文件名提取日期 (假設格式為 YYYYMM_xxx.xlsx)
-        file_name = Path(file_path).stem
-        
-        # 嘗試從文件名提取日期
-        date_pattern = r'(\d{6})'
-        match = re.search(date_pattern, file_name)
-        
-        if match:
-            date_str = match.group(1)
-            date = int(date_str)
-            m = int(date_str[-2:])  # 月份
-        else:
-            # 如果無法從文件名提取，使用當前日期
-            current = datetime.now()
-            date = int(current.strftime('%Y%m'))
-            m = current.month
-            self.logger.warning(
-                f"Could not extract date from filename, using current date: {date}"
-            )
-        
-        return df, date, m
+
+        return df
     
     async def _load_ap_invoice(self, source) -> pd.DataFrame:
         """
@@ -457,40 +443,37 @@ class SPXDataLoadingStep(PipelineStep):
         return validated
     
     def _extract_raw_po_data(
-        self, 
-        raw_po_result: Tuple[pd.DataFrame, int, int]
-    ) -> Tuple[pd.DataFrame, int, int]:
+        self,
+        raw_po_result: pd.DataFrame
+    ) -> pd.DataFrame:
         """
-        提取和驗證原始 PO 數據
-        
+        驗證原始 PO 數據
+
         Args:
-            raw_po_result: 原始 PO 數據結果
-            
+            raw_po_result: 原始 PO 數據
+
         Returns:
-            Tuple[pd.DataFrame, int, int]: 驗證後的數據
+            pd.DataFrame: 驗證後的數據
         """
-        if isinstance(raw_po_result, tuple) and len(raw_po_result) == 3:
-            df, date, m = raw_po_result
-            
-            # 驗證 DataFrame
-            if df is None or df.empty:
-                raise ValueError("Raw PO data is empty")
-            
-            # 驗證必要列
-            required_columns = ['Product Code', 'Item Description', 'GL#']
-            missing_columns = [col for col in required_columns if col not in df.columns]
-            
-            if missing_columns:
-                raise ValueError(f"Missing required columns: {missing_columns}")
-            
-            self.logger.info(
-                f"Raw PO data validated: {df.shape} shape, "
-                f"{len(df.columns)} columns, date={date}, month={m}"
-            )
-            
-            return df, date, m
-        else:
-            raise ValueError("Invalid raw PO data format")
+        df = raw_po_result
+
+        # 驗證 DataFrame
+        if df is None or not isinstance(df, pd.DataFrame) or df.empty:
+            raise ValueError("Raw PO data is empty")
+
+        # 驗證必要列
+        required_columns = ['Product Code', 'Item Description', 'GL#']
+        missing_columns = [col for col in required_columns if col not in df.columns]
+
+        if missing_columns:
+            raise ValueError(f"Missing required columns: {missing_columns}")
+
+        self.logger.info(
+            f"Raw PO data validated: {df.shape} shape, "
+            f"{len(df.columns)} columns"
+        )
+
+        return df
     
     async def _cleanup_resources(self):
         """清理數據源資源"""
@@ -1380,8 +1363,12 @@ class SPXPRDataLoadingStep(PipelineStep):
             if 'raw_pr' not in loaded_data:
                 raise ValueError("Failed to load raw PR data")
             
-            df, date, m = self._extract_raw_pr_data(loaded_data['raw_pr'])
-            
+            df = self._extract_raw_pr_data(loaded_data['raw_pr'])
+
+            # 從 metadata 取得處理日期（單一來源：UI 使用者選擇 / CLI run_config.toml）
+            date = context.metadata.processing_date
+            m = date % 100
+
             # 更新 Context 主數據
             context.update_data(df)
             context.set_variable('processing_date', date)
@@ -1558,7 +1545,7 @@ class SPXPRDataLoadingStep(PipelineStep):
             
             # 根據檔案類型決定載入策略
             if file_type == 'raw_pr':
-                # 主 PR 數據需要提取日期和月份
+                # 主 PR 數據載入（日期由 context.metadata 提供）
                 return await self._load_raw_pr_file(source, file_path)
             else:
                 # 其他檔案直接讀取
@@ -1575,31 +1562,25 @@ class SPXPRDataLoadingStep(PipelineStep):
             raise
     
     async def _load_raw_pr_file(
-        self, 
-        source, 
+        self,
+        source,
         file_path: str
-    ) -> Tuple[pd.DataFrame, int, int]:
+    ) -> pd.DataFrame:
         """
-        載入原始 PR 檔案並提取日期信息
-        
-        處理流程:
-        1. 讀取 PR 數據
-        2. 基本數據清洗（Line#, GL# 等）
-        3. 從檔名提取日期和月份
-        
+        載入原始 PR 檔案
+
+        processing_date 由 context.metadata 提供，不從檔名擷取。
+
         Args:
             source: 數據源實例
             file_path: 檔案路徑
-            
+
         Returns:
-            Tuple[pd.DataFrame, int, int]: (DataFrame, date, month)
-            
-        Note:
-            假設檔名格式為 YYYYMM_xxx.xlsx
+            pd.DataFrame: 載入並清洗後的 PR 數據
         """
         # 讀取數據
         df = await source.read()
-        
+
         # 基本數據處理（與 PO 類似）
         if 'Line#' in df.columns:
             df['Line#'] = (
@@ -1609,7 +1590,7 @@ class SPXPRDataLoadingStep(PipelineStep):
                 .astype('Int64')
                 .astype('string')
             )
-        
+
         if 'GL#' in df.columns:
             df['GL#'] = np.where(df['GL#'] == 'N.A.', '666666', df['GL#'])
             df['GL#'] = (
@@ -1623,30 +1604,10 @@ class SPXPRDataLoadingStep(PipelineStep):
 
         if 'Project Number' in df.columns:
             df.rename(columns={'Project Number': 'Project'})
-        
+
         self.logger.debug(f"成功導入 PR 數據, 數據維度: {df.shape}")
-        
-        # 從檔案名提取日期（假設格式為 YYYYMM_xxx.xlsx）
-        file_name = Path(file_path).stem
-        
-        # 嘗試從檔案名提取日期
-        date_pattern = r'(\d{6})'
-        match = re.search(date_pattern, file_name)
-        
-        if match:
-            date_str = match.group(1)
-            date = int(date_str)
-            m = int(date_str[-2:])  # 月份
-        else:
-            # 如果無法從檔案名提取，使用當前日期
-            current = datetime.now()
-            date = int(current.strftime('%Y%m'))
-            m = current.month
-            self.logger.warning(
-                f"Could not extract date from filename, using current date: {date}"
-            )
-        
-        return df, date, m
+
+        return df
     
     async def _load_reference_data(self, context: ProcessingContext) -> int:
         """
@@ -1763,54 +1724,44 @@ class SPXPRDataLoadingStep(PipelineStep):
         return validated
     
     def _extract_raw_pr_data(
-        self, 
-        raw_pr_result: Tuple[pd.DataFrame, int, int]
-    ) -> Tuple[pd.DataFrame, int, int]:
+        self,
+        raw_pr_result: pd.DataFrame
+    ) -> pd.DataFrame:
         """
-        提取和驗證原始 PR 數據
-        
-        驗證項目:
-        1. 數據格式正確（Tuple 包含 3 個元素）
-        2. DataFrame 非空
-        3. 必要欄位存在
-        
+        驗證原始 PR 數據
+
         Args:
-            raw_pr_result: 原始 PR 數據結果
-            
+            raw_pr_result: 原始 PR 數據
+
         Returns:
-            Tuple[pd.DataFrame, int, int]: 驗證後的數據
-            
+            pd.DataFrame: 驗證後的數據
+
         Raises:
             ValueError: 當數據格式或內容無效時
         """
-        if isinstance(raw_pr_result, tuple) and len(raw_pr_result) == 3:
-            df, date, m = raw_pr_result
-            
-            # 驗證 DataFrame
-            if df is None or df.empty:
-                raise ValueError("Raw PR data is empty")
-            
-            # 驗證必要列
-            # TODO: 根據實際 PR 檔案格式調整必要欄位
-            required_columns = ['Product Code', 'Item Description', 'GL#']
-            missing_columns = [
-                col for col in required_columns 
-                if col not in df.columns
-            ]
-            
-            if missing_columns:
-                raise ValueError(
-                    f"Missing required columns: {missing_columns}"
-                )
-            
-            self.logger.info(
-                f"Raw PR data validated: {df.shape}, "
-                f"date={date}, month={m}"
+        df = raw_pr_result
+
+        # 驗證 DataFrame
+        if df is None or not isinstance(df, pd.DataFrame) or df.empty:
+            raise ValueError("Raw PR data is empty")
+
+        # 驗證必要列
+        required_columns = ['Product Code', 'Item Description', 'GL#']
+        missing_columns = [
+            col for col in required_columns
+            if col not in df.columns
+        ]
+
+        if missing_columns:
+            raise ValueError(
+                f"Missing required columns: {missing_columns}"
             )
-            
-            return df, date, m
-        else:
-            raise ValueError("Invalid raw PR data format")
+
+        self.logger.info(
+            f"Raw PR data validated: {df.shape}"
+        )
+
+        return df
     
     async def _cleanup_resources(self):
         """

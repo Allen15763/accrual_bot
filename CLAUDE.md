@@ -630,11 +630,10 @@ class MyEntityDataLoadingStep(BaseLoadingStep):
     def get_required_file_type(self) -> str:
         return 'po_file'  # or 'pr_file'
 
-    async def _load_primary_file(self, source, path: str) -> Tuple[pd.DataFrame, int, int]:
+    async def _load_primary_file(self, source, path: str) -> pd.DataFrame:
         # Load entity-specific primary file
         df = await source.read()
-        raw_rows, filtered_rows = len(df), len(df)
-        return df, raw_rows, filtered_rows
+        return df
 
     async def _load_reference_data(self, context) -> int:
         # Load entity-specific reference data into context
@@ -921,6 +920,15 @@ The codebase underwent significant refactoring to improve code quality and maint
 - **Changes**: Removed `accrual_bot/utils/duckdb_manager/` (18 files) and `accrual_bot/utils/metadata_builder/` (13 files) from the project; cleaned `utils/__init__.py` re-exports; removed corresponding test directories (51 tests moved to standalone repos)
 - **Installation** (if needed): `pip install "seafin-duckdb-manager @ git+https://github.com/Allen15763/seafin-duckdb-manager.git@v2.1.0"` / `pip install "seafin-metadata-builder @ git+https://github.com/Allen15763/seafin-metadata-builder.git@v1.0.0"`
 - **Impact**: Test count reduced from 830 → 779; no business logic tests affected
+
+### Phase 14: Unified processing_date Source (2026-03-27)
+- **Problem**: `processing_date` had two unsynchronized propagation paths — `context.metadata.processing_date` (set at ProcessingContext creation from UI/CLI) vs `context.variables['processing_date']` (set by loading steps from filename regex `(\d{6})`). If filename lacked YYYYMM, variable would fallback to `datetime.now()`, diverging from user intent.
+- **Solution**: Unified to `context.metadata.processing_date` as single source of truth. CLI uses `run_config.toml`; UI uses user-selected date. Filenames with or without YYYYMM no longer affect task execution.
+- **API change**: `_load_primary_file()` and `_extract_primary_data()` return type simplified from `Tuple[pd.DataFrame, int, int]` to `pd.DataFrame` — date/month no longer part of the loading API
+- **Loading steps** (`base_loading.py`, `spt_loading.py`, `sct_loading.py`, `spt_procurement_loading.py`, `spx_loading.py`, `spt_combined_procurement_loading.py`): Removed filename date extraction from main flow; `_extract_date_from_filename()` marked deprecated but kept for backward compat
+- **Consumer steps** (~11 files): Changed from `context.get_variable('processing_date')` to `context.metadata.processing_date`; `validate_input()` checks unified to `if not processing_date:` (catches both `None` and `0`)
+- **Backward compat**: Variables `processing_date` and `processing_month` still set in loading steps (values sourced from metadata) for any code reading them
+- **Impact**: ~21 files modified; test suite 777 passed (2 pre-existing failures unchanged)
 
 ### Benefits
 - **Maintainability**: Single source of truth for shared logic reduces bug surface area

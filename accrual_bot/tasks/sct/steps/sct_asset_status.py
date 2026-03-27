@@ -381,7 +381,7 @@ class SCTAssetStatusUpdateStep(PipelineStep):
             return False
 
         processing_date = context.metadata.processing_date
-        if processing_date is None:
+        if not processing_date:
             self.logger.error("缺少處理日期")
             context.add_error("缺少處理日期")
             return False

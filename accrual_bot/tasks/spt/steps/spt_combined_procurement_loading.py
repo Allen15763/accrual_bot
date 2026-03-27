@@ -49,17 +49,19 @@ class CombinedProcurementDataLoadingStep(PipelineStep):
                 'file_date': None
             }
 
+            # 處理日期統一由 context.metadata 提供（UI/CLI 設定）
+            file_date = context.metadata.processing_date
+            load_summary['file_date'] = file_date
+            context.set_variable('file_date', file_date)
+
             # 1. 載入 PO 資料
             if 'raw_po' in self.file_paths:
                 self.logger.info("Loading raw PO data...")
-                po_result = await self._load_po_data()
-                if po_result:
-                    po_df, file_date = po_result
+                po_df = await self._load_po_data()
+                if po_df is not None:
                     context.set_auxiliary_data('po_data', po_df)
                     load_summary['po_loaded'] = True
                     load_summary['po_rows'] = len(po_df)
-                    load_summary['file_date'] = file_date
-                    context.set_variable('file_date', file_date)
                     self.logger.info(f"✓ Loaded PO data: {len(po_df)} rows")
                 else:
                     self.logger.warning("✗ Failed to load PO data")
@@ -69,15 +71,11 @@ class CombinedProcurementDataLoadingStep(PipelineStep):
             # 2. 載入 PR 資料
             if 'raw_pr' in self.file_paths:
                 self.logger.info("Loading raw PR data...")
-                pr_result = await self._load_pr_data()
-                if pr_result:
-                    pr_df, file_date = pr_result
+                pr_df = await self._load_pr_data()
+                if pr_df is not None:
                     context.set_auxiliary_data('pr_data', pr_df)
                     load_summary['pr_loaded'] = True
                     load_summary['pr_rows'] = len(pr_df)
-                    if load_summary['file_date'] is None:
-                        load_summary['file_date'] = file_date
-                        context.set_variable('file_date', file_date)
                     self.logger.info(f"✓ Loaded PR data: {len(pr_df)} rows")
                 else:
                     self.logger.warning("✗ Failed to load PR data")
@@ -138,7 +136,7 @@ class CombinedProcurementDataLoadingStep(PipelineStep):
                 message=str(e)
             )
 
-    async def _load_po_data(self) -> Tuple[pd.DataFrame, int]:
+    async def _load_po_data(self) -> pd.DataFrame:
         """載入 PO 資料"""
         try:
             file_config = self.file_paths['raw_po']
@@ -153,16 +151,13 @@ class CombinedProcurementDataLoadingStep(PipelineStep):
             source = await DataSourceFactory.create_source(file_path, **params)
             df = await source.read()
 
-            # 從檔名提取日期
-            file_date = self._extract_date_from_filename(file_path)
-
-            return df, file_date
+            return df
 
         except Exception as e:
             self.logger.error(f"Failed to load PO data: {str(e)}")
             return None
 
-    async def _load_pr_data(self) -> Tuple[pd.DataFrame, int]:
+    async def _load_pr_data(self) -> pd.DataFrame:
         """載入 PR 資料"""
         try:
             file_config = self.file_paths['raw_pr']
@@ -177,10 +172,7 @@ class CombinedProcurementDataLoadingStep(PipelineStep):
             source = await DataSourceFactory.create_source(file_path, **params)
             df = await source.read()
 
-            # 從檔名提取日期
-            file_date = self._extract_date_from_filename(file_path)
-
-            return df, file_date
+            return df
 
         except Exception as e:
             self.logger.error(f"Failed to load PR data: {str(e)}")
@@ -237,6 +229,10 @@ class CombinedProcurementDataLoadingStep(PipelineStep):
     def _extract_date_from_filename(self, file_path: str) -> int:
         """
         從檔名提取日期 (YYYYMM)
+
+        .. deprecated::
+            不再用於主流程。processing_date 改由 context.metadata.processing_date 提供。
+            保留此方法僅供向後兼容。
 
         Args:
             file_path: 檔案路徑

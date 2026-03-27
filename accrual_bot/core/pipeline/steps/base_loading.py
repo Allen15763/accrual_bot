@@ -9,7 +9,7 @@ Usage:
         def get_required_file_type(self) -> str:
             return 'raw_po'
 
-        async def _load_primary_file(self, source, file_path) -> Tuple[pd.DataFrame, int, int]:
+        async def _load_primary_file(self, source, file_path) -> pd.DataFrame:
             # SPT specific loading logic
             ...
 """
@@ -153,7 +153,11 @@ class BaseLoadingStep(PipelineStep):
             if required_file_type not in loaded_data:
                 raise ValueError(f"Failed to load {required_file_type} data")
 
-            df, date, m = self._extract_primary_data(loaded_data[required_file_type])
+            df = self._extract_primary_data(loaded_data[required_file_type])
+
+            # 從 metadata 取得處理日期（單一來源：UI 使用者選擇 / CLI run_config.toml）
+            date = context.metadata.processing_date
+            m = date % 100
 
             # 更新 Context 主數據
             context.update_data(df)
@@ -265,7 +269,7 @@ class BaseLoadingStep(PipelineStep):
         self,
         file_type: str,
         config: Dict[str, Any]
-    ) -> Union[pd.DataFrame, Tuple[pd.DataFrame, int, int], None]:
+    ) -> Union[pd.DataFrame, None]:
         """
         載入單個文件（支援參數配置）
 
@@ -274,7 +278,7 @@ class BaseLoadingStep(PipelineStep):
             config: 文件配置 {'path': '...', 'params': {...}}
 
         Returns:
-            Union[pd.DataFrame, Tuple, None]: 載入的數據
+            Union[pd.DataFrame, None]: 載入的數據
         """
         try:
             file_path = config['path']
@@ -428,6 +432,11 @@ class BaseLoadingStep(PipelineStep):
         """
         從文件名提取日期信息
 
+        .. deprecated::
+            不再用於主流程。processing_date 改由 context.metadata.processing_date 提供
+            （來源：UI 使用者選擇 / CLI run_config.toml）。
+            保留此方法僅供向後兼容，請勿在新代碼中使用。
+
         Args:
             file_path: 文件路徑
 
@@ -504,7 +513,7 @@ class BaseLoadingStep(PipelineStep):
         self,
         source,
         file_path: str
-    ) -> Tuple[pd.DataFrame, int, int]:
+    ) -> pd.DataFrame:
         """
         載入主要數據文件
 
@@ -513,15 +522,15 @@ class BaseLoadingStep(PipelineStep):
             file_path: 文件路徑
 
         Returns:
-            Tuple[pd.DataFrame, int, int]: (DataFrame, date, month)
+            pd.DataFrame: 載入的主要數據
         """
         pass
 
     @abstractmethod
     def _extract_primary_data(
         self,
-        primary_result: Tuple[pd.DataFrame, int, int]
-    ) -> Tuple[pd.DataFrame, int, int]:
+        primary_result: pd.DataFrame
+    ) -> pd.DataFrame:
         """
         提取和驗證主數據
 
@@ -529,7 +538,7 @@ class BaseLoadingStep(PipelineStep):
             primary_result: 主數據載入結果
 
         Returns:
-            Tuple[pd.DataFrame, int, int]: 驗證後的數據
+            pd.DataFrame: 驗證後的數據
         """
         pass
 

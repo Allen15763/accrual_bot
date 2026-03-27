@@ -157,10 +157,9 @@ class TestSPTDataLoadingExtractRawPO:
             'Item Description': ['Test'],
             'GL#': ['100000'],
         })
-        result = step._extract_primary_data((df, 202512, 12))
-        assert len(result) == 3
-        assert result[1] == 202512
-        assert result[2] == 12
+        result = step._extract_primary_data(df)
+        assert isinstance(result, pd.DataFrame)
+        assert len(result) == 1
 
     @patch('accrual_bot.tasks.spt.steps.spt_loading.config_manager')
     def test_extract_raw_po_data_empty_raises(self, mock_cm):
@@ -168,7 +167,7 @@ class TestSPTDataLoadingExtractRawPO:
         from accrual_bot.tasks.spt.steps.spt_loading import SPTDataLoadingStep
         step = SPTDataLoadingStep()
         with pytest.raises(ValueError, match="Raw raw_po data is empty"):
-            step._extract_primary_data((pd.DataFrame(), 202512, 12))
+            step._extract_primary_data(pd.DataFrame())
 
     @patch('accrual_bot.tasks.spt.steps.spt_loading.config_manager')
     def test_extract_raw_po_data_missing_columns_raises(self, mock_cm):
@@ -177,15 +176,15 @@ class TestSPTDataLoadingExtractRawPO:
         step = SPTDataLoadingStep()
         df = pd.DataFrame({'SomeColumn': [1, 2]})
         with pytest.raises(ValueError, match="Missing required columns"):
-            step._extract_primary_data((df, 202512, 12))
+            step._extract_primary_data(df)
 
     @patch('accrual_bot.tasks.spt.steps.spt_loading.config_manager')
     def test_extract_raw_po_data_invalid_format_raises(self, mock_cm):
-        """測試無效的數據格式應拋出 ValueError"""
+        """測試無效的數據格式（非 DataFrame）應拋出 ValueError"""
         from accrual_bot.tasks.spt.steps.spt_loading import SPTDataLoadingStep
         step = SPTDataLoadingStep()
-        with pytest.raises(ValueError, match="Invalid raw_po data format"):
-            step._extract_primary_data("not_a_tuple")
+        with pytest.raises(ValueError, match="Raw raw_po data is empty"):
+            step._extract_primary_data("not_a_dataframe")
 
 
 # ============================================================
@@ -275,9 +274,9 @@ class TestSPTPRDataLoadingExtractRawPR:
             'Item Description': ['Test PR'],
             'GL#': ['200000'],
         })
-        result = step._extract_primary_data((df, 202512, 12))
-        assert len(result) == 3
-        assert result[1] == 202512
+        result = step._extract_primary_data(df)
+        assert isinstance(result, pd.DataFrame)
+        assert len(result) == 1
 
     @patch('accrual_bot.tasks.spt.steps.spt_loading.config_manager')
     def test_extract_raw_pr_data_empty_raises(self, mock_cm):
@@ -285,7 +284,7 @@ class TestSPTPRDataLoadingExtractRawPR:
         from accrual_bot.tasks.spt.steps.spt_loading import SPTPRDataLoadingStep
         step = SPTPRDataLoadingStep()
         with pytest.raises(ValueError, match="Raw raw_pr data is empty"):
-            step._extract_primary_data((pd.DataFrame(), 202512, 12))
+            step._extract_primary_data(pd.DataFrame())
 
     @patch('accrual_bot.tasks.spt.steps.spt_loading.config_manager')
     def test_validate_file_configs_missing_raw_pr_raises(self, mock_cm, tmp_path):

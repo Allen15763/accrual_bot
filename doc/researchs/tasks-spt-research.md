@@ -528,7 +528,7 @@ finally:
 - 沒有 `_load_ap_invoice()` 的特殊處理分支
 - 日誌訊息中的 PO/PR 字樣
 
-這是一個**嚴重的 DRY 違反**，兩個類別合計大約 900 行，但實際差異不超過 50 行。如果兩個類別都繼承 `BaseLoadingStep`，只需各自實作 `get_required_file_type()`、`_load_primary_file()` 和 `_load_reference_data()` 三個抽象方法，程式碼量可以縮減至約 200 行。
+~~這是一個**嚴重的 DRY 違反**，兩個類別合計大約 900 行，但實際差異不超過 50 行。~~ ✅ **已修復（2026-03-17）**：引入 `SPTBaseDataLoadingStep(BaseLoadingStep)`，子類只需宣告 `get_required_file_type()`，檔案從 1164 行縮減至約 200 行。
 
 #### 4.3.3 SPTProcurementDataLoadingStep / SPTProcurementPRDataLoadingStep
 
@@ -539,18 +539,19 @@ class SPTProcurementDataLoadingStep(BaseLoadingStep):
     def get_required_file_type(self) -> str:
         return 'raw_po'
 
-    async def _load_primary_file(self, source, path: str) -> Tuple[pd.DataFrame, int, int]:
+    async def _load_primary_file(self, source, path: str) -> pd.DataFrame:
         df = await source.read()
-        date, month = self._extract_date_from_filename(path)
-        return df, date, month
+        return df
 
-    def _extract_primary_data(self, primary_result) -> Tuple[pd.DataFrame, int, int]:
+    def _extract_primary_data(self, primary_result: pd.DataFrame) -> pd.DataFrame:
         return primary_result
 
     async def _load_reference_data(self, context: ProcessingContext) -> int:
         # 暫時棄用：實際透過 file_configs 的自動載入完成
         return 0
 ```
+
+> **Note**: `_load_primary_file()` 回傳型別已從 `Tuple[pd.DataFrame, int, int]` 簡化為 `pd.DataFrame`。processing_date 統一由 `context.metadata.processing_date` 提供，不再從檔名擷取。`_extract_date_from_filename()` 仍保留於 `BaseLoadingStep` 但已廢棄。
 
 這裡出現了一個有趣的現象：`_load_reference_data()` 方法體全部被注解掉，原因是採購前期底稿的路徑已經包含在 `file_configs` 字典中，`BaseLoadingStep` 的 `_load_all_files_concurrent()` 會自動載入所有在 `file_configs` 中的檔案，不需要在 `_load_reference_data()` 中額外處理。
 
@@ -1311,14 +1312,17 @@ if result.status == StepStatus.FAILED:
 
 當子步驟失敗時，方法返回 `None`，而不是拋出異常或傳遞 FAILED 狀態。父步驟（`CombinedProcurementProcessingStep`）在收到 `None` 時會記錄警告，但仍繼續執行另一個類型（PO 失敗時仍嘗試 PR）。這種設計允許 PO 和 PR 其中一個失敗時，另一個仍能完成，但也意味著失敗資訊的傳遞不夠清晰。
 
-**缺少前期底稿的 `processing_date` 傳遞**
+**~~缺少前期底稿的 `processing_date` 傳遞~~** ✅ 已修復（2026-03-17）
 
 ```python
 file_date = parent_context.metadata.processing_date
+sub_context.metadata.entity_type = parent_context.metadata.entity_type
+sub_context.metadata.processing_type = 'PO'  # 或 'PR'
+sub_context.metadata.processing_date = file_date
 sub_context.set_variable('file_date', file_date)
 ```
 
-注意：sub_context 的 `metadata.processing_date` 沒有被設置，只有透過 `set_variable('file_date', ...)` 傳遞。`SPTProcurementStatusEvaluationStep` 使用 `context.metadata.processing_date`，但 sub_context 的 metadata 可能為預設值（0 或 None），可能導致狀態判斷錯誤。這是一個潛在的 bug，需要確認 `SPTProcurementStatusEvaluationStep` 實際上從哪裡取得 `file_date`。
+~~注意：sub_context 的 `metadata.processing_date` 沒有被設置，只有透過 `set_variable('file_date', ...)` 傳遞。~~ 已修復：`entity_type`、`processing_type`、`processing_date` 三個 metadata 欄位均完整從 parent_context 傳播至 sub_context。
 
 #### 4.11.3 CombinedProcurementExportStep（COMBINED 匯出）
 

@@ -433,9 +433,9 @@ class TestSPTERMValidateInput:
 
         ctx = ProcessingContext(
             data=spt_erm_df, entity_type='SPT',
-            processing_date=202512, processing_type='PO'
+            processing_date=0, processing_type='PO'
         )
-        # 不設置 processing_date 變數
+        # processing_date=0 模擬未設定處理日期（metadata 為單一來源）
         ctx.add_auxiliary_data('reference_account', pd.DataFrame())
         ctx.add_auxiliary_data('reference_liability', pd.DataFrame())
 

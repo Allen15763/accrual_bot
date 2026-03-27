@@ -588,7 +588,7 @@ class SPXERMLogicStep(PipelineStep):
         start_time = time.time()
         try:
             df = context.data.copy()
-            processing_date = context.get_variable('processing_date')
+            processing_date = context.metadata.processing_date
             
             # 獲取參考數據
             ref_account = context.get_auxiliary_data('reference_account')
@@ -1067,8 +1067,8 @@ class SPXERMLogicStep(PipelineStep):
             return False
         
         # 檢查處理日期
-        processing_date = context.get_variable('processing_date')
-        if processing_date is None:
+        processing_date = context.metadata.processing_date
+        if not processing_date:
             self.logger.error("缺少處理日期")
             context.add_error("缺少處理日期")
             return False

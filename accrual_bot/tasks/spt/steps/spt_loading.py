@@ -4,8 +4,9 @@ SPT Data Loading Steps
 SPT PO 和 PR 數據載入步驟，基於 BaseLoadingStep 模板方法模式。
 消除了原 SPTDataLoadingStep 與 SPTPRDataLoadingStep 之間的約 600 行重複程式碼（原 1164 行）。
 
-共用邏輯（Line#/GL#/Project Number 欄位處理、並發載入、日期提取、參考資料載入）
+共用邏輯（Line#/GL#/Project Number 欄位處理、並發載入、參考資料載入）
 全部集中於 SPTBaseDataLoadingStep，子類只需宣告 get_required_file_type()。
+processing_date 由 context.metadata.processing_date 提供（UI/CLI），不從檔名擷取。
 """
 
 from abc import abstractmethod
@@ -43,32 +44,28 @@ class SPTBaseDataLoadingStep(BaseLoadingStep):
         self,
         source,
         file_path: str
-    ) -> Tuple[pd.DataFrame, int, int]:
+    ) -> pd.DataFrame:
         """
-        載入主要數據文件並提取日期。
+        載入主要數據文件。
 
         使用 BaseLoadingStep._process_common_columns() 統一處理
         Line#、GL#、Project Number → Project 欄位轉換。
+        processing_date 由 context.metadata 提供，不從檔名擷取。
         """
         df = await source.read()
         df = self._process_common_columns(df)
         self.logger.debug(
             f"成功導入{self.get_required_file_type().upper()}數據, 數據維度: {df.shape}"
         )
-        date, m = self._extract_date_from_filename(file_path)
-        return df, date, m
+        return df
 
     def _extract_primary_data(
         self,
-        primary_result: Tuple[pd.DataFrame, int, int]
-    ) -> Tuple[pd.DataFrame, int, int]:
-        """驗證並提取主數據（格式、非空、必要欄位）"""
-        if not (isinstance(primary_result, tuple) and len(primary_result) == 3):
-            raise ValueError(
-                f"Invalid {self.get_required_file_type()} data format"
-            )
-        df, date, m = primary_result
-        if df is None or df.empty:
+        primary_result: pd.DataFrame
+    ) -> pd.DataFrame:
+        """驗證主數據（非空、必要欄位）"""
+        df = primary_result
+        if df is None or not isinstance(df, pd.DataFrame) or df.empty:
             raise ValueError(
                 f"Raw {self.get_required_file_type()} data is empty"
             )
@@ -77,10 +74,9 @@ class SPTBaseDataLoadingStep(BaseLoadingStep):
         if missing:
             raise ValueError(f"Missing required columns: {missing}")
         self.logger.info(
-            f"Raw {self.get_required_file_type()} data validated: "
-            f"{df.shape}, date={date}, month={m}"
+            f"Raw {self.get_required_file_type()} data validated: {df.shape}"
         )
-        return df, date, m
+        return df
 
     async def _load_reference_data(self, context: ProcessingContext) -> int:
         """

@@ -1349,7 +1349,6 @@ class MyBusinessStep(PipelineStep):
 ```python
 from src.core.pipeline.steps.base_loading import BaseLoadingStep
 from seafin_metadata_builder import MetadataBuilder, SchemaConfig, ColumnSpec
-from typing import Tuple
 import pandas as pd
 
 class MyEntityLoadingStep(BaseLoadingStep):
@@ -1358,14 +1357,14 @@ class MyEntityLoadingStep(BaseLoadingStep):
     def get_required_file_type(self) -> str:
         return 'raw_data'  # 對應 paths.toml 的 key
 
-    async def _load_primary_file(self, source, path: str) -> Tuple[pd.DataFrame, int, int]:
+    async def _load_primary_file(self, source, path: str) -> pd.DataFrame:
         builder = MetadataBuilder()
         schema = SchemaConfig(columns=[
             ColumnSpec(source='日期',  target='date',   dtype='DATE', required=True),
             ColumnSpec(source='.*金額.*', target='amount', dtype='DECIMAL'),
         ])
         df = builder.build(path, schema, header_row=1)
-        return df, len(df), len(df)
+        return df
 
     async def _load_reference_data(self, context) -> int:
         try:

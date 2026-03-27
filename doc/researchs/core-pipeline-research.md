@@ -655,18 +655,16 @@ class MyDataLoadingStep(BaseLoadingStep):
 
     async def _load_primary_file(
         self, source, file_path: str
-    ) -> Tuple[pd.DataFrame, int, int]:
-        """載入主要 PO 檔案，並返回 (DataFrame, YYYYMM, month)"""
+    ) -> pd.DataFrame:
+        """載入主要 PO 檔案，返回 DataFrame"""
         df = await source.read(sheet_name='PO Data', header=1)
         df = self._process_common_columns(df)   # 處理 Line#、GL# 等通用欄位
-        date, m = self._extract_date_from_filename(file_path)
-        return df, date, m
+        return df
 
-    def _extract_primary_data(self, primary_result):
+    def _extract_primary_data(self, primary_result: pd.DataFrame) -> pd.DataFrame:
         """驗證並提取主數據"""
-        df, date, m = primary_result
-        assert '產品代碼' in df.columns, "缺少必要欄位：產品代碼"
-        return df, date, m
+        assert '產品代碼' in primary_result.columns, "缺少必要欄位：產品代碼"
+        return primary_result
 
     async def _load_reference_data(self, context: ProcessingContext) -> int:
         """載入科目對照表"""
@@ -1144,7 +1142,7 @@ checkpoints/
 │   ├── data.parquet (或 data.pkl)
 │   ├── checkpoint_info.json
 │   │   ├── step_name, entity_type, processing_date, processing_type
-│   │   ├── variables: {processing_date: 202509, file_paths: {...}}
+│   │   ├── variables: {file_paths: {...}}
 │   │   ├── warnings: [], errors: []
 │   │   ├── data_shape: [1500, 45]
 │   │   └── timestamp: "20260309_143022"

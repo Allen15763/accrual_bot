@@ -392,10 +392,14 @@ class BaseLoadingStep(PipelineStep, BaseDataImporter):
 
 # tasks/spt/steps/spt_loading.py
 class SPTDataLoadingStep(BaseLoadingStep):
-    async def _load_primary_file(self, source, path: str):
+    async def _load_primary_file(self, source, path: str) -> pd.DataFrame:
         df = self.import_file(path, sheet_name=0)  # 使用繼承來的方法
-        return df, len(df), len(df)
+        return df  # 回傳 DataFrame（不再回傳 Tuple）
 ```
+
+> **注意**：`_load_primary_file()` 的回傳型別已從 `Tuple[pd.DataFrame, int, int]` 簡化為 `pd.DataFrame`。
+> 此外，載入步驟不再從檔名提取日期——`processing_date` 統一由 `context.metadata.processing_date` 提供
+> （來源：UI 使用者選擇 / CLI `run_config.toml`）。`BaseLoadingStep._extract_date_from_filename()` 已標記為 deprecated，保留僅供向後兼容。
 
 ### 5.7 繼承 `BaseDataImporter` 建立自訂導入器
 
