@@ -325,11 +325,11 @@ __all__ = ["SPTPipelineOrchestrator"]
 
 模組的公開 API 只有一個類別：`SPTPipelineOrchestrator`。這是刻意為之的最小化設計——外部呼叫者不需要知道 SPT 內部有哪些步驟，只需要透過 Orchestrator 建立 Pipeline 即可。
 
-**`steps/__init__.py`（59 行）**
+**`steps/__init__.py`（56 行）**
 
-步驟子模組的 `__all__` 匯出了 23 個符號，包含所有步驟類別和一個 dataclass（`AccountPredictionConditions`）。這個 `__all__` 的存在主要是為了讓 `pipeline_orchestrator.py` 可以用整潔的 import 語法一次匯入所有步驟，而不是在 orchestrator 中到處散落各種獨立 import。
+步驟子模組的 `__all__` 匯出了 25 個符號，包含所有步驟類別和一個 dataclass（`AccountPredictionConditions`）。這個 `__all__` 的存在主要是為了讓 `pipeline_orchestrator.py` 可以用整潔的 import 語法一次匯入所有步驟，而不是在 orchestrator 中到處散落各種獨立 import。
 
-值得注意的是，四個孤兒步驟（`SPTStatusStep`、`SPTDepartmentStep`、`SPTAccrualStep`、`SPTValidationStep`）也被包含在 `__all__` 中，雖然它們並未被 Orchestrator 使用。
+> **更新（2026-03-17）**：四個孤兒步驟（`SPTStatusStep`、`SPTDepartmentStep`、`SPTAccrualStep`、`SPTValidationStep`）已從 `__all__` 移除，僅保留 deprecation docstring。
 
 ### 4.2 SPTPipelineOrchestrator 詳解
 

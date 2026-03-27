@@ -1,9 +1,16 @@
 # DuckDB Manager 模組深度研究文件
 
+> **⚠️ 注意：此模組已於 2026-03-27 提取為獨立 GitHub 套件**
+> - **套件名稱**: `seafin-duckdb-manager` v2.1.0
+> - **GitHub**: https://github.com/Allen15763/seafin-duckdb-manager
+> - **安裝**: `pip install "seafin-duckdb-manager @ git+https://github.com/Allen15763/seafin-duckdb-manager.git@v2.1.0"`
+> - **Import**: `from seafin_duckdb_manager import DuckDBManager, DuckDBConfig`
+> - 本文件為歷史研究文件，保留作為架構與設計參考。文中路徑 `accrual_bot/utils/duckdb_manager/` 已不存在於主專案中。
+
 > **版本**: 基於 duckdb_manager v2.1.0（Bug 修復記錄更新至 2026-03-14）
 > **研究日期**: 2026-03-13
 > **最後更新**: 2026-03-14（記錄四個 Bug 修復：§6.2.1、§6.2.2、§6.2.3、§6.2.6）
-> **研究範圍**: `accrual_bot/utils/duckdb_manager/` 所有 15 個 Python 檔案
+> **原始研究範圍**: `accrual_bot/utils/duckdb_manager/` 所有 15 個 Python 檔案
 
 ---
 

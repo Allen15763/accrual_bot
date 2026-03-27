@@ -42,7 +42,7 @@
 
 ### 1.4 配置文件生態系
 
-ConfigManager 管理的配置文件共 5 個：
+ConfigManager 管理的配置文件共 6 個：
 
 ```
 accrual_bot/config/
@@ -50,6 +50,7 @@ accrual_bot/config/
 ├── stagging.toml        ← TOML；共用業務規則（~430 行）：general, date_patterns, category_patterns
 ├── stagging_spt.toml    ← TOML；SPT 專屬：[pipeline.spt], [spt], [spt_status_label_rules], ...
 ├── stagging_spx.toml    ← TOML；SPX 專屬：[pipeline.spx], [spx], [spx_column_defaults], ...
+├── stagging_sct.toml    ← TOML；SCT 專屬：[pipeline.sct], [sct], [sct_erm_status_rules], ...（Phase 12 新增）
 └── paths.toml           ← TOML；檔案路徑與讀取參數（由 get_paths_config() 存取）
 ```
 

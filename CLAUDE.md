@@ -295,7 +295,7 @@ service = UnifiedPipelineService()
 
 # Query available entities and types
 entities = service.get_available_entities()      # ['SPT', 'SPX', 'SCT']
-types = service.get_entity_types('SPX')          # ['PO', 'PR', 'PPE']
+types = service.get_entity_types('SPX')          # ['PO', 'PR', 'PPE', 'PPE_DESC']
 steps = service.get_enabled_steps('SPX', 'PO')   # ['SPXDataLoading', ...]
 
 # Build and execute pipeline
@@ -740,6 +740,8 @@ accrual_bot/
 │   │   ├── pipeline.py         # Pipeline class
 │   │   ├── context.py          # ProcessingContext class
 │   │   ├── checkpoint.py       # CheckpointManager
+│   │   ├── engines/
+│   │   │   └── condition_engine.py  # Config-driven condition engine (SPX/SCT)
 │   │   └── steps/
 │   │       ├── base_loading.py     # BaseLoadingStep (~593 lines)
 │   │       ├── base_evaluation.py  # BaseERMEvaluationStep (~518 lines)
@@ -792,6 +794,10 @@ accrual_bot/
     │   ├── data_utils.py       # TOML loading, regex patterns
     │   └── file_utils.py       # File validation, copy, hash
     └── logging/logger.py       # Unified logging
+
+# Note: duckdb_manager/ and metadata_builder/ were extracted to standalone packages
+# → seafin-duckdb-manager (github.com/Allen15763/seafin-duckdb-manager)
+# → seafin-metadata-builder (github.com/Allen15763/seafin-metadata-builder)
 
 # Project root
 ├── main_pipeline.py            # CLI entry point

@@ -1146,8 +1146,8 @@ PipelineStep (ABC)
 │   ├── SPTERMLogicStep              # tasks/spt/steps/spt_evaluation_erm.py
 │   ├── SPXERMLogicStep              # tasks/spx/steps/spx_evaluation.py
 │   ├── SPXPRERMLogicStep            # tasks/spx/steps/spx_pr_evaluation.py
-│   ├── SCTERMLogicStep              # tasks/sct/steps/sct_evaluation_erm.py
-│   ├── SCTPRERMLogicStep            # tasks/sct/steps/sct_pr_evaluation_erm.py
+│   ├── SCTERMLogicStep              # tasks/sct/steps/sct_evaluation.py
+│   ├── SCTPRERMLogicStep            # tasks/sct/steps/sct_pr_evaluation.py
 │   └── SPTProcurementStatusEvaluationStep  # tasks/spt/steps/spt_procurement_evaluation.py
 │
 └── （直接繼承的共用步驟）

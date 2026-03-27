@@ -1,6 +1,13 @@
 # utils/metadata_builder 深度研究文件
 
-> 研究範圍：`accrual_bot/utils/metadata_builder/`（13 個 Python 檔案，含 README.md）
+> **⚠️ 注意：此模組已於 2026-03-27 提取為獨立 GitHub 套件**
+> - **套件名稱**: `seafin-metadata-builder` v1.0.0
+> - **GitHub**: https://github.com/Allen15763/seafin-metadata-builder
+> - **安裝**: `pip install "seafin-metadata-builder @ git+https://github.com/Allen15763/seafin-metadata-builder.git@v1.0.0"`
+> - **Import**: `from seafin_metadata_builder import MetadataBuilder, SchemaConfig, ColumnSpec, SourceSpec`
+> - 本文件為歷史研究文件，保留作為架構與設計參考。文中路徑 `accrual_bot/utils/metadata_builder/` 已不存在於主專案中。
+
+> 原始研究範圍：`accrual_bot/utils/metadata_builder/`（13 個 Python 檔案，含 README.md）
 > 研究時間：2026-03-12
 > 研究目的：軟體工程最佳實踐角度的深度分析
 

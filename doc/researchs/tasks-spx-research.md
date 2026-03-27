@@ -48,22 +48,22 @@ SPX 業務特有的複雜性包括：
 ```
 accrual_bot/tasks/spx/
 ├── __init__.py                   (7 行)   - 模組初始化，導出 SPXPipelineOrchestrator
-├── pipeline_orchestrator.py      (427 行) - Pipeline 組裝與步驟工廠
+├── pipeline_orchestrator.py      (434 行) - Pipeline 組裝與步驟工廠
 └── steps/
-    ├── __init__.py               (87 行)  - 子模組初始化，32 個符號
-    ├── spx_condition_engine.py   (551 行) - 配置驅動條件引擎（核心）
-    ├── spx_evaluation.py         (1300行) - 第一/第二階段狀態評估 + PPE 步驟
+    ├── __init__.py               (84 行)  - 子模組初始化
+    ├── spx_condition_engine.py   (22 行)  - 向後兼容 re-export（核心邏輯已移至 core/pipeline/engines/condition_engine.py, 560 行）
+    ├── spx_evaluation.py         (1302行) - 第一/第二階段狀態評估 + PPE 步驟
     ├── spx_evaluation_2.py       (415 行) - 訂金 PO 特殊狀態更新
     ├── spx_pr_evaluation.py      (592 行) - PR 專屬 ERM 邏輯
-    ├── spx_integration.py        (1600行) - 資料整合（欄位增補、AP整合、關單、驗收）
-    ├── spx_loading.py            (1300行) - 資料載入（PO/PR/PPE/OPS）
-    ├── spx_exporting.py          (500 行) - 匯出（PO/PR/OPS驗收）
+    ├── spx_integration.py        (1973行) - 資料整合（欄位增補、AP整合、關單、驗收）
+    ├── spx_loading.py            (1877行) - 資料載入（PO/PR/PPE/OPS）
+    ├── spx_exporting.py          (815 行) - 匯出（PO/PR/OPS驗收）
     ├── spx_steps.py              (690 行) - 傳統/實驗性步驟（已不在主流程中使用）
     ├── spx_ppe_desc.py           (659 行) - PPE_DESC 管道 + 純函式業務邏輯
-    └── spx_ppe_qty_validation.py (946 行) - 會計 vs OPS 數量比對驗證
+    └── spx_ppe_qty_validation.py (593 行) - 會計 vs OPS 數量比對驗證
 ```
 
-總計原始碼：約 **8,183 行**，約 **384 KB**
+總計原始碼：約 **8,963 行**（不含 `core/pipeline/engines/condition_engine.py` 的 560 行，該檔案由 `spx_condition_engine.py` re-export）
 
 ---
 
