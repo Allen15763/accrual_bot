@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Accrual Bot is an async data processing system for PO/PR (Purchase Order/Purchase Request) accrual processing. It handles monthly financial data reconciliation for two active business entities: SPT and SPX. The system includes both a command-line pipeline execution mode and a Streamlit-based Web UI.
+Accrual Bot is an async data processing system for PO/PR (Purchase Order/Purchase Request) accrual processing. It handles monthly financial data reconciliation for three active business entities: SPT, SPX, and SCT. The system includes both a command-line pipeline execution mode and a Streamlit-based Web UI.
 
 ## Common Commands
 
@@ -54,7 +54,7 @@ The codebase follows a four-layer architecture pattern:
 │  pages/ → components/ → services/ → Session State           │
 ├─────────────────────────────────────────────────────────────┤
 │                    Tasks Layer (Orchestrators)               │
-│  tasks/spt/ | tasks/spx/ | tasks/common/                     │
+│  tasks/spt/ | tasks/spx/ | tasks/sct/ | tasks/common/        │
 ├─────────────────────────────────────────────────────────────┤
 │                    Core Layer (Framework)                    │
 │  Pipeline | PipelineStep | ProcessingContext | DataSources  │
@@ -79,6 +79,7 @@ The codebase follows a four-layer architecture pattern:
 - **tasks/**: Entity-specific implementations
   - `tasks/spt/`: SPT-specific steps and pipeline orchestrator (PO/PR/PROCUREMENT)
   - `tasks/spx/`: SPX-specific steps and pipeline orchestrator (PO/PR/PPE/PPE_DESC)
+  - `tasks/sct/`: SCT-specific steps and pipeline orchestrator (PO/PR)
   - `tasks/common/`: Shared task steps (DataShapeSummaryStep)
   - Each task module contains entity-specific business logic
 
@@ -109,7 +110,7 @@ DataLoading → Filtering → ColumnAddition → Integration → BusinessLogic �
 
 ### Entity-Specific Processing
 
-Two active entity types with configuration-driven pipeline orchestration (config split into per-entity TOML files):
+Three active entity types with configuration-driven pipeline orchestration (config split into per-entity TOML files):
 
 - **SPT** ([tasks/spt/](accrual_bot/tasks/spt/)):
   - PO Pipeline: SPTDataLoading → ProductFilter → ColumnAddition → APInvoiceIntegration → PreviousWorkpaperIntegration → ProcurementIntegration → CommissionDataUpdate → PayrollDetection → DateLogic → SPTERMLogic → SPTStatusLabel → SPTAccountPrediction → SPTPostProcessing → SPTExport → DataShapeSummary
@@ -126,6 +127,13 @@ Two active entity types with configuration-driven pipeline orchestration (config
   - PPE Pipeline: PPEDataLoading → PPEDataCleaning → PPEDataMerge → PPEContractDateUpdate → PPEMonthDifference
   - PPE_DESC Pipeline: PPEDescDataLoading → DescriptionExtraction → ContractPeriodMapping → PPEDescExport
   - Complex processing: config-driven condition engine (SPXConditionEngine), deposit/rental identification, locker/kiosk asset validation
+
+- **SCT** ([tasks/sct/](accrual_bot/tasks/sct/)):
+  - PO Pipeline: SCTDataLoading → SCTColumnAddition → APInvoiceIntegration → PreviousWorkpaperIntegration → ProcurementIntegration (後續核心邏輯待擴充)
+  - PR Pipeline: SCTPRDataLoading → SCTColumnAddition → PreviousWorkpaperIntegration → ProcurementIntegration (後續核心邏輯待擴充)
+  - Raw data format: xlsx (unlike SPT/SPX which use CSV)
+  - Reference data: `ref_SCTTW.xlsx` for account mapping
+  - SCT-specific ColumnAdditionStep (same as SPX but without 累計至本期驗收數量/金額)
 
 Pipeline steps can be enabled/disabled via configuration in TOML files:
 ```toml
@@ -149,6 +157,14 @@ enabled_po_steps = ["SPXDataLoading", "ProductFilter", "ColumnAddition",
     "ValidationDataProcessing", "DepositStatusUpdate", "DataReformatting",
     "SPXExport", "DataShapeSummary"]
 enabled_pr_steps = ["SPXPRDataLoading", "ProductFilter", "ColumnAddition", ...]
+
+# config/stagging_sct.toml
+[pipeline.sct]
+enabled_po_steps = ["SCTDataLoading", "SCTColumnAddition",
+    "APInvoiceIntegration", "PreviousWorkpaperIntegration",
+    "ProcurementIntegration"]
+enabled_pr_steps = ["SCTPRDataLoading", "SCTColumnAddition",
+    "PreviousWorkpaperIntegration", "ProcurementIntegration"]
 ```
 
 ### Data Sources (core/datasources/)
@@ -169,7 +185,7 @@ All sources implement the same `DataSource` interface with thread-safe operation
 
 ### Configuration
 
-Six configuration files:
+Seven configuration files:
 
 - **config/config.ini**: Legacy INI configuration (general settings, regex patterns, credentials)
 
@@ -204,6 +220,10 @@ Six configuration files:
   - Supplier lists (bao, kiosk, locker suppliers)
   - SPX condition engine rules (spx_status_stage1_rules, spx_erm_status_rules)
 
+- **config/stagging_sct.toml**: SCT-specific configuration:
+  - Pipeline configuration (enabled steps for PO/PR)
+  - SCT column defaults (sm_accounts)
+
 - **config/run_config.toml**: Runtime configuration for pipeline execution
 
 Configuration is accessed via **thread-safe singleton** `ConfigManager` from `accrual_bot.utils.config`:
@@ -218,7 +238,7 @@ All pipeline modules use the unified `get_logger()` function from `accrual_bot.u
 The UI provides a 5-page guided workflow for pipeline execution:
 
 ```
-Page 1: Configuration    → Select Entity (SPT/SPX), Type (PO/PR/PPE), Date
+Page 1: Configuration    → Select Entity (SPT/SPX/SCT), Type (PO/PR/PPE), Date
 Page 2: File Upload      → Upload required/optional files with validation
 Page 3: Execution        → Run pipeline with progress tracking and logs
 Page 4: Results          → Preview data, download CSV/Excel
@@ -263,7 +283,7 @@ from accrual_bot.ui.services import UnifiedPipelineService
 service = UnifiedPipelineService()
 
 # Query available entities and types
-entities = service.get_available_entities()      # ['SPT', 'SPX']
+entities = service.get_available_entities()      # ['SPT', 'SPX', 'SCT']
 types = service.get_entity_types('SPX')          # ['PO', 'PR', 'PPE']
 steps = service.get_enabled_steps('SPX', 'PO')   # ['SPXDataLoading', ...]
 
@@ -291,6 +311,11 @@ ENTITY_CONFIG = {
         'types': ['PO', 'PR', 'PPE', 'PPE_DESC'],
         'icon': '📦',
     },
+    'SCT': {
+        'display_name': 'SCT',
+        'types': ['PO', 'PR'],
+        'icon': '🏷️',
+    },
 }
 
 # PROCUREMENT sub-types
@@ -302,6 +327,8 @@ REQUIRED_FILES = {
     ('SPX', 'PO'): ['raw_po'],
     ('SPX', 'PPE'): ['contract_filing_list'],
     ('SPX', 'PPE_DESC'): ['workpaper', 'contract_periods'],
+    ('SCT', 'PO'): ['raw_po'],
+    ('SCT', 'PR'): ['raw_pr'],
     ('SPT', 'PROCUREMENT', 'PO'): ['raw_po'],
     ...
 }
@@ -312,6 +339,8 @@ OPTIONAL_FILES = {
                      'procurement_pr', 'media_finished', 'media_left', 'media_summary'],
     ('SPX', 'PO'): ['previous', 'procurement_po', 'ap_invoice', 'previous_pr',
                      'procurement_pr', 'ops_validation'],
+    ('SCT', 'PO'): ['previous', 'procurement_po', 'ap_invoice', 'previous_pr'],
+    ('SCT', 'PR'): ['previous_pr', 'procurement_pr'],
     ('SPT', 'PROCUREMENT', 'PO'): ['procurement_previous', 'media_finished',
                                     'media_left', 'media_summary'],
     ...
@@ -513,6 +542,7 @@ Pipeline orchestrators provide configuration-driven pipeline construction:
 ```python
 from accrual_bot.tasks.spt import SPTPipelineOrchestrator
 from accrual_bot.tasks.spx import SPXPipelineOrchestrator
+from accrual_bot.tasks.sct import SCTPipelineOrchestrator
 
 # Create SPT PO pipeline
 spt_orchestrator = SPTPipelineOrchestrator()
@@ -540,11 +570,15 @@ pipeline = spx_orchestrator.build_ppe_desc_pipeline(
     processing_date=202512
 )
 
+# Create SCT PO pipeline (xlsx input, up to ProcurementIntegration)
+sct_orchestrator = SCTPipelineOrchestrator()
+pipeline = sct_orchestrator.build_po_pipeline(file_paths={'raw_po': 'path/to/po.xlsx'})
+
 # Get enabled steps for a processing type
 enabled_steps = spt_orchestrator.get_enabled_steps('PO')  # Returns list from config
 ```
 
-Steps are loaded based on `[pipeline.spt]` in `stagging_spt.toml` or `[pipeline.spx]` in `stagging_spx.toml`.
+Steps are loaded based on `[pipeline.spt]` in `stagging_spt.toml`, `[pipeline.spx]` in `stagging_spx.toml`, or `[pipeline.sct]` in `stagging_sct.toml`.
 
 ### Creating a New Pipeline (Manual)
 
@@ -664,7 +698,7 @@ Example: Adding 'INV' (Invoice) type to SPX
 
 ### Adding a New Entity
 
-Example: Adding a new entity (e.g. 'NEW')
+Example: Adding a new entity (e.g. 'NEW'). See SCT implementation (`tasks/sct/`) as a real reference.
 
 **Additional files to create:**
 
@@ -680,6 +714,11 @@ Example: Adding a new entity (e.g. 'NEW')
 | # | File | Changes |
 |---|------|---------|
 | 5 | `ui/services/unified_pipeline_service.py` | Register in `_get_orchestrator()` |
+| 6 | `utils/config/config_manager.py` | Add `'stagging_new.toml'` to task TOML loading list (line ~394) |
+| 7 | `ui/config.py` | Add entity to `ENTITY_CONFIG`, `REQUIRED_FILES`, `OPTIONAL_FILES` |
+| 8 | `config/paths.toml` | Add `[new.po]`/`[new.pr]` path and params sections |
+| 9 | `config/config.ini` | Add reference data path (e.g. `ref_path_new`) if needed |
+| 10 | `config/stagging.toml` | Add FA accounts under `[fa_accounts]` |
 
 **For detailed extension guide, see [doc/UI_Architecture.md#14-擴充指南新增-pipeline-類型](doc/UI_Architecture.md)**
 
@@ -713,9 +752,12 @@ accrual_bot/
 │   ├── spt/
 │   │   ├── pipeline_orchestrator.py  # SPTPipelineOrchestrator
 │   │   └── steps/              # PO/PR/PROCUREMENT steps (18 files)
-│   └── spx/
-│       ├── pipeline_orchestrator.py  # SPXPipelineOrchestrator
-│       └── steps/              # PO/PR/PPE/PPE_DESC steps (12 files)
+│   ├── spx/
+│   │   ├── pipeline_orchestrator.py  # SPXPipelineOrchestrator
+│   │   └── steps/              # PO/PR/PPE/PPE_DESC steps (12 files)
+│   └── sct/
+│       ├── pipeline_orchestrator.py  # SCTPipelineOrchestrator
+│       └── steps/              # PO/PR steps (sct_loading, sct_column_addition)
 ├── ui/                         # Streamlit UI
 │   ├── config.py               # UI configuration constants
 │   ├── services/
@@ -728,7 +770,8 @@ accrual_bot/
 │   ├── run_config.toml         # Runtime execution config
 │   ├── stagging.toml           # Shared config (paths, date patterns, category patterns)
 │   ├── stagging_spt.toml       # SPT pipeline steps, pivot config, business rules
-│   └── stagging_spx.toml       # SPX pipeline steps, supplier lists, condition rules
+│   ├── stagging_spx.toml       # SPX pipeline steps, supplier lists, condition rules
+│   └── stagging_sct.toml       # SCT pipeline steps, column defaults
 ├── runner/                     # Pipeline execution (config_loader, step_executor)
 ├── data/                       # Importers (base_importer, google_sheets_importer)
 └── utils/
@@ -765,9 +808,11 @@ accrual_bot/
   - `common/`: Shared task steps (DataShapeSummaryStep)
   - `spt/pipeline_orchestrator.py`: SPT pipeline configuration (PO/PR/PROCUREMENT with PO/PR/COMBINED sub-types)
   - `spx/pipeline_orchestrator.py`: SPX pipeline configuration (PO/PR/PPE/PPE_DESC)
+  - `sct/pipeline_orchestrator.py`: SCT pipeline configuration (PO/PR, up to ProcurementIntegration)
   - `spt/steps/`: SPT-specific steps — loading, ERM, status label, account prediction, procurement, combined procurement
   - `spx/steps/`: SPX-specific steps — loading, condition engine, evaluation, exporting, integration, PPE, PPE_DESC
-- **accrual_bot/config/stagging_spt.toml**, **stagging_spx.toml**: Entity-specific configuration with `[pipeline.spt]` and `[pipeline.spx]` sections for step enablement
+  - `sct/steps/`: SCT-specific steps — loading (xlsx), column addition (without cumulative receipt)
+- **accrual_bot/config/stagging_spt.toml**, **stagging_spx.toml**, **stagging_sct.toml**: Entity-specific configuration with `[pipeline.spt]`, `[pipeline.spx]`, and `[pipeline.sct]` sections for step enablement
 - **checkpoints/**: Saved pipeline states (excluded from git)
 - **output/**: Processed results (excluded from git)
 
@@ -845,6 +890,15 @@ The codebase underwent significant refactoring to improve code quality and maint
 - **Backward-compat functions accept date (Fix 8, P3)**: `run_spx_po_full_pipeline()`, `run_spx_pr_full_pipeline()`, `run_spt_po_full_pipeline()`, `run_spt_pr_full_pipeline()` all accept `processing_date: int = 202512` — callers can now specify a month without editing source code
 - **Result dict alignment (Fix 9, P1)**: Normal execution path adds `result.setdefault("aborted", False)` after `pipeline.execute()`, aligning with `StepByStepExecutor`'s result structure and eliminating `KeyError` for callers that check `result["aborted"]`
 - **Dead branch removed (Fix 10, P3)**: `_convert_params()` `elif key == "keep_default_na"` branch deleted — it was identical to the `else` branch and TOML already parses booleans natively
+
+### Phase 12: SCT Entity Pipeline (2026-03-23)
+- **New entity: SCT** — Third business entity added with PO/PR pipeline support (up to ProcurementIntegration step)
+- **Files created**: `tasks/sct/` module with `SCTPipelineOrchestrator`, `SCTBaseDataLoadingStep` (BaseLoadingStep template), `SCTColumnAdditionStep` (SPX variant without cumulative receipt), `config/stagging_sct.toml`
+- **Key differences from SPT/SPX**: Raw data format is xlsx (not CSV); reference data from `ref_SCTTW.xlsx`; no ProductFilter; SCT-specific ColumnAddition
+- **Reused steps**: `APInvoiceIntegrationStep`, `PreviousWorkpaperIntegrationStep`, `ProcurementIntegrationStep` directly from core/spx
+- **Config updates**: `config_manager.py` loads `stagging_sct.toml`; `paths.toml` has `[sct.po]`/`[sct.pr]` sections; `stagging.toml` has `ref_path_sct` under `[paths]` and `sct` under `[fa_accounts]`
+- **UI integration**: SCT registered in `ENTITY_CONFIG`, `REQUIRED_FILES`, `OPTIONAL_FILES`, and `UnifiedPipelineService._get_orchestrator()`
+- **Pending**: Core business logic (ERM evaluation, status labeling, export) to be implemented in subsequent phases
 
 ### Benefits
 - **Maintainability**: Single source of truth for shared logic reduces bug surface area

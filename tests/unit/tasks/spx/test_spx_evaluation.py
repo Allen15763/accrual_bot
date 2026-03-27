@@ -23,8 +23,8 @@ from accrual_bot.core.pipeline.context import ProcessingContext
 def mock_evaluation_deps():
     """Mock 評估步驟的外部依賴"""
     with patch('accrual_bot.tasks.spx.steps.spx_evaluation.config_manager') as mock_cm, \
-         patch('accrual_bot.tasks.spx.steps.spx_condition_engine.config_manager') as mock_cm_engine, \
-         patch('accrual_bot.tasks.spx.steps.spx_condition_engine.get_logger', return_value=MagicMock()):
+         patch('accrual_bot.core.pipeline.engines.condition_engine.config_manager') as mock_cm_engine, \
+         patch('accrual_bot.core.pipeline.engines.condition_engine.get_logger', return_value=MagicMock()):
         config_toml = {
             'spx_status_stage1_rules': {'conditions': []},
             'spx_erm_status_rules': {'conditions': []},

@@ -22,8 +22,8 @@ from accrual_bot.core.pipeline.base import StepStatus, StepResult
 @pytest.fixture
 def mock_engine_deps():
     """Mock SPXConditionEngine 的外部依賴"""
-    with patch('accrual_bot.tasks.spx.steps.spx_condition_engine.config_manager') as mock_cm, \
-         patch('accrual_bot.tasks.spx.steps.spx_condition_engine.get_logger', return_value=MagicMock()):
+    with patch('accrual_bot.core.pipeline.engines.condition_engine.config_manager') as mock_cm, \
+         patch('accrual_bot.core.pipeline.engines.condition_engine.get_logger', return_value=MagicMock()):
         mock_cm._config_toml = {
             'spx_erm_status_rules': {
                 'conditions': []

@@ -20,6 +20,12 @@ ENTITY_CONFIG: Dict[str, Dict] = {
         'description': 'SPX Platform for opened PR/PO',
         'icon': '📦',
     },
+    'SCT': {
+        'display_name': 'SCT',
+        'types': ['PO', 'PR'],
+        'description': 'SCT Platform for opened PR/PO',
+        'icon': '🏷️',
+    },
 }
 
 # Processing Type 配置
@@ -98,6 +104,9 @@ REQUIRED_FILES: Dict[Tuple, List[str]] = {
     ('SPX', 'PR'): ['raw_pr'],
     ('SPX', 'PPE'): ['contract_filing_list'],
     ('SPX', 'PPE_DESC'): ['workpaper', 'contract_periods'],
+    # SCT
+    ('SCT', 'PO'): ['raw_po'],
+    ('SCT', 'PR'): ['raw_pr'],
     # 3-tuple keys (PROCUREMENT 子類型)
     ('SPT', 'PROCUREMENT', 'PO'): ['raw_po'],
     ('SPT', 'PROCUREMENT', 'PR'): ['raw_pr'],
@@ -138,6 +147,17 @@ OPTIONAL_FILES: Dict[Tuple, List[str]] = {
     ],
     ('SPX', 'PPE'): [],
     ('SPX', 'PPE_DESC'): [],
+    # SCT
+    ('SCT', 'PO'): [
+        'previous',
+        'procurement_po',
+        'ap_invoice',
+        'previous_pr',
+    ],
+    ('SCT', 'PR'): [
+        'previous_pr',
+        'procurement_pr',
+    ],
     # 3-tuple keys (PROCUREMENT 子類型)
     ('SPT', 'PROCUREMENT', 'PO'): [
         'procurement_previous',

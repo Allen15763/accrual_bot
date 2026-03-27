@@ -27,6 +27,7 @@ from accrual_bot.core.pipeline import ProcessingContext
 from accrual_bot.runner import load_run_config, load_file_paths, StepByStepExecutor
 from accrual_bot.tasks.spt import SPTPipelineOrchestrator
 from accrual_bot.tasks.spx import SPXPipelineOrchestrator
+from accrual_bot.tasks.sct import SCTPipelineOrchestrator
 from accrual_bot.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -48,6 +49,7 @@ def get_orchestrator(entity: str):
     orchestrators = {
         "SPT": SPTPipelineOrchestrator,
         "SPX": SPXPipelineOrchestrator,
+        "SCT": SCTPipelineOrchestrator,
         # "MOB": MOBPipelineOrchestrator,  # TODO: 實作 MOB orchestrator
     }
 

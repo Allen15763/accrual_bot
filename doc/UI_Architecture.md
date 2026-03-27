@@ -52,7 +52,7 @@
 
 ### 1.1 專案背景
 
-Accrual Bot UI 是基於 Streamlit 構建的 Web 介面，為複雜的 PO/PR（Purchase Order/Purchase Request）月結處理系統提供用戶友善的操作界面。該系統處理三個業務實體（SPT、SPX、MOB）的財務對帳作業。
+Accrual Bot UI 是基於 Streamlit 構建的 Web 介面，為複雜的 PO/PR（Purchase Order/Purchase Request）月結處理系統提供用戶友善的操作界面。該系統處理三個業務實體（SPT、SPX、SCT）的財務對帳作業。
 
 ### 1.2 設計目標
 
@@ -104,7 +104,7 @@ Export:       Excel (openpyxl, xlsxwriter), CSV
 ├────────────────────────────────┼────────────────────────────────────────────┤
 │                          Backend Layer                                      │
 │  ┌─────────────────────────────┴───────────────────────────────┐           │
-│  │          SPTPipelineOrchestrator | SPXPipelineOrchestrator   │           │
+│  │  SPTPipelineOrchestrator | SPXPipelineOrchestrator | SCTPipelineOrchestrator │
 │  └─────────────────────────────┬───────────────────────────────┘           │
 │                                │                                            │
 │  ┌─────────────────────────────┴───────────────────────────────┐           │
@@ -858,6 +858,12 @@ ENTITY_CONFIG: Dict[str, Dict] = {
         'description': 'SPX Platform 採購/請購單/固定資產處理',
         'icon': '📦',
     },
+    'SCT': {
+        'display_name': 'SCT',
+        'types': ['PO', 'PR'],
+        'description': 'SCT Platform 採購/請購單處理',
+        'icon': '🏷️',
+    },
 }
 
 # 處理類型配置
@@ -929,11 +935,11 @@ SUPPORTED_FILE_FORMATS: Dict[str, List[str]] = {
 │  build_pipeline()                                   │
 └──────────────────────┬──────────────────────────────┘
                        │
-        ┌──────────────┼──────────────┐
-        ▼              ▼              ▼
-┌──────────────┐ ┌──────────────┐ ┌──────────────┐
-│SPTOrchestrator│ │SPXOrchestrator│ │ConfigManager │
-└──────────────┘ └──────────────┘ └──────────────┘
+        ┌──────────────┼──────────────┬──────────────┐
+        ▼              ▼              ▼              ▼
+┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐
+│SPTOrchestrator│ │SPXOrchestrator│ │SCTOrchestrator│ │ConfigManager │
+└──────────────┘ └──────────────┘ └──────────────┘ └──────────────┘
 ```
 
 **優點**:
@@ -1037,7 +1043,7 @@ class ConfigManager:
 
 **流程**:
 ```
-1. 顯示 Entity 按鈕 (SPT / SPX)
+1. 顯示 Entity 按鈕 (SPT / SPX / SCT)
 2. 用戶點選 Entity
    └─ 觸發狀態清除 + rerun
 3. 顯示 Processing Type 按鈕 (PO / PR / PPE)
@@ -1390,7 +1396,7 @@ class UnifiedPipelineService:
         獲取可用的 entity 清單
 
         Returns:
-            ['SPT', 'SPX']
+            ['SPT', 'SPX', 'SCT']
         """
 
     def get_entity_config(self, entity: str) -> Dict[str, Any]:
@@ -1435,7 +1441,7 @@ class UnifiedPipelineService:
         構建 Pipeline
 
         Args:
-            entity: 'SPT' or 'SPX'
+            entity: 'SPT', 'SPX', or 'SCT'
             proc_type: 'PO', 'PR', or 'PPE'
             file_paths: {file_key: path} 字典
             processing_date: YYYYMM (PPE 必填)

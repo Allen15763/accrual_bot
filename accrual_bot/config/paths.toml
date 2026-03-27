@@ -138,6 +138,38 @@ procurement_previous_po = { dtype = "str", sheet_name = "PO"}
 
 
 # =============================================================================
+# SCT PO 路徑配置
+# =============================================================================
+[sct.po]
+raw_po = "{resources}/{YYYYMM}/SCT/Original Data/{YYYYMM}_purchase_order_*.xlsx"
+previous = "{resources}/{YYYYMM}/SCT/前期底稿/{PREV_YYYYMM}_PO_FN.xlsx"
+procurement_po = "{resources}/{YYYYMM}/SCT/Original Data/{YYYYMM}_PO_PQ.xlsx"
+ap_invoice = "{resources}/{YYYYMM}/SCT/Original Data/{YYYYMM} AP_Invoice_Match_Monitoring_Ext_Ka.xlsx"
+previous_pr = "{resources}/{YYYYMM}/SCT/前期底稿/{PREV_YYYYMM}_PR_FN.xlsx"
+
+[sct.po.params]
+raw_po = { sheet_name = 0, header = 0, dtype = "str" }
+previous = { sheet_name = 0, header = 0, dtype = "str" }
+procurement_po = { dtype = "str" }
+ap_invoice = {}
+previous_pr = { dtype = "str" }
+
+
+# =============================================================================
+# SCT PR 路徑配置
+# =============================================================================
+[sct.pr]
+raw_pr = "{resources}/{YYYYMM}/SCT/Original Data/{YYYYMM}_purchase_request_*.xlsx"
+previous_pr = "{resources}/{YYYYMM}/SCT/前期底稿/{PREV_YYYYMM}_PR_FN.xlsx"
+procurement_pr = "{resources}/{YYYYMM}/SCT/Original Data/{YYYYMM}_PR_PQ.xlsx"
+
+[sct.pr.params]
+raw_pr = { sheet_name = 0, header = 0, dtype = "str" }
+previous_pr = { dtype = "str" }
+procurement_pr = { dtype = "str" }
+
+
+# =============================================================================
 # MOB 路徑配置 (待實作)
 # =============================================================================
 [mob.po]
