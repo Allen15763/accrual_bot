@@ -956,13 +956,15 @@ def get_ref_on_colab(ref_data_path):
 
 ### 8.3 測試覆蓋率分析
 
+> **2026-03-28 更新**：Phase 15 擴充 `test_data_utils.py`，補齊主要空白。
+
 | 模組 | 測試函數數 | 覆蓋狀況 |
 |------|-----------|---------|
 | `column_utils.py` | 12 個測試方法 | 100%（CLAUDE.md 記載） |
-| `data_utils.py` | 約 30 個測試方法 | 覆蓋主要公開函數；`classify_description`、`give_account_by_keyword`、`parallel_apply`、`memory_efficient_operation`、`extract_date_range_from_description` 無測試 |
+| `data_utils.py` | 約 50 個測試方法 | ~76%；新增 `extract_date_range_from_description`（8 tests）、`give_account_by_keyword`（4 tests）、`extract_clean_description`（4 tests）、`parallel_apply` / `memory_efficient_operation`（3 tests）|
 | `file_utils.py` | 約 25 個測試方法 | 79%（CLAUDE.md 記載）；`get_resource_path`（PyInstaller 分支）、`get_directory_size`（邊界情況）有測試 |
 
-**最大測試空白**：`extract_date_range_from_description` 完全沒有測試，而這個函數含有已知的 `NoneType` bug，且是 pipeline 中實際使用的業務邏輯。
+原先最大空白 `extract_date_range_from_description` 已有完整測試覆蓋，含 4 種日期格式、無效輸入和邊界情況。
 
 ### 8.4 與 `spe_bank_recon` 的關係
 

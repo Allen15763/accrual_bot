@@ -198,3 +198,135 @@ class TestGetLoggerConvenienceFunction:
         """get_structured_logger 應返回 StructuredLogger 實例"""
         result = get_structured_logger('structured_convenience')
         assert isinstance(result, StructuredLogger)
+
+
+@pytest.mark.unit
+class TestSetupFileHandler:
+    """測試 _setup_file_handler 方法 - 目錄建立與 RotatingFileHandler"""
+
+    def test_setup_file_handler_creates_directory(self, tmp_path):
+        """驗證 _setup_file_handler 自動建立日誌目錄"""
+        log_dir = tmp_path / "logs" / "subdir"
+        with patch('accrual_bot.utils.logging.logger.config_manager') as mock_cm:
+            mock_cm.get.return_value = 'INFO'
+            logger_instance = Logger()
+            root = logger_instance.get_logger()
+            logger_instance._setup_file_handler(root, str(log_dir))
+            assert log_dir.exists()
+
+    def test_setup_file_handler_adds_handler(self, tmp_path):
+        """驗證 _setup_file_handler 成功添加 RotatingFileHandler"""
+        log_dir = tmp_path / "logs"
+        with patch('accrual_bot.utils.logging.logger.config_manager') as mock_cm:
+            mock_cm.get.return_value = 'INFO'
+            logger_instance = Logger()
+            root = logger_instance.get_logger()
+            initial_handler_count = len(root.handlers)
+            logger_instance._setup_file_handler(root, str(log_dir))
+            assert len(root.handlers) > initial_handler_count
+            assert 'file' in logger_instance._handlers
+
+    def test_setup_file_handler_creates_log_file(self, tmp_path):
+        """驗證 _setup_file_handler 建立日誌檔案"""
+        log_dir = tmp_path / "logs"
+        with patch('accrual_bot.utils.logging.logger.config_manager') as mock_cm:
+            mock_cm.get.return_value = 'INFO'
+            logger_instance = Logger()
+            root = logger_instance.get_logger()
+            logger_instance._setup_file_handler(root, str(log_dir))
+            # 寫入一筆日誌以確保檔案被建立
+            root.info("test message")
+            log_files = list(log_dir.glob("Accrual_bot_*.log"))
+            assert len(log_files) >= 1
+
+
+@pytest.mark.unit
+class TestColoredFormatterExtended:
+    """ColoredFormatter 擴展測試"""
+
+    def test_format_with_color_enabled(self):
+        """驗證啟用顏色時格式化包含 ANSI 色碼"""
+        formatter = ColoredFormatter(
+            fmt='%(levelname)s %(name)s: %(message)s',
+            use_color=True
+        )
+        # 強制啟用顏色（繞過終端偵測）
+        formatter.use_color = True
+        record = logging.LogRecord(
+            name='test.module', level=logging.WARNING, pathname='', lineno=0,
+            msg='warning message', args=(), exc_info=None
+        )
+        result = formatter.format(record)
+        assert 'warning message' in result
+        # 確認原始 record 不被污染
+        assert record.levelname == 'WARNING'
+        assert record.name == 'test.module'
+
+    def test_format_preserves_record_after_coloring(self):
+        """驗證格式化後 record 的 levelname 和 name 已恢復原始值"""
+        formatter = ColoredFormatter(
+            fmt='%(levelname)s: %(message)s',
+            use_color=True
+        )
+        formatter.use_color = True
+        record = logging.LogRecord(
+            name='original', level=logging.ERROR, pathname='', lineno=0,
+            msg='err', args=(), exc_info=None
+        )
+        formatter.format(record)
+        assert record.levelname == 'ERROR'
+        assert record.name == 'original'
+
+
+@pytest.mark.unit
+class TestStructuredLoggerExtended:
+    """StructuredLogger 擴展測試"""
+
+    @pytest.fixture
+    def slogger(self):
+        """建立 StructuredLogger 實例"""
+        with patch('accrual_bot.utils.logging.logger.config_manager') as mock_cm:
+            mock_cm.get.return_value = 'INFO'
+            sl = StructuredLogger('structured_ext_test')
+            yield sl
+
+    def test_log_operation_end_success(self, slogger):
+        """驗證 log_operation_end 成功情況不拋出例外"""
+        slogger.log_operation_end('my_op', success=True, duration=1.5)
+
+    def test_log_operation_end_failure(self, slogger):
+        """驗證 log_operation_end 失敗情況使用 error 級別"""
+        with patch.object(slogger.logger, 'error') as mock_error:
+            slogger.log_operation_end('my_op', success=False, reason='timeout')
+            mock_error.assert_called_once()
+
+    def test_log_data_processing(self, slogger):
+        """驗證 log_data_processing 含處理時間"""
+        with patch.object(slogger.logger, 'info') as mock_info:
+            slogger.log_data_processing('PO', 1000, processing_time=2.5, entity='SPX')
+            mock_info.assert_called_once()
+            msg = mock_info.call_args[0][0]
+            assert '1,000' in msg
+            assert '2.50s' in msg
+
+    def test_log_file_operation_success(self, slogger):
+        """驗證 log_file_operation 成功情況"""
+        with patch.object(slogger.logger, 'info') as mock_info:
+            slogger.log_file_operation('讀取', '/tmp/data.xlsx', success=True, size='2MB')
+            mock_info.assert_called_once()
+
+    def test_log_file_operation_failure(self, slogger):
+        """驗證 log_file_operation 失敗情況使用 error 級別"""
+        with patch.object(slogger.logger, 'error') as mock_error:
+            slogger.log_file_operation('寫入', '/tmp/out.csv', success=False)
+            mock_error.assert_called_once()
+
+    def test_log_error_with_context(self, slogger):
+        """驗證 log_error 帶上下文資訊"""
+        with patch.object(slogger.logger, 'error') as mock_error:
+            err = ValueError("test error")
+            slogger.log_error(err, context='data_loading', step='Step1')
+            mock_error.assert_called_once()
+            msg = mock_error.call_args[0][0]
+            assert 'data_loading' in msg
+            assert 'test error' in msg

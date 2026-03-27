@@ -1105,13 +1105,19 @@ class ClosingListIntegrationStep(PipelineStep):
 
 ### 8.3 相關測試檔案
 
+> **2026-03-28 更新**：Phase 15 新增 4 個測試檔案，覆蓋 integration、exporting、pr_evaluation、loading execute 層。
+
 | 測試檔案 | 覆蓋範圍 |
 |---------|---------|
 | `tests/unit/tasks/spx/test_spx_orchestrator.py` | `SPXPipelineOrchestrator` 的 Pipeline 建構邏輯 |
 | `tests/unit/tasks/spx/test_spx_loading.py` | `SPXDataLoadingStep` 的輸入驗證與檔案格式處理 |
-| `tests/unit/tasks/spx/test_spx_condition_engine.py` | `SPXConditionEngine` 的各類 check type |
+| `tests/unit/tasks/spx/test_spx_loading_execute.py` | `SPXDataLoadingStep`、`PPEDataLoadingStep`、`SPXPRDataLoadingStep` 的 execute 層（37 tests） |
+| `tests/unit/tasks/spx/test_spx_condition_engine.py` | `SPXConditionEngine` 的各類 check type（含 11 種未測 check type 補充） |
 | `tests/unit/tasks/spx/test_spx_evaluation.py` | `StatusStage1Step`、`SPXERMLogicStep` 的狀態判斷邏輯 |
-| `tests/unit/tasks/spx/test_spx_ppe_steps.py` | PPE_DESC 純函式的 regex 提取邏輯 |
+| `tests/unit/tasks/spx/test_spx_ppe_steps.py` | PPE_DESC 純函式 regex + PPE qty validation（擴充） |
+| `tests/unit/tasks/spx/test_spx_integration.py` | `ColumnAdditionStep`、`APInvoiceIntegrationStep`、`ClosingListIntegrationStep`、`ValidationDataProcessingStep` 等 8 個整合步驟（35 tests） |
+| `tests/unit/tasks/spx/test_spx_exporting.py` | `SPXExportStep`、`AccountingOPSExportingStep`、`SPXPRExportStep`（25 tests） |
+| `tests/unit/tasks/spx/test_spx_pr_evaluation.py` | `SPXPRERMLogicStep` PR 評估邏輯（30 tests） |
 
 ### 8.4 配置依賴清單
 

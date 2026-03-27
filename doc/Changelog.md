@@ -100,6 +100,32 @@
 - **Backward compat**: Variables `processing_date` and `processing_month` still set in loading steps (values sourced from metadata) for any code reading them
 - **Impact**: ~21 files modified; test suite 777 passed (2 pre-existing failures unchanged)
 
+## Phase 15: Test Coverage Expansion to 74% (2026-03-28)
+- **Coverage jump**: 43% → **74%** (+31 percentage points); test count 777 → **1,535** (all passing, 0 failures)
+- **Coverage exclusion config**: Added `[tool.coverage.run] omit` in `pyproject.toml` to exclude UI pages/components, deprecated re-export stubs, and `test_data_generator.py` from coverage denominator (~920 untestable statements removed)
+- **Bug fix (P0)**: `common.py:508` — `ProductFilterStep` `ZeroDivisionError` when `duration == 0` (fast filtering); added guard `speed = original_count / duration if duration > 0 else 0`
+- **Bug fix (P0)**: `common.py:882-886` — `_determine_key_type()` missing PO-only branch; PO workpapers silently skipped reviewer info processing. Added `elif has_po and not has_pr: return 'po'`
+- **New test files (16)**:
+  - `tests/unit/ui/utils/test_ui_helpers.py` (18 tests, 0%→100%)
+  - `tests/unit/ui/utils/test_async_bridge.py` (14 tests, 0%→95%)
+  - `tests/unit/runner/test_config_loader.py` (30 tests, 0%→97%)
+  - `tests/unit/runner/test_step_executor.py` (12 tests, 15%→93%)
+  - `tests/unit/tasks/spx/test_spx_integration.py` (~35 tests, 11%→64%)
+  - `tests/unit/tasks/spx/test_spx_loading_execute.py` (37 tests, 17%→79%)
+  - `tests/unit/tasks/spx/test_spx_exporting.py` (25 tests, 15%→85%)
+  - `tests/unit/tasks/spx/test_spx_pr_evaluation.py` (30 tests, 16%→100%)
+  - `tests/unit/tasks/spt/test_spt_evaluation_accountant.py` (38 tests, 18%→98%)
+  - `tests/unit/tasks/spt/test_spt_evaluation_affiliate.py` (40 tests, 16%→92%)
+  - `tests/unit/tasks/spt/test_spt_post_processing_step.py` (22 tests, 12%→50%)
+  - `tests/unit/tasks/spt/test_spt_column_initialization.py` (13 tests, 22%→89%)
+  - `tests/unit/tasks/spt/test_spt_procurement_pipeline.py` (49 tests, 11-14%→44-93%)
+  - `tests/unit/tasks/sct/test_sct_column_addition.py` (15 tests, 22%→88%)
+  - `tests/unit/tasks/sct/test_sct_integration.py` (7 tests, 22%→92%)
+  - `tests/unit/tasks/sct/test_sct_loading.py` (12 tests, 33%→81%)
+  - `tests/unit/tasks/common/test_data_shape_summary.py` (10 tests, 24%→86%)
+- **Extended test files (9)**: `test_data_utils.py` (+25 tests, 48%→76%), `test_common_steps.py` (+30 tests, 42%→79%), `test_spx_condition_engine.py` (+48 tests, 54%→80%), `test_base_evaluation.py` (+8 tests, 65%→79%), `test_config_manager.py` (+24 tests, 55%→69%), `test_base_importer.py` (+8 tests, →69%), `test_checkpoint.py` (+10 tests), `test_logger.py` (+9 tests, →81%), `test_spx_ppe_steps.py` (+46 tests, 42%→74%)
+- **Known source bug documented**: `spt_combined_procurement_processing.py:151,207` — `ProcessingContext()` called without required args; `_process_po_data()` / `_process_pr_data()` always fail in try/except
+
 ## Benefits
 
 - **Maintainability**: Single source of truth for shared logic reduces bug surface area

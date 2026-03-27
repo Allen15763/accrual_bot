@@ -859,18 +859,21 @@ accrual_bot/config/
 
 ### 8.5 測試覆蓋情況
 
+> **2026-03-28 更新**：Phase 15 擴充 `test_config_manager.py`，覆蓋率提升至 ~69%。
+
 | 測試案例 | 覆蓋內容 | 測試強度 |
 |---------|---------|---------|
 | `test_singleton_same_instance` | DCL 單例唯一性 | ✅ 充分 |
 | `test_thread_safe_singleton` | 100 執行緒並發單例 | ✅ 充分 |
 | `test_config_data_integrity` | `_config_toml` 存在且為 dict | 🟡 基本 |
 | `test_concurrent_access_stress` | 1000 執行緒壓力測試 | ✅ 充分 |
+| `test_get_*` | `get()`, `get_list()`, `get_dict()` 公開 API | ✅ 新增 |
+| `test_reload_config` | `reload()` 重載邏輯 | ✅ 新增 |
+| `test_load_config_paths` | `_load_config()` 多路徑解析 | ✅ 新增 |
 
-**缺乏的測試**：
-- `get_nested()` / `get_all()` / `get()` 的正確性
-- fallback 機制（配置文件不存在時行為）
+**仍缺乏的測試**：
 - `_set_default_config()` 的預設值正確性
-- `reload_config()` 的行為正確性
 - `get_credentials_config()` 的路徑解析
+- PyInstaller 環境下的 `sys.frozen` 分支
 
-整體測試覆蓋率：線程安全 ✅，功能正確性 ❌（幾乎未覆蓋）
+整體測試覆蓋率：線程安全 ✅，功能正確性 ✅（主要 API 已覆蓋）

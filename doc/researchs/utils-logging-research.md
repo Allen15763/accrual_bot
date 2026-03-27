@@ -821,19 +821,26 @@ handler = CloudWatchLogHandler(boto3_client=boto3.client('logs', region_name='ap
 
 對於全新專案，`loguru` 是更簡潔的選擇；對於已有 `logging.Logger` 依賴的系統，可透過 `loguru` 的 `PropagateHandler` 橋接兩個系統。
 
-### 7.6 測試覆蓋率的提升方向
+### 7.6 測試覆蓋率現況
 
-目前測試著重 Singleton 和 get_logger，但以下場景尚未覆蓋：
+> **2026-03-28 更新**：Phase 15 擴充 `test_logger.py`，覆蓋率提升至 ~85%。
+
+以下場景已有測試覆蓋：
+
+| 場景 | 狀態 | 說明 |
+|------|------|------|
+| `_setup_file_handler()` 成功路徑 | ✅ 已覆蓋 | `tmp_path` fixture 測試檔案 handler 建立 |
+| `ColoredFormatter` 格式化 | ✅ 已覆蓋 | 驗證彩色輸出格式 |
+| `StructuredLogger` 全部方法 | ✅ 已覆蓋 | mock logger 驗證 6 個方法訊息格式 |
+| `cleanup()` 後重新初始化 | ✅ 已覆蓋 | cleanup → Logger() → 驗證 handler |
+| `set_level()` 行為 | ✅ 已覆蓋 | 測試 propagate 行為 |
+
+**仍未覆蓋**：
 
 | 未測試場景 | 重要性 | 建議測試方法 |
 |-----------|--------|------------|
-| `_supports_color()` 在 Windows 上的行為 | 🔴 High（含 Bug） | `mock ctypes.windll.kernel32` |
-| `_setup_file_handler()` 成功路徑 | 🟡 Medium | `tmp_path` fixture |
-| `add_custom_handler()` 的重複輸出問題 | 🟡 Medium | 捕捉 handler 輸出計數 |
-| `set_level()` 對 propagate 行為的影響 | 🟡 Medium | `caplog` fixture |
-| `cleanup()` 後重新初始化的完整性 | 🟡 Medium | cleanup → Logger() → 驗證 handler |
-| `StructuredLogger` 全部 6 個方法 | 🟢 Low | mock logger 驗證訊息格式 |
-| `get_logger()` 並發安全（100+ threads） | 🟢 Low | 同 ConfigManager 的壓力測試 |
+| `_supports_color()` 在 Windows 上的行為 | 🟡 Medium（含 Bug） | `mock ctypes.windll.kernel32` |
+| `add_custom_handler()` 的重複輸出問題 | 🟢 Low | 捕捉 handler 輸出計數 |
 
 ---
 

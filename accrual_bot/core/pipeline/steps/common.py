@@ -505,7 +505,7 @@ class ProductFilterStep(PipelineStep):
             
             # ✅ 標準化 metadata
             filter_rate = filtered_count / original_count * 100
-            speed = original_count / duration
+            speed = original_count / duration if duration > 0 else 0
             metadata = (StepMetadataBuilder()
                         .set_row_counts(original_count, filtered_count)
                         .set_process_counts(processed=filtered_count, skipped=removed_count)
@@ -880,6 +880,8 @@ class PreviousWorkpaperIntegrationStep(PipelineStep):
                   ColumnResolver.has_column(df_ref, 'pr_line'))
 
         if has_po and has_pr:
+            return 'po'
+        elif has_po and not has_pr:
             return 'po'
         elif has_pr and not has_po:
             return 'pr'

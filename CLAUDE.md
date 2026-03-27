@@ -249,7 +249,7 @@ See SCT implementation (`tasks/sct/`) as a complete reference. Detailed guide: [
 
 ## Testing
 
-779 tests (661 unit + 12 integration + 106 unmarked), 777 passing. 2 pre-existing failures in `test_previous_workpaper.py`. Coverage: 38%.
+1,535 tests (unit + integration), all passing. Coverage: 74% (with UI pages/components excluded from measurement via `pyproject.toml` omit config).
 
 ```bash
 # Windows PowerShell（activate 後）
@@ -280,7 +280,7 @@ See [doc/UI_Architecture.md](doc/UI_Architecture.md) for detailed UI architectur
 | Document | Description |
 |----------|-------------|
 | `CLAUDE.md` | This file — development guidance |
-| `doc/Changelog.md` | Architecture improvements changelog (Phase 1-14) |
+| `doc/Changelog.md` | Architecture improvements changelog (Phase 1-15) |
 | `doc/Project_Design_Reference.md` | Architecture, patterns, templates |
 | `doc/UI_Architecture.md` | UI architecture, components, extension guide |
 | `doc/SPT_PROCUREMENT_Implementation.md` | SPT Procurement pipeline details |
@@ -288,7 +288,7 @@ See [doc/UI_Architecture.md](doc/UI_Architecture.md) for detailed UI architectur
 | `doc/SPE_Project_Architecture_Reference.md` | SPE project architecture reference |
 | `doc/Project_Review_And_Merger_Analysis.md` | Project review and merger analysis |
 | `doc/Task Pipeline Structure Unit Test Plan.md` | Test plan for pipeline structure |
-| `tests/README.md` | Test suite guide (779 tests) |
+| `tests/README.md` | Test suite guide (1,535 tests) |
 
 ## Language
 

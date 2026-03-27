@@ -309,3 +309,173 @@ class TestConvenienceFunctions:
         manager.save_checkpoint(ctx, 'Step1')
         result = list_available_checkpoints(checkpoint_dir=tmp_checkpoint_dir)
         assert len(result) == 1
+
+
+@pytest.mark.unit
+class TestCheckpointManagerExtended:
+    """CheckpointManager 擴展測試 - 提高覆蓋率"""
+
+    @pytest.fixture
+    def manager(self, tmp_checkpoint_dir):
+        return CheckpointManager(checkpoint_dir=tmp_checkpoint_dir)
+
+    # --- save_checkpoint 序列化邊界情況 ---
+
+    def test_save_non_dataframe_auxiliary_data(self, manager):
+        """驗證非 DataFrame 的輔助數據以 pickle 儲存"""
+        ctx = ProcessingContext(
+            data=pd.DataFrame({'X': [1, 2]}),
+            entity_type='SPX',
+            processing_date=202512,
+            processing_type='PO',
+        )
+        # 添加 dict 類型的輔助數據
+        ctx.add_auxiliary_data('config_dict', {'key': 'value', 'num': 42})
+        name = manager.save_checkpoint(ctx, 'DictAux')
+        aux_dir = Path(manager.checkpoint_dir) / name / 'auxiliary_data'
+        # 應有 pkl 檔案
+        pkl_files = list(aux_dir.glob('*.pkl'))
+        assert any('config_dict' in f.name for f in pkl_files)
+
+    def test_save_and_load_non_dataframe_auxiliary_data(self, manager):
+        """驗證非 DataFrame 輔助數據的完整存取循環"""
+        ctx = ProcessingContext(
+            data=pd.DataFrame({'X': [1]}),
+            entity_type='SPT',
+            processing_date=202501,
+            processing_type='PR',
+        )
+        test_list = [1, 2, 3, 'abc']
+        ctx.add_auxiliary_data('my_list', test_list)
+        name = manager.save_checkpoint(ctx, 'ListAux')
+        loaded = manager.load_checkpoint(name)
+        assert loaded.has_auxiliary_data('my_list')
+        assert loaded.get_auxiliary_data('my_list') == test_list
+
+    def test_save_parquet_fallback_to_pickle(self, manager):
+        """驗證 Parquet 儲存失敗時 fallback 到 Pickle"""
+        ctx = ProcessingContext(
+            data=pd.DataFrame({'A': [1]}),
+            entity_type='TEST',
+            processing_date=202512,
+            processing_type='PO',
+        )
+        # Mock to_parquet 使其失敗，to_pickle 成功
+        with patch.object(pd.DataFrame, 'to_parquet', side_effect=Exception("parquet error")):
+            name = manager.save_checkpoint(ctx, 'FallbackStep')
+        checkpoint_path = Path(manager.checkpoint_dir) / name
+        # Parquet 失敗，應有 pkl
+        assert (checkpoint_path / 'data.pkl').exists()
+
+    def test_save_empty_auxiliary_dataframe_skipped(self, manager):
+        """驗證空的 DataFrame 輔助數據不被儲存"""
+        ctx = ProcessingContext(
+            data=pd.DataFrame({'A': [1]}),
+            entity_type='TEST',
+            processing_date=202512,
+            processing_type='PO',
+        )
+        ctx.add_auxiliary_data('empty_df', pd.DataFrame())
+        name = manager.save_checkpoint(ctx, 'EmptyAux')
+        aux_dir = Path(manager.checkpoint_dir) / name / 'auxiliary_data'
+        # 空 DataFrame 不應產生檔案
+        parquet_files = list(aux_dir.glob('empty_df.*'))
+        assert len(parquet_files) == 0
+
+    # --- load_checkpoint 損毀檔案處理 ---
+
+    def test_load_pickle_fallback_when_no_parquet(self, manager):
+        """驗證主數據只有 pkl 時可正確載入"""
+        ctx = ProcessingContext(
+            data=pd.DataFrame({'B': [10, 20]}),
+            entity_type='SPX',
+            processing_date=202506,
+            processing_type='PO',
+        )
+        name = manager.save_checkpoint(ctx, 'PklTest')
+        checkpoint_path = Path(manager.checkpoint_dir) / name
+        # 刪除 parquet 檔，手動建立 pkl
+        parquet_file = checkpoint_path / 'data.parquet'
+        if parquet_file.exists():
+            import pickle
+            data = pd.read_parquet(parquet_file)
+            data.to_pickle(checkpoint_path / 'data.pkl')
+            parquet_file.unlink()
+        loaded = manager.load_checkpoint(name)
+        assert len(loaded.data) == 2
+        assert 'B' in loaded.data.columns
+
+    def test_load_no_data_files_returns_empty_df(self, manager):
+        """驗證無主數據檔案時載入空 DataFrame"""
+        ctx = ProcessingContext(
+            data=pd.DataFrame({'C': [1]}),
+            entity_type='TEST',
+            processing_date=202512,
+            processing_type='PO',
+        )
+        name = manager.save_checkpoint(ctx, 'NoData')
+        checkpoint_path = Path(manager.checkpoint_dir) / name
+        # 刪除所有數據檔案
+        for f in checkpoint_path.glob('data.*'):
+            f.unlink()
+        loaded = manager.load_checkpoint(name)
+        assert loaded.data.empty
+
+    # --- list_checkpoints 邊界情況 ---
+
+    def test_list_checkpoints_skips_non_directory(self, manager):
+        """驗證 list_checkpoints 跳過非目錄項目"""
+        # 在 checkpoint 目錄建立一個普通檔案
+        stray_file = Path(manager.checkpoint_dir) / "stray_file.txt"
+        stray_file.write_text("not a checkpoint")
+        ctx = ProcessingContext(
+            data=pd.DataFrame({'A': [1]}),
+            entity_type='SPX',
+            processing_date=202512,
+            processing_type='PO',
+        )
+        manager.save_checkpoint(ctx, 'RealStep')
+        cps = manager.list_checkpoints()
+        # 只有真正的 checkpoint 目錄
+        assert len(cps) == 1
+        assert cps[0]['entity_type'] == 'SPX'
+
+    def test_list_checkpoints_skips_dir_without_info_json(self, manager):
+        """驗證缺少 checkpoint_info.json 的目錄被跳過"""
+        bogus_dir = Path(manager.checkpoint_dir) / "bogus_checkpoint"
+        bogus_dir.mkdir(parents=True, exist_ok=True)
+        cps = manager.list_checkpoints()
+        assert len(cps) == 0
+
+    def test_list_checkpoints_handles_corrupt_json(self, manager):
+        """驗證 JSON 損毀的 checkpoint 被跳過而不拋出例外"""
+        corrupt_dir = Path(manager.checkpoint_dir) / "corrupt_cp"
+        corrupt_dir.mkdir(parents=True, exist_ok=True)
+        info_file = corrupt_dir / "checkpoint_info.json"
+        info_file.write_text("{invalid json content")
+        cps = manager.list_checkpoints()
+        assert len(cps) == 0
+
+    def test_cleanup_with_entity_filter(self, manager):
+        """驗證 cleanup_old_checkpoints 可按 entity 過濾"""
+        for i in range(4):
+            ctx = ProcessingContext(
+                data=pd.DataFrame({'A': [i]}),
+                entity_type='SPX',
+                processing_date=202512,
+                processing_type='PO',
+            )
+            manager.save_checkpoint(ctx, f'Step{i}')
+        # 另一個 entity
+        ctx2 = ProcessingContext(
+            data=pd.DataFrame({'A': [99]}),
+            entity_type='SPT',
+            processing_date=202512,
+            processing_type='PO',
+        )
+        manager.save_checkpoint(ctx2, 'SPTStep')
+        deleted = manager.cleanup_old_checkpoints(keep_last=2, filter_by_entity='SPX')
+        assert deleted == 2
+        # SPT 的不受影響
+        spt_cps = manager.list_checkpoints(filter_by_entity='SPT')
+        assert len(spt_cps) == 1

@@ -67,3 +67,21 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
 packages = ["accrual_bot"]
+
+[tool.coverage.run]
+source = ["accrual_bot"]
+omit = [
+    "accrual_bot/ui/pages/*",
+    "accrual_bot/ui/components/*",
+    "accrual_bot/ui/app.py",
+    "accrual_bot/test_data_generator.py",
+    "accrual_bot/core/pipeline/steps/spt_*.py",
+    "accrual_bot/core/pipeline/steps/spx_*.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.",
+]
+show_missing = true

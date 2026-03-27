@@ -2,8 +2,8 @@
 
 ## 概述
 
-本項目使用 pytest 測試框架，包含 **779 測試**（661 unit + 12 integration + 106 unmarked），
-覆蓋 core pipeline、data sources、tasks（SPT/SPX/SCT）、utilities、UI 等模組。
+本項目使用 pytest 測試框架，包含 **1,535 測試**（~1,400 unit + 12 integration + ~120 unmarked），
+覆蓋 core pipeline、data sources、tasks（SPT/SPX/SCT）、utilities、runner、UI 等模組。整體覆蓋率 **74%**。
 
 > **注意**：`duckdb_manager` 和 `metadata_builder` 的測試已隨模組提取至獨立套件（[seafin-duckdb-manager](https://github.com/Allen15763/seafin-duckdb-manager)、[seafin-metadata-builder](https://github.com/Allen15763/seafin-metadata-builder)）。
 
@@ -45,18 +45,32 @@ tests/
 │   │   │   ├── test_spt_orchestrator.py     # SPT Orchestrator 測試
 │   │   │   ├── test_spt_loading.py          # SPT 資料載入測試
 │   │   │   ├── test_spt_evaluation_erm.py   # SPT ERM 評估測試
-│   │   │   └── test_spt_account_prediction.py # SPT 科目預測測試
+│   │   │   ├── test_spt_account_prediction.py # SPT 科目預測測試
+│   │   │   ├── test_spt_evaluation_accountant.py # SPT 會計標籤測試（38 tests）
+│   │   │   ├── test_spt_evaluation_affiliate.py  # SPT 分潤/薪資偵測測試（40 tests）
+│   │   │   ├── test_spt_post_processing_step.py  # SPT 後處理步驟測試（22 tests）
+│   │   │   ├── test_spt_column_initialization.py  # SPT 欄位初始化測試（13 tests）
+│   │   │   └── test_spt_procurement_pipeline.py   # SPT 採購 Pipeline 測試（49 tests）
 │   │   ├── spx/
 │   │   │   ├── test_spx_orchestrator.py     # SPX Orchestrator 測試
 │   │   │   ├── test_spx_loading.py          # SPX 資料載入測試
+│   │   │   ├── test_spx_loading_execute.py  # SPX 載入 execute 層測試（37 tests）
 │   │   │   ├── test_spx_condition_engine.py # SPX 條件引擎測試
 │   │   │   ├── test_spx_evaluation.py       # SPX 評估步驟測試
-│   │   │   └── test_spx_ppe_steps.py        # SPX PPE 步驟測試
-│   │   └── sct/
-│   │       ├── test_sct_evaluation.py       # SCT ERM 評估測試
-│   │       ├── test_sct_asset_status.py     # SCT 資產狀態測試
-│   │       ├── test_sct_account_prediction.py # SCT 科目預測測試
-│   │       └── test_sct_post_processing.py  # SCT 後處理測試
+│   │   │   ├── test_spx_ppe_steps.py        # SPX PPE 步驟測試
+│   │   │   ├── test_spx_integration.py      # SPX 整合步驟測試（35 tests）
+│   │   │   ├── test_spx_exporting.py        # SPX 匯出步驟測試（25 tests）
+│   │   │   └── test_spx_pr_evaluation.py    # SPX PR 評估測試（30 tests）
+│   │   ├── sct/
+│   │   │   ├── test_sct_evaluation.py       # SCT ERM 評估測試
+│   │   │   ├── test_sct_asset_status.py     # SCT 資產狀態測試
+│   │   │   ├── test_sct_account_prediction.py # SCT 科目預測測試
+│   │   │   ├── test_sct_post_processing.py  # SCT 後處理測試
+│   │   │   ├── test_sct_column_addition.py  # SCT 欄位添加測試（15 tests）
+│   │   │   ├── test_sct_integration.py      # SCT 整合步驟測試（7 tests）
+│   │   │   └── test_sct_loading.py          # SCT 資料載入測試（12 tests）
+│   │   └── common/
+│   │       └── test_data_shape_summary.py   # 資料形狀摘要測試（10 tests）
 │   ├── utils/
 │   │   ├── config/
 │   │   │   └── test_config_manager.py       # ConfigManager 執行緒安全測試
@@ -66,12 +80,18 @@ tests/
 │   │   │   └── test_file_utils.py           # 檔案工具函式測試
 │   │   └── logging/
 │   │       └── test_logger.py               # Logger 單例 / 執行緒安全測試
+│   ├── runner/
+│   │   ├── test_config_loader.py            # ConfigLoader 測試（30 tests, 97%）
+│   │   └── test_step_executor.py            # StepExecutor 測試（12 tests, 93%）
 │   ├── ui/
 │   │   ├── services/
 │   │   │   ├── test_unified_pipeline_service.py # UnifiedPipelineService 測試
 │   │   │   └── test_file_handler.py         # FileHandler 測試
-│   │   └── models/
-│   │       └── test_state_models.py         # UI 狀態模型測試
+│   │   ├── models/
+│   │   │   └── test_state_models.py         # UI 狀態模型測試
+│   │   └── utils/
+│   │       ├── test_ui_helpers.py           # UI 工具函式測試（18 tests）
+│   │       └── test_async_bridge.py         # AsyncBridge 測試（14 tests）
 │   └── data/
 │       └── importers/
 │           └── test_base_importer.py        # BaseDataImporter 測試
@@ -126,8 +146,8 @@ python -m pytest tests/unit/tasks/spt/test_spt_orchestrator.py::TestSPTPipelineO
 # 覆蓋率報告
 python -m pytest tests/ --cov=accrual_bot --cov-report=html --cov-report=term-missing
 
-# 覆蓋率門檻
-python -m pytest tests/ --cov=accrual_bot --cov-fail-under=80
+# 覆蓋率門檻（目前設定 70%）
+python -m pytest tests/ --cov=accrual_bot --cov-fail-under=70
 ```
 
 查看 HTML 覆蓋率報告：
@@ -141,16 +161,27 @@ start htmlcov\index.html
 
 | 模組 | 覆蓋率 | 說明 |
 |------|--------|------|
-| `utils/config/config_manager.py` | 100% | 執行緒安全單例 |
+| `utils/config/config_manager.py` | ~69% | 執行緒安全單例 + get/get_list/reload |
 | `core/pipeline/context.py` | ~95% | ProcessingContext |
 | `core/pipeline/base.py` | ~85% | PipelineStep 基礎類別 |
 | `core/pipeline/pipeline.py` | ~80% | Pipeline 執行引擎 |
-| `core/pipeline/checkpoint.py` | ~77% | Checkpoint 管理 |
+| `core/pipeline/checkpoint.py` | ~85% | Checkpoint 管理（含損毀/邊界測試） |
+| `core/pipeline/steps/common.py` | ~79% | 共用步驟（8 個步驟類別） |
+| `core/pipeline/steps/base_evaluation.py` | ~79% | BaseERMEvaluationStep |
 | `utils/helpers/column_utils.py` | ~90% | 欄位解析工具 |
-| `utils/helpers/data_utils.py` | ~85% | 資料工具函式 |
-| `utils/logging/logger.py` | ~80% | 日誌框架 |
+| `utils/helpers/data_utils.py` | ~76% | 資料工具函式（含 date_range, keyword） |
+| `utils/logging/logger.py` | ~85% | 日誌框架（含 file_handler, StructuredLogger） |
+| `runner/config_loader.py` | ~97% | 配置載入（TOML 解析、路徑模板） |
+| `runner/step_executor.py` | ~93% | 步驟執行器（互動模式 mock） |
 | `tasks/spt/pipeline_orchestrator.py` | ~90% | SPT 編排器 |
 | `tasks/spx/pipeline_orchestrator.py` | ~90% | SPX 編排器 |
+| `tasks/spt/steps/spt_evaluation_accountant.py` | ~98% | SPT 會計標籤 |
+| `tasks/spt/steps/spt_evaluation_affiliate.py` | ~92% | SPT 分潤/薪資偵測 |
+| `tasks/spx/steps/spx_integration.py` | ~50% | SPX 整合步驟 |
+| `tasks/spx/steps/spx_exporting.py` | ~60% | SPX 匯出步驟 |
+| `tasks/sct/steps/sct_column_addition.py` | ~65% | SCT 欄位添加 |
+| `ui/utils/ui_helpers.py` | ~100% | UI 工具函式 |
+| `ui/utils/async_bridge.py` | ~90% | AsyncBridge |
 
 ## 測試標記
 

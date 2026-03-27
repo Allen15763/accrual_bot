@@ -478,3 +478,639 @@ class TestValueResolution:
         result = engine_with_rules._resolve_ref('spx.asset_suppliers')
         assert '益欣' in result
         assert '掌櫃' in result
+
+    @pytest.mark.unit
+    def test_resolve_ref_missing_key(self, engine_with_rules, mock_engine_deps):
+        """不存在的配置路徑應回傳 None"""
+        result = engine_with_rules._resolve_ref('nonexistent.path')
+        assert result is None
+
+    @pytest.mark.unit
+    def test_resolve_ref_case_insensitive(self, engine_with_rules, mock_engine_deps):
+        """配置引用應支援不區分大小寫的 fallback"""
+        mock_engine_deps._config_toml['FA_ACCOUNTS'] = {'SPX': ['199999']}
+        # 'fa_accounts' 已存在（小寫），所以直接命中；測試大寫 key
+        result = engine_with_rules._resolve_ref('FA_ACCOUNTS.SPX')
+        assert result == ['199999']
+
+    @pytest.mark.unit
+    def test_resolve_ref_non_dict_intermediate(self, engine_with_rules, mock_engine_deps):
+        """中間路徑非 dict 時應回傳 None"""
+        mock_engine_deps._config_toml['scalar_val'] = 'just_a_string'
+        result = engine_with_rules._resolve_ref('scalar_val.sub_key')
+        assert result is None
+
+    @pytest.mark.unit
+    def test_resolve_pattern_key(self, engine_with_rules, mock_engine_deps):
+        """pattern_key 應透過 _resolve_ref 解析"""
+        check = {'pattern_key': 'spx.deposit_keywords'}
+        result = engine_with_rules._resolve_pattern(check)
+        assert result == '訂金|押金|保證金'
+
+    @pytest.mark.unit
+    def test_resolve_value_key(self, engine_with_rules, mock_engine_deps):
+        """value_key 應透過 _resolve_ref 解析"""
+        mock_engine_deps._config_toml['test_section'] = {'test_value': 'hello'}
+        check = {'value_key': 'test_section.test_value'}
+        result = engine_with_rules._resolve_value(check)
+        assert result == 'hello'
+
+    @pytest.mark.unit
+    def test_resolve_list_key(self, engine_with_rules, mock_engine_deps):
+        """list_key 應透過 _resolve_ref 解析列表"""
+        check = {'list_key': 'fa_accounts.spx'}
+        result = engine_with_rules._resolve_list(check)
+        assert result == ['199999']
+
+    @pytest.mark.unit
+    def test_resolve_list_key_string(self, engine_with_rules, mock_engine_deps):
+        """list_key 指向字串時應包裝為列表"""
+        mock_engine_deps._config_toml['single'] = {'val': 'one_item'}
+        check = {'list_key': 'single.val'}
+        result = engine_with_rules._resolve_list(check)
+        assert result == ['one_item']
+
+    @pytest.mark.unit
+    def test_resolve_status_value_key(self, engine_with_rules, mock_engine_deps):
+        """status_value_key 應透過 _resolve_ref 解析"""
+        mock_engine_deps._config_toml['status'] = {'completed': '已完成'}
+        rule = {'status_value_key': 'status.completed'}
+        result = engine_with_rules._resolve_status_value(rule)
+        assert result == '已完成'
+
+
+# ============================================================
+# 額外 check type 測試（提升覆蓋率）
+# ============================================================
+
+class TestEvaluateCheckExtended:
+    """測試 _evaluate_check 中尚未覆蓋的 check type"""
+
+    @pytest.mark.unit
+    def test_is_not_null_with_values(self, engine_with_rules):
+        """is_not_null 應排除 NA、空字串、'nan'"""
+        df = pd.DataFrame({'Col': [pd.NA, 'value', '', 'nan', 'data']})
+        check = {'type': 'is_not_null', 'field': 'Col'}
+        result = engine_with_rules._evaluate_check(df, check, 'PO狀態', {})
+        assert result is not None
+        expected = [False, True, False, False, True]
+        assert result.tolist() == expected
+
+    @pytest.mark.unit
+    def test_is_not_null_missing_field(self, engine_with_rules):
+        """is_not_null 欄位不存在時應回傳 None"""
+        df = pd.DataFrame({'Other': [1]})
+        check = {'type': 'is_not_null', 'field': 'Missing'}
+        result = engine_with_rules._evaluate_check(df, check, 'PO狀態', {})
+        assert result is None
+
+    @pytest.mark.unit
+    def test_no_status_check(self, engine_with_rules):
+        """no_status 應識別狀態欄位為空的列"""
+        df = pd.DataFrame({'PO狀態': [pd.NA, '已完成', '', 'nan', '進行中']})
+        check = {'type': 'no_status'}
+        result = engine_with_rules._evaluate_check(df, check, 'PO狀態', {})
+        assert result is not None
+        expected = [True, False, True, True, False]
+        assert result.tolist() == expected
+
+    @pytest.mark.unit
+    def test_erm_le_date_without_prebuilt(self, engine_with_rules):
+        """erm_le_date 無 prebuilt 時應即時計算"""
+        df = pd.DataFrame({
+            'Expected Received Month_轉換格式': [202512, 202601, 202511],
+        })
+        context = {'processing_date': 202512, 'prebuilt_masks': {}}
+        check = {'type': 'erm_le_date'}
+        result = engine_with_rules._evaluate_check(df, check, 'PO狀態', context)
+        assert result is not None
+        assert result.tolist() == [True, False, True]
+
+    @pytest.mark.unit
+    def test_erm_le_date_no_processing_date(self, engine_with_rules):
+        """erm_le_date 無 processing_date 時應回傳 None"""
+        df = pd.DataFrame({
+            'Expected Received Month_轉換格式': [202512],
+        })
+        context = {'prebuilt_masks': {}}
+        check = {'type': 'erm_le_date'}
+        result = engine_with_rules._evaluate_check(df, check, 'PO狀態', context)
+        assert result is None
+
+    @pytest.mark.unit
+    def test_erm_gt_date_without_prebuilt(self, engine_with_rules):
+        """erm_gt_date 無 prebuilt 時應即時計算"""
+        df = pd.DataFrame({
+            'Expected Received Month_轉換格式': [202512, 202601, 202511],
+        })
+        context = {'processing_date': 202512, 'prebuilt_masks': {}}
+        check = {'type': 'erm_gt_date'}
+        result = engine_with_rules._evaluate_check(df, check, 'PO狀態', context)
+        assert result is not None
+        assert result.tolist() == [False, True, False]
+
+    @pytest.mark.unit
+    def test_erm_gt_date_no_column(self, engine_with_rules):
+        """erm_gt_date 欄位不存在時應回傳 None"""
+        df = pd.DataFrame({'Other': [1]})
+        context = {'processing_date': 202512, 'prebuilt_masks': {}}
+        check = {'type': 'erm_gt_date'}
+        result = engine_with_rules._evaluate_check(df, check, 'PO狀態', context)
+        assert result is None
+
+    @pytest.mark.unit
+    def test_erm_in_range_without_prebuilt(self, engine_with_rules):
+        """erm_in_range 無 prebuilt 時應即時計算"""
+        df = pd.DataFrame({
+            'Expected Received Month_轉換格式': [202511, 202601, 202510],
+            'YMs of Item Description': ['202510,202512', '202510,202512', '202510,202512'],
+        })
+        context = {'prebuilt_masks': {}}
+        check = {'type': 'erm_in_range'}
+        result = engine_with_rules._evaluate_check(df, check, 'PO狀態', context)
+        assert result is not None
+        # 202511 在 [202510, 202512] 內 -> True
+        # 202601 不在 [202510, 202512] 內 -> False
+        # 202510 在 [202510, 202512] 內 -> True
+        assert result.tolist() == [True, False, True]
+
+    @pytest.mark.unit
+    def test_erm_in_range_missing_columns(self, engine_with_rules):
+        """erm_in_range 缺少必要欄位時應回傳 None"""
+        df = pd.DataFrame({'Other': [1]})
+        context = {'prebuilt_masks': {}}
+        check = {'type': 'erm_in_range'}
+        result = engine_with_rules._evaluate_check(df, check, 'PO狀態', context)
+        assert result is None
+
+    @pytest.mark.unit
+    def test_qty_matched_without_prebuilt(self, engine_with_rules):
+        """qty_matched 無 prebuilt 時應即時比較數量"""
+        df = pd.DataFrame({
+            'Entry Quantity': [100, 200, 50],
+            'Received Quantity': [100, 150, 50],
+        })
+        context = {'prebuilt_masks': {}}
+        check = {'type': 'qty_matched'}
+        result = engine_with_rules._evaluate_check(df, check, 'PO狀態', context)
+        assert result is not None
+        assert result.tolist() == [True, False, True]
+
+    @pytest.mark.unit
+    def test_qty_matched_missing_columns(self, engine_with_rules):
+        """qty_matched 缺少欄位時應回傳 None"""
+        df = pd.DataFrame({'Other': [1]})
+        context = {'prebuilt_masks': {}}
+        check = {'type': 'qty_matched'}
+        result = engine_with_rules._evaluate_check(df, check, 'PO狀態', context)
+        assert result is None
+
+    @pytest.mark.unit
+    def test_qty_not_matched(self, engine_with_rules):
+        """qty_not_matched 應為 qty_matched 的反向"""
+        df = pd.DataFrame({
+            'Entry Quantity': [100, 200],
+            'Received Quantity': [100, 150],
+        })
+        context = {'prebuilt_masks': {}}
+        check = {'type': 'qty_not_matched'}
+        result = engine_with_rules._evaluate_check(df, check, 'PO狀態', context)
+        assert result is not None
+        assert result.tolist() == [False, True]
+
+    @pytest.mark.unit
+    def test_not_billed_without_prebuilt(self, engine_with_rules):
+        """not_billed 無 prebuilt 時應檢查 Entry Billed Amount 是否為 0"""
+        df = pd.DataFrame({
+            'Entry Billed Amount': ['0', '5000', '0'],
+        })
+        context = {'prebuilt_masks': {}}
+        check = {'type': 'not_billed'}
+        result = engine_with_rules._evaluate_check(df, check, 'PO狀態', context)
+        assert result is not None
+        assert result.tolist() == [True, False, True]
+
+    @pytest.mark.unit
+    def test_has_billing_without_prebuilt(self, engine_with_rules):
+        """has_billing 無 prebuilt 時應檢查 Billed Quantity 非 '0'"""
+        df = pd.DataFrame({
+            'Billed Quantity': ['0', '100', '0'],
+        })
+        context = {'prebuilt_masks': {}}
+        check = {'type': 'has_billing'}
+        result = engine_with_rules._evaluate_check(df, check, 'PO狀態', context)
+        assert result is not None
+        assert result.tolist() == [False, True, False]
+
+    @pytest.mark.unit
+    def test_fully_billed_without_prebuilt(self, engine_with_rules):
+        """fully_billed 無 prebuilt 時應比較 Entry Amount 與 Entry Billed Amount"""
+        df = pd.DataFrame({
+            'Entry Amount': ['10000', '20000', '5000'],
+            'Entry Billed Amount': ['10000', '15000', '5000'],
+        })
+        context = {'prebuilt_masks': {}}
+        check = {'type': 'fully_billed'}
+        result = engine_with_rules._evaluate_check(df, check, 'PO狀態', context)
+        assert result is not None
+        assert result.tolist() == [True, False, True]
+
+    @pytest.mark.unit
+    def test_has_unpaid_without_prebuilt(self, engine_with_rules):
+        """has_unpaid 無 prebuilt 時應檢查金額差異"""
+        df = pd.DataFrame({
+            'Entry Amount': ['10000', '20000', '5000'],
+            'Entry Billed Amount': ['10000', '15000', '5000'],
+        })
+        context = {'prebuilt_masks': {}}
+        check = {'type': 'has_unpaid'}
+        result = engine_with_rules._evaluate_check(df, check, 'PO狀態', context)
+        assert result is not None
+        # 差額：0, 5000, 0 -> 非零為 True
+        assert result.tolist() == [False, True, False]
+
+    @pytest.mark.unit
+    def test_format_error_without_prebuilt(self, engine_with_rules):
+        """format_error 無 prebuilt 時應檢查 YMs of Item Description"""
+        df = pd.DataFrame({
+            'YMs of Item Description': ['100001,100002', '202510,202512', '100001,100002'],
+        })
+        context = {'prebuilt_masks': {}}
+        check = {'type': 'format_error'}
+        result = engine_with_rules._evaluate_check(df, check, 'PO狀態', context)
+        assert result is not None
+        assert result.tolist() == [True, False, True]
+
+    @pytest.mark.unit
+    def test_not_equals_check(self, engine_with_rules):
+        """not_equals 應為 equals 的反向"""
+        df = pd.DataFrame({'Status': ['Open', 'Closed', 'Open']})
+        check = {'type': 'not_equals', 'field': 'Status', 'value': 'Closed'}
+        result = engine_with_rules._evaluate_check(df, check, 'PO狀態', {})
+        assert result is not None
+        assert result.tolist() == [True, False, True]
+
+    @pytest.mark.unit
+    def test_not_in_list_check(self, engine_with_rules):
+        """not_in_list 應為 in_list 的反向"""
+        df = pd.DataFrame({'GL#': ['100000', '199999', '200000']})
+        check = {'type': 'not_in_list', 'field': 'GL#', 'values': ['199999']}
+        result = engine_with_rules._evaluate_check(df, check, 'PO狀態', {})
+        assert result is not None
+        assert result.tolist() == [True, False, True]
+
+    @pytest.mark.unit
+    def test_is_fa_check(self, engine_with_rules):
+        """is_fa 應根據 fa_accounts 配置識別 FA 帳號"""
+        df = pd.DataFrame({'GL#': ['100000', '199999', '200000']})
+        context = {'prebuilt_masks': {}}
+        check = {'type': 'is_fa'}
+        result = engine_with_rules._evaluate_check(df, check, 'PO狀態', context)
+        assert result is not None
+        # 只有 '199999' 在 fa_accounts.spx 中
+        assert result.tolist() == [False, True, False]
+
+    @pytest.mark.unit
+    def test_not_fa_check(self, engine_with_rules):
+        """not_fa 應為 is_fa 的反向"""
+        df = pd.DataFrame({'GL#': ['100000', '199999', '200000']})
+        context = {'prebuilt_masks': {}}
+        check = {'type': 'not_fa'}
+        result = engine_with_rules._evaluate_check(df, check, 'PO狀態', context)
+        assert result is not None
+        assert result.tolist() == [True, False, True]
+
+    @pytest.mark.unit
+    def test_remark_completed_check(self, engine_with_rules):
+        """remark_completed 應識別採購或 FN 備註中的完成關鍵字"""
+        df = pd.DataFrame({
+            'Remarked by Procurement': ['已完成', pd.NA, 'rent', pd.NA],
+            'Remarked by 上月 FN': [pd.NA, '已入帳', pd.NA, pd.NA],
+        })
+        context = {'prebuilt_masks': {}}
+        check = {'type': 'remark_completed'}
+        result = engine_with_rules._evaluate_check(df, check, 'PO狀態', context)
+        assert result is not None
+        assert result.tolist() == [True, True, True, False]
+
+    @pytest.mark.unit
+    def test_pr_not_incomplete_check(self, engine_with_rules):
+        """pr_not_incomplete 應排除 FN PR 備註中含「未完成」的列"""
+        df = pd.DataFrame({
+            'Remarked by 上月 FN PR': ['正常', '未完成', pd.NA],
+        })
+        context = {'prebuilt_masks': {}}
+        check = {'type': 'pr_not_incomplete'}
+        result = engine_with_rules._evaluate_check(df, check, 'PO狀態', context)
+        assert result is not None
+        assert result.tolist() == [True, False, True]
+
+    @pytest.mark.unit
+    def test_pr_not_incomplete_missing_column(self, engine_with_rules):
+        """pr_not_incomplete 欄位不存在時應回傳全 True"""
+        df = pd.DataFrame({'Other': [1, 2]})
+        context = {'prebuilt_masks': {}}
+        check = {'type': 'pr_not_incomplete'}
+        result = engine_with_rules._evaluate_check(df, check, 'PO狀態', context)
+        assert result is not None
+        assert result.tolist() == [True, True]
+
+    @pytest.mark.unit
+    def test_not_error_check(self, engine_with_rules):
+        """not_error 應排除 Remarked by Procurement 為 'error' 的列"""
+        df = pd.DataFrame({
+            'Remarked by Procurement': ['normal', 'error', 'ok'],
+        })
+        context = {'prebuilt_masks': {}}
+        check = {'type': 'not_error'}
+        result = engine_with_rules._evaluate_check(df, check, 'PO狀態', context)
+        assert result is not None
+        assert result.tolist() == [True, False, True]
+
+    @pytest.mark.unit
+    def test_not_error_missing_column(self, engine_with_rules):
+        """not_error 欄位不存在時應回傳全 True"""
+        df = pd.DataFrame({'Other': [1, 2]})
+        context = {'prebuilt_masks': {}}
+        check = {'type': 'not_error'}
+        result = engine_with_rules._evaluate_check(df, check, 'PO狀態', context)
+        assert result is not None
+        assert result.tolist() == [True, True]
+
+    @pytest.mark.unit
+    def test_out_of_range_without_prebuilt(self, engine_with_rules):
+        """out_of_range 無 prebuilt 時應計算不在範圍且非格式錯誤的列"""
+        df = pd.DataFrame({
+            'Expected Received Month_轉換格式': [202511, 202601, 202510],
+            'YMs of Item Description': ['202510,202512', '202510,202512', '100001,100002'],
+        })
+        context = {'prebuilt_masks': {}}
+        check = {'type': 'out_of_range'}
+        result = engine_with_rules._evaluate_check(df, check, 'PO狀態', context)
+        assert result is not None
+        # 202511 在範圍 -> in_range=True -> out=False
+        # 202601 不在範圍 -> in_range=False, 非格式錯誤 -> out=True
+        # 202510 -> YMs='100001,100002' 格式錯誤 -> 被排除 -> out=False
+        assert result.tolist() == [False, True, False]
+
+    @pytest.mark.unit
+    def test_desc_erm_le_date(self, engine_with_rules):
+        """desc_erm_le_date 應比較 YMs of Item Description 結尾日期"""
+        df = pd.DataFrame({
+            'YMs of Item Description': ['202510,202512', '202510,202601', '202510,202511'],
+        })
+        context = {'processing_date': 202512, 'prebuilt_masks': {}}
+        check = {'type': 'desc_erm_le_date'}
+        result = engine_with_rules._evaluate_check(df, check, 'PO狀態', context)
+        assert result is not None
+        # str[7:] -> '202512', '202601', '202511'
+        # <= 202512 -> True, False, True
+        assert result.tolist() == [True, False, True]
+
+    @pytest.mark.unit
+    def test_desc_erm_gt_date(self, engine_with_rules):
+        """desc_erm_gt_date 應比較 YMs of Item Description 起始日期"""
+        df = pd.DataFrame({
+            'YMs of Item Description': ['202510,202512', '202601,202603', '202512,202512'],
+        })
+        context = {'processing_date': 202512, 'prebuilt_masks': {}}
+        check = {'type': 'desc_erm_gt_date'}
+        result = engine_with_rules._evaluate_check(df, check, 'PO狀態', context)
+        assert result is not None
+        # str[:6] -> '202510', '202601', '202512'
+        # > 202512 -> False, True, False
+        assert result.tolist() == [False, True, False]
+
+    @pytest.mark.unit
+    def test_desc_erm_not_error(self, engine_with_rules):
+        """desc_erm_not_error 應排除 YMs 起始為 100001 的列"""
+        df = pd.DataFrame({
+            'YMs of Item Description': ['202510,202512', '100001,100002'],
+        })
+        context = {'prebuilt_masks': {}}
+        check = {'type': 'desc_erm_not_error'}
+        result = engine_with_rules._evaluate_check(df, check, 'PO狀態', context)
+        assert result is not None
+        assert result.tolist() == [True, False]
+
+    @pytest.mark.unit
+    def test_equals_with_cast(self, engine_with_rules):
+        """equals 帶 cast 參數時應正確轉型比較"""
+        df = pd.DataFrame({'Amount': ['100', '200', '100']})
+        check = {'type': 'equals', 'field': 'Amount', 'value': 100, 'cast': 'int'}
+        result = engine_with_rules._evaluate_check(df, check, 'PO狀態', {})
+        assert result is not None
+        assert result.tolist() == [True, False, True]
+
+    @pytest.mark.unit
+    def test_contains_with_pattern_key(self, engine_with_rules, mock_engine_deps):
+        """contains 使用 pattern_key 應從配置解析正則"""
+        df = pd.DataFrame({'Description': ['含訂金品項', '一般品項', '押金']})
+        check = {'type': 'contains', 'field': 'Description', 'pattern_key': 'spx.deposit_keywords'}
+        result = engine_with_rules._evaluate_check(df, check, 'PO狀態', {})
+        assert result is not None
+        assert result.tolist() == [True, False, True]
+
+    @pytest.mark.unit
+    def test_in_list_with_list_key(self, engine_with_rules, mock_engine_deps):
+        """in_list 使用 list_key 應從配置解析列表"""
+        df = pd.DataFrame({'GL#': ['100000', '199999', '200000']})
+        check = {'type': 'in_list', 'field': 'GL#', 'list_key': 'fa_accounts.spx'}
+        result = engine_with_rules._evaluate_check(df, check, 'PO狀態', {})
+        assert result is not None
+        assert result.tolist() == [False, True, False]
+
+    @pytest.mark.unit
+    def test_prebuilt_mask_no_status_not_used(self, engine_with_rules):
+        """no_status 類型不應使用 prebuilt_masks，需即時計算"""
+        df = pd.DataFrame({'PO狀態': [pd.NA, '已完成']})
+        # 即使 prebuilt 中有 no_status，也不應使用
+        prebuilt_value = pd.Series([False, False])
+        context = {'prebuilt_masks': {'no_status': prebuilt_value}}
+        check = {'type': 'no_status'}
+        result = engine_with_rules._evaluate_check(df, check, 'PO狀態', context)
+        assert result is not None
+        # 應即時計算而非使用 prebuilt
+        assert result.iloc[0] == True
+        assert result.iloc[1] == False
+
+
+# ============================================================
+# _build_combined_mask 額外測試
+# ============================================================
+
+class TestBuildCombinedMaskExtended:
+    """測試 _build_combined_mask 的邊界情況"""
+
+    @pytest.mark.unit
+    def test_empty_checks_returns_none(self, engine_with_rules):
+        """空 checks 列表應回傳 None"""
+        df = pd.DataFrame({'A': [1, 2]})
+        result = engine_with_rules._build_combined_mask(
+            df, [], 'and', 'PO狀態', {}
+        )
+        assert result is None
+
+    @pytest.mark.unit
+    def test_all_checks_return_none(self, engine_with_rules):
+        """所有 check 都回傳 None 時，組合結果應為 None"""
+        df = pd.DataFrame({'A': [1, 2]})
+        checks = [
+            {'type': 'contains', 'field': 'NonExistent', 'pattern': 'x'},
+            {'type': 'equals', 'field': 'NonExistent', 'value': 'y'},
+        ]
+        result = engine_with_rules._build_combined_mask(
+            df, checks, 'and', 'PO狀態', {}
+        )
+        assert result is None
+
+    @pytest.mark.unit
+    def test_or_combine_multiple_masks(self, engine_with_rules):
+        """'or' 組合多個 mask 應正確聯集"""
+        df = pd.DataFrame({
+            'A': ['x', 'y', 'z'],
+            'B': ['p', 'q', 'x'],
+            'C': ['m', 'n', 'x'],
+        })
+        checks = [
+            {'type': 'equals', 'field': 'A', 'value': 'x'},
+            {'type': 'equals', 'field': 'B', 'value': 'q'},
+            {'type': 'equals', 'field': 'C', 'value': 'x'},
+        ]
+        result = engine_with_rules._build_combined_mask(
+            df, checks, 'or', 'PO狀態', {}
+        )
+        assert result is not None
+        # row 0: A=x -> True; row 1: B=q -> True; row 2: B=x, C=x -> True
+        assert result.tolist() == [True, True, True]
+
+    @pytest.mark.unit
+    def test_type_placeholder_in_field(self, engine_with_rules):
+        """{TYPE} 佔位符在 field 中應被替換為 processing_type"""
+        df = pd.DataFrame({
+            'PR狀態': [pd.NA, '已完成', pd.NA],
+        })
+        checks = [{'type': 'is_null', 'field': '{TYPE}狀態'}]
+        result = engine_with_rules._build_combined_mask(
+            df, checks, 'and', 'PR狀態', {},
+            processing_type='PR'
+        )
+        assert result is not None
+        assert result.tolist() == [True, False, True]
+
+
+# ============================================================
+# _compute_erm_in_range 測試
+# ============================================================
+
+class TestComputeErmInRange:
+    """測試 _compute_erm_in_range 方法"""
+
+    @pytest.mark.unit
+    def test_erm_in_range_basic(self, engine_with_rules):
+        """ERM 在 YMs 範圍內應回傳 True"""
+        df = pd.DataFrame({
+            'Expected Received Month_轉換格式': [202510, 202512, 202511],
+            'YMs of Item Description': ['202510,202512', '202510,202512', '202510,202512'],
+        })
+        result = engine_with_rules._compute_erm_in_range(df)
+        assert result is not None
+        # 全部都在 [202510, 202512] 範圍內
+        assert result.tolist() == [True, True, True]
+
+    @pytest.mark.unit
+    def test_erm_out_of_range(self, engine_with_rules):
+        """ERM 不在 YMs 範圍內應回傳 False"""
+        df = pd.DataFrame({
+            'Expected Received Month_轉換格式': [202509, 202601],
+            'YMs of Item Description': ['202510,202512', '202510,202512'],
+        })
+        result = engine_with_rules._compute_erm_in_range(df)
+        assert result is not None
+        assert result.tolist() == [False, False]
+
+    @pytest.mark.unit
+    def test_erm_in_range_missing_columns(self, engine_with_rules):
+        """缺少必要欄位應回傳 None"""
+        df = pd.DataFrame({'Other': [1]})
+        result = engine_with_rules._compute_erm_in_range(df)
+        assert result is None
+
+
+# ============================================================
+# apply_rules 進階測試
+# ============================================================
+
+class TestApplyRulesExtended:
+    """apply_rules 方法的進階測試"""
+
+    @pytest.mark.unit
+    def test_update_no_status_in_prebuilt(self, engine_with_rules, sample_df, engine_context):
+        """update_no_status=True 時應同步更新 prebuilt_masks 中的 no_status"""
+        df = sample_df.copy()
+        engine_context['prebuilt_masks'] = {
+            'qty_matched': pd.Series([True] * 5),
+            'erm_le_date': pd.Series([True] * 5),
+            'erm_gt_date': pd.Series([False] * 5),
+            'format_error': pd.Series([False] * 5),
+        }
+        engine_with_rules.apply_rules(
+            df, 'PO狀態', engine_context, update_no_status=True
+        )
+        # prebuilt_masks 中應有 no_status
+        assert 'no_status' in engine_context['prebuilt_masks']
+
+    @pytest.mark.unit
+    def test_rule_with_empty_checks_skipped(self, mock_engine_deps):
+        """checks 為空列表的規則應被跳過"""
+        mock_engine_deps._config_toml['test_rules'] = {
+            'conditions': [
+                {
+                    'priority': 10,
+                    'status_value': '不應命中',
+                    'note': '空 checks',
+                    'combine': 'and',
+                    'checks': [],
+                },
+            ]
+        }
+        from accrual_bot.tasks.spx.steps.spx_condition_engine import SPXConditionEngine
+        engine = SPXConditionEngine('test_rules')
+        df = pd.DataFrame({'PO狀態': [pd.NA]})
+        context = {'processing_date': 202512, 'prebuilt_masks': {}}
+        df_result, stats = engine.apply_rules(df, 'PO狀態', context)
+        assert df_result['PO狀態'].isna().all()
+
+    @pytest.mark.unit
+    def test_multiple_rules_sequential(self, mock_engine_deps):
+        """多個規則應依序應用，已被命中的列不再被後續規則處理"""
+        mock_engine_deps._config_toml['test_rules'] = {
+            'conditions': [
+                {
+                    'priority': 10,
+                    'status_value': '第一批',
+                    'note': '第一規則',
+                    'combine': 'and',
+                    'checks': [{'type': 'equals', 'field': 'Type', 'value': 'A'}],
+                },
+                {
+                    'priority': 20,
+                    'status_value': '第二批',
+                    'note': '第二規則',
+                    'combine': 'and',
+                    'checks': [{'type': 'equals', 'field': 'Type', 'value': 'B'}],
+                },
+            ]
+        }
+        from accrual_bot.tasks.spx.steps.spx_condition_engine import SPXConditionEngine
+        engine = SPXConditionEngine('test_rules')
+        df = pd.DataFrame({
+            'PO狀態': [pd.NA, pd.NA, pd.NA],
+            'Type': ['A', 'B', 'C'],
+        })
+        context = {'processing_date': 202512, 'prebuilt_masks': {}}
+        df_result, stats = engine.apply_rules(df, 'PO狀態', context)
+        assert df_result.loc[0, 'PO狀態'] == '第一批'
+        assert df_result.loc[1, 'PO狀態'] == '第二批'
+        # 第三列不匹配任何規則，應仍為 NA
+        assert pd.isna(df_result.loc[2, 'PO狀態'])

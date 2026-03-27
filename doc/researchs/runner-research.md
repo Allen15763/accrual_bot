@@ -1735,14 +1735,17 @@ def _convert_params(params: Dict[str, Any]) -> Dict[str, Any]:
 
 ### 8.3 測試現況
 
-> **警告**：`runner` 模組目前在 `tests/` 目錄中沒有對應的單元測試。
+> **2026-03-28 更新**：Phase 15 新增 2 個測試檔案，覆蓋率從 0% 大幅提升。
 
-這是顯著的測試覆蓋空白，尤其考慮到 `config_loader.py` 中包含了幾個具有業務邏輯的純函數，這些函數天然易於測試。
+| 測試檔案 | 測試數 | 覆蓋率 | 覆蓋範圍 |
+|----------|--------|--------|---------|
+| `tests/unit/runner/test_config_loader.py` | 30 | ~97% | `load_run_config()`, `load_file_paths()`, `_calculate_date_vars()`, `_resolve_path_template()`, `_convert_params()`, `_deep_merge()` |
+| `tests/unit/runner/test_step_executor.py` | 12 | ~93% | `StepByStepExecutor` 的互動模式（mock `input()`）、checkpoint 保存、continue/skip/abort 操作 |
 
-**可立即加入的測試（無 mock 需求）**：
+原先建議的測試已全部實現，並擴展至更完整的覆蓋。以下為原始建議供參考：
 
 ```python
-# tests/unit/runner/test_config_loader.py
+# tests/unit/runner/test_config_loader.py（已實現）
 
 import pytest
 from accrual_bot.runner.config_loader import (

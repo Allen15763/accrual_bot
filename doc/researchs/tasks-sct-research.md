@@ -823,15 +823,20 @@ SCT 目前依賴 `SCTPostProcessingStep` 的輸出欄位篩選作為最終輸出
 
 ### 8.2 測試覆蓋率現況
 
+> **2026-03-28 更新**：Phase 15 新增 3 個測試檔案，覆蓋原先空白的步驟。
+
 | 測試檔案 | 測試數 | 測試範圍 |
 |----------|--------|---------|
 | `test_sct_evaluation.py` | 28 | SCTERMLogicStep + SCTPRERMLogicStep |
 | `test_sct_asset_status.py` | 10 | SCTAssetStatusUpdateStep |
 | `test_sct_account_prediction.py` | 2 | SCTAccountPredictionStep |
 | `test_sct_post_processing.py` | 21 | SCTPostProcessingStep |
-| **合計** | **61** | — |
+| `test_sct_column_addition.py` | 15 | SCTColumnAdditionStep（FA/S&M 判斷、欄位添加、PR 重命名） |
+| `test_sct_integration.py` | 7 | APInvoiceIntegrationStep |
+| `test_sct_loading.py` | 12 | SCTDataLoadingStep + SCTPRDataLoadingStep |
+| **合計** | **~95** | — |
 
-**未覆蓋的步驟**：`SCTDataLoadingStep`、`SCTPRDataLoadingStep`、`SCTColumnAdditionStep`、`APInvoiceIntegrationStep`、`SCTPipelineOrchestrator`
+**已覆蓋所有主要步驟**。剩餘未覆蓋：`SCTPipelineOrchestrator` 部分分支。
 
 ### 8.3 檔案行數統計
 

@@ -753,13 +753,9 @@ self.logger.error(...)
 
 #### 問題 4：缺乏對應的單元測試
 
-目前 `tests/` 目錄中**沒有** `test_data_shape_summary.py`，這是一個明顯的測試缺口：
+~~目前 `tests/` 目錄中**沒有** `test_data_shape_summary.py`~~
 
-- `DataShapeSummaryStep` 的核心邏輯（`_create_pivot_summary`、`_create_comparison_summary`）屬於純函數，非常適合單元測試，但缺乏覆蓋
-- 獨立執行模式（`run_standalone_summary`、`_load_file`）也未有測試
-- 在 830 個測試中，此模組的測試覆蓋率為 0%
-
-這個問題特別值得關注，因為 `DataShapeSummaryStep` 是唯一跨實體共用的步驟，其正確性直接影響兩個實體的驗證報告。
+> **2026-03-28 更新**：Phase 15 已新增 `tests/unit/tasks/common/test_data_shape_summary.py`（10 tests），覆蓋 `DataShapeSummaryStep` 的核心邏輯（`execute()`、`_create_pivot_summary`、`_create_comparison_summary`）及獨立執行模式。此測試缺口已填補。
 
 #### 問題 5：output 目錄檔案累積問題
 

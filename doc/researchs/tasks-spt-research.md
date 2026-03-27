@@ -1772,7 +1772,7 @@ async def _load_reference_data(self, context: ProcessingContext) -> int:
 
 ### 8.2 測試覆蓋率現況
 
-根據 `CLAUDE.md` 的記錄，SPT 相關測試位於：
+> **2026-03-28 更新**：Phase 15 新增 5 個測試檔案，覆蓋原先空白的 affiliate、accountant、後處理、採購 pipeline 步驟。
 
 | 測試檔案 | 主要覆蓋內容 | 覆蓋率 |
 |---|---|---|
@@ -1780,8 +1780,13 @@ async def _load_reference_data(self, context: ProcessingContext) -> int:
 | `tests/unit/tasks/spt/test_spt_loading.py` | `SPTDataLoadingStep` 的輸入驗證 | 中等 |
 | `tests/unit/tasks/spt/test_spt_evaluation_erm.py` | `SPTERMLogicStep` 的 ERM 邏輯 | 96% |
 | `tests/unit/tasks/spt/test_spt_account_prediction.py` | `SPTAccountPredictionStep` | 中等 |
+| `tests/unit/tasks/spt/test_spt_evaluation_accountant.py` | `SPTStatusLabelStep`（11 種條件、規則引擎） | ~98% |
+| `tests/unit/tasks/spt/test_spt_evaluation_affiliate.py` | `CommissionDataUpdateStep`、`PayrollDetectionStep` | ~92% |
+| `tests/unit/tasks/spt/test_spt_post_processing_step.py` | `SPTPostProcessingStep`（格式化、清理、重排） | 中等 |
+| `tests/unit/tasks/spt/test_spt_column_initialization.py` | `SPTColumnInitializationStep`（PO/PR Line、supplier mapping） | 中等 |
+| `tests/unit/tasks/spt/test_spt_procurement_pipeline.py` | 6 個採購步驟（evaluation、mapping、validation、loading、processing、export） | ~45% |
 
-`spt_evaluation_affiliate.py`、`spt_evaluation_accountant.py`、`spt_steps.py`（後處理步驟）、所有採購相關步驟的測試覆蓋率較低或沒有直接的測試檔案。
+所有主要步驟已有對應測試。已知源碼 BUG：`spt_combined_procurement_processing.py:151,207` 中 `ProcessingContext()` 無參數呼叫。
 
 ### 8.3 檔案行數統計
 

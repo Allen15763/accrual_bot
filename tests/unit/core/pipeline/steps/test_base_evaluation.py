@@ -364,3 +364,202 @@ def test_accrual_flag_various_statuses(status, expected_accrual):
     result = step._set_accrual_flag(df, 'PO狀態')
 
     assert result.loc[0, '是否估計入帳'] == expected_accrual
+
+
+# --- _set_account_name 測試 ---
+
+@pytest.mark.unit
+class TestSetAccountName:
+    """測試 _set_account_name 方法"""
+
+    @pytest.fixture
+    def step(self):
+        return ConcreteERMStep(name="TestERM")
+
+    def test_set_account_name_maps_correctly(self, step):
+        """測試科目名稱正確映射 - GL# 對應 Account Name"""
+        df = pd.DataFrame({
+            'Account code': ['100000', '100001', '100002'],
+            'PO狀態': ['已完成', '已完成', '已完成'],
+        })
+        ref_account = create_reference_account_df()
+        mask = pd.Series([True, True, True], index=df.index)
+
+        result = step._set_account_name(df, ref_account, mask)
+
+        assert 'Account Name' in result.columns
+        assert result.loc[0, 'Account Name'] == 'Cash'
+        assert result.loc[1, 'Account Name'] == 'Receivables'
+        assert result.loc[2, 'Account Name'] == 'Inventory'
+
+    def test_set_account_name_empty_ref(self, step):
+        """測試參考科目資料為空時，直接返回原始 DataFrame"""
+        df = pd.DataFrame({
+            'Account code': ['100000'],
+        })
+        ref_account = pd.DataFrame(columns=['Account', 'Account Desc'])
+        mask = pd.Series([True], index=df.index)
+
+        result = step._set_account_name(df, ref_account, mask)
+
+        # 參考資料為空，不應該新增 Account Name 欄位（或維持原樣）
+        assert 'Account Name' not in result.columns or result['Account Name'].isna().all()
+
+    def test_set_account_name_unmatched_code(self, step):
+        """測試無法匹配的科目代碼，Account Name 應為 NaN"""
+        df = pd.DataFrame({
+            'Account code': ['999999'],
+        })
+        ref_account = create_reference_account_df()
+        mask = pd.Series([True], index=df.index)
+
+        result = step._set_account_name(df, ref_account, mask)
+
+        assert 'Account Name' in result.columns
+        assert pd.isna(result.loc[0, 'Account Name'])
+
+
+# --- _set_department 測試 ---
+
+@pytest.mark.unit
+class TestSetDepartment:
+    """測試 _set_department 方法"""
+
+    @pytest.fixture
+    def step(self):
+        """建立帶有 dept_accounts 的測試步驟"""
+        s = ConcreteERMStep(name="TestERM")
+        s.dept_accounts = ['100001']
+        return s
+
+    def test_set_department_in_dept_accounts(self, step):
+        """測試科目在 dept_accounts 清單中時，取 Department 前3碼"""
+        df = pd.DataFrame({
+            'Account code': ['100001'],
+            'Department': ['ABC123'],
+            'Dep.': [''],
+        })
+        mask = pd.Series([True], index=df.index)
+
+        result = step._set_department(df, mask)
+
+        assert result.loc[0, 'Dep.'] == 'ABC'
+
+    def test_set_department_not_in_dept_accounts(self, step):
+        """測試科目不在 dept_accounts 清單中時，設為 '000'"""
+        df = pd.DataFrame({
+            'Account code': ['100000'],
+            'Department': ['XYZ789'],
+            'Dep.': [''],
+        })
+        mask = pd.Series([True], index=df.index)
+
+        result = step._set_department(df, mask)
+
+        assert result.loc[0, 'Dep.'] == '000'
+
+
+# --- _calculate_accrual_amount 測試 ---
+
+@pytest.mark.unit
+class TestCalculateAccrualAmount:
+    """測試 _calculate_accrual_amount 方法"""
+
+    @pytest.fixture
+    def step(self):
+        return ConcreteERMStep(name="TestERM")
+
+    def test_calculate_accrual_amount_basic(self, step):
+        """測試基本預估金額計算: Unit Price * (Entry Qty - Billed Qty)"""
+        df = pd.DataFrame({
+            'Unit Price': [100.0, 200.0],
+            'Entry Quantity': [10, 20],
+            'Billed Quantity': [5, 15],
+        })
+        mask = pd.Series([True, True], index=df.index)
+
+        result = step._calculate_accrual_amount(df, mask)
+
+        assert 'Accr. Amount' in result.columns
+        # 100 * (10 - 5) = 500
+        assert float(result.loc[0, 'Accr. Amount']) == 500.0
+        # 200 * (20 - 15) = 1000
+        assert float(result.loc[1, 'Accr. Amount']) == 1000.0
+        # temp_amount 欄位應被移除
+        assert 'temp_amount' not in result.columns
+
+    def test_calculate_accrual_amount_partial_mask(self, step):
+        """測試部分 mask 為 False 時，只計算 mask 為 True 的列"""
+        df = pd.DataFrame({
+            'Unit Price': [100.0, 200.0],
+            'Entry Quantity': [10, 20],
+            'Billed Quantity': [5, 15],
+        })
+        mask = pd.Series([True, False], index=df.index)
+
+        result = step._calculate_accrual_amount(df, mask)
+
+        assert float(result.loc[0, 'Accr. Amount']) == 500.0
+        assert pd.isna(result.loc[1, 'Accr. Amount'])
+
+
+# --- _handle_prepayment 測試 ---
+
+@pytest.mark.unit
+class TestHandlePrepayment:
+    """測試 _handle_prepayment 方法"""
+
+    @pytest.fixture
+    def step(self):
+        return ConcreteERMStep(name="TestERM")
+
+    def test_handle_prepayment_with_prepay(self, step):
+        """測試有預付款時，是否有預付 = 'Y'，Liability = '111112'"""
+        df = pd.DataFrame({
+            'Entry Prepay Amount': ['100', '0'],
+            'Account code': ['100000', '100001'],
+            '是否有預付': [pd.NA, pd.NA],
+            'Liability': [pd.NA, pd.NA],
+        })
+        mask = pd.Series([True, True], index=df.index)
+        ref_liability = create_reference_liability_df()
+
+        result = step._handle_prepayment(df, mask, ref_liability)
+
+        # 第一筆有預付款
+        assert result.loc[0, '是否有預付'] == 'Y'
+        assert result.loc[0, 'Liability'] == '111112'
+
+    def test_handle_prepayment_without_prepay(self, step):
+        """測試無預付款時，從參考資料查找 Liability"""
+        df = pd.DataFrame({
+            'Entry Prepay Amount': ['0', '0'],
+            'Account code': ['100000', '100001'],
+            '是否有預付': [pd.NA, pd.NA],
+            'Liability': [pd.NA, pd.NA],
+        })
+        mask = pd.Series([True, True], index=df.index)
+        ref_liability = create_reference_liability_df()
+
+        result = step._handle_prepayment(df, mask, ref_liability)
+
+        # 無預付款，Liability 從參考資料查找
+        assert result.loc[0, 'Liability'] == '111111'
+        assert result.loc[1, 'Liability'] == '111112'
+
+    def test_handle_prepayment_empty_ref_liability(self, step):
+        """測試參考負債資料為空時的處理"""
+        df = pd.DataFrame({
+            'Entry Prepay Amount': ['100', '0'],
+            'Account code': ['100000', '100001'],
+            '是否有預付': [pd.NA, pd.NA],
+            'Liability': [pd.NA, pd.NA],
+        })
+        mask = pd.Series([True, True], index=df.index)
+        ref_liability = pd.DataFrame(columns=['Account', 'Liability'])
+
+        result = step._handle_prepayment(df, mask, ref_liability)
+
+        # 有預付款的仍應設置 Liability = '111112'
+        assert result.loc[0, '是否有預付'] == 'Y'
+        assert result.loc[0, 'Liability'] == '111112'

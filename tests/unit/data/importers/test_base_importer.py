@@ -178,3 +178,138 @@ class TestBaseDataImporter:
         date_int, month = importer.extract_date_and_month_from_filename("no_date_here.csv")
         assert date_int is None
         assert month is None
+
+
+@pytest.mark.unit
+class TestBaseDataImporterExtended:
+    """BaseDataImporter 擴展測試 - 提高覆蓋率"""
+
+    @pytest.fixture
+    def importer(self):
+        """建立 BaseDataImporter 實例（mock 外部依賴）"""
+        with patch("accrual_bot.data.importers.base_importer.get_logger") as mock_logger, \
+             patch("accrual_bot.data.importers.base_importer.CONCURRENT_SETTINGS",
+                   {"MAX_WORKERS": 4, "TIMEOUT": 60}):
+            mock_logger.return_value = MagicMock()
+            from accrual_bot.data.importers.base_importer import BaseDataImporter
+            instance = BaseDataImporter()
+            yield instance
+
+    # --- import_file 錯誤處理路徑 ---
+
+    def test_import_file_excel_read_error_logs_and_raises(self, importer, tmp_path):
+        """驗證 Excel 讀取失敗時會記錄錯誤並拋出例外"""
+        bad_file = tmp_path / "corrupt.xlsx"
+        bad_file.write_bytes(b"not an excel file")
+        with patch("accrual_bot.data.importers.base_importer.validate_file_path", return_value=True), \
+             patch("accrual_bot.data.importers.base_importer.is_excel_file", return_value=True), \
+             patch("accrual_bot.data.importers.base_importer.is_csv_file", return_value=False):
+            with pytest.raises(Exception):
+                importer.import_file(str(bad_file))
+        # 確認有記錄錯誤
+        importer.logger.error.assert_called()
+
+    def test_import_file_passes_kwargs_to_csv(self, importer, tmp_path):
+        """驗證 import_file 正確傳遞 kwargs 給 _import_csv"""
+        csv_file = tmp_path / "data.csv"
+        csv_file.write_bytes("a,b\n1,2\n".encode("utf-8"))
+        with patch("accrual_bot.data.importers.base_importer.validate_file_path", return_value=True), \
+             patch("accrual_bot.data.importers.base_importer.is_excel_file", return_value=False), \
+             patch("accrual_bot.data.importers.base_importer.is_csv_file", return_value=True):
+            df = importer.import_file(str(csv_file), encoding='utf-8')
+            assert len(df) == 1
+            assert list(df.columns) == ["a", "b"]
+
+    # --- import_multiple_files 批量導入 ---
+
+    def test_import_multiple_files_skips_empty_path(self, importer, tmp_path):
+        """驗證空路徑字串會被跳過"""
+        csv_file = tmp_path / "good.csv"
+        csv_file.write_bytes("x\n1\n".encode("utf-8"))
+        with patch("accrual_bot.data.importers.base_importer.validate_file_path", return_value=True), \
+             patch("accrual_bot.data.importers.base_importer.is_excel_file", return_value=False), \
+             patch("accrual_bot.data.importers.base_importer.is_csv_file", return_value=True):
+            results = importer.import_multiple_files(["", str(csv_file), ""])
+            assert len(results) == 1
+            assert "good" in results
+
+    def test_import_multiple_files_continues_on_single_failure(self, importer, tmp_path):
+        """驗證單一檔案失敗時不影響其他檔案的導入"""
+        good_csv = tmp_path / "good.csv"
+        good_csv.write_bytes("col\nval\n".encode("utf-8"))
+        bad_csv = tmp_path / "bad.csv"
+        bad_csv.write_bytes(b"\x80\x81\x82")  # 無效的 binary
+
+        with patch("accrual_bot.data.importers.base_importer.validate_file_path", return_value=True), \
+             patch("accrual_bot.data.importers.base_importer.is_excel_file", return_value=False), \
+             patch("accrual_bot.data.importers.base_importer.is_csv_file", return_value=True):
+            results = importer.import_multiple_files([str(bad_csv), str(good_csv)])
+            # good.csv 應成功導入，bad.csv 失敗但不中斷
+            assert "good" in results
+
+    def test_import_multiple_files_with_file_configs(self, importer, tmp_path):
+        """驗證 file_configs 參數正確傳遞給 import_file"""
+        csv_file = tmp_path / "configured.csv"
+        csv_file.write_bytes("h1,h2\na,b\n".encode("utf-8"))
+        with patch("accrual_bot.data.importers.base_importer.validate_file_path", return_value=True), \
+             patch("accrual_bot.data.importers.base_importer.is_excel_file", return_value=False), \
+             patch("accrual_bot.data.importers.base_importer.is_csv_file", return_value=True):
+            results = importer.import_multiple_files(
+                [str(csv_file)],
+                file_configs={"configured": {"encoding": "utf-8"}}
+            )
+            assert "configured" in results
+            assert len(results["configured"]) == 1
+
+    # --- _import_excel engine fallback ---
+
+    def test_import_excel_openpyxl_fallback_to_xlrd(self, importer, tmp_path):
+        """驗證 openpyxl 失敗時會嘗試 xlrd engine"""
+        xlsx_file = tmp_path / "test.xlsx"
+        df = pd.DataFrame({"a": [1]})
+        df.to_excel(xlsx_file, index=False, engine="openpyxl")
+
+        call_count = 0
+        original_read_excel = pd.read_excel
+
+        def mock_read_excel(path, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if kwargs.get('engine') == 'openpyxl':
+                raise Exception("openpyxl 模擬失敗")
+            # xlrd 也會失敗（因為是 xlsx 格式），但我們驗證 fallback 邏輯有執行
+            raise Exception("xlrd 模擬失敗")
+
+        with patch("accrual_bot.data.importers.base_importer.pd.read_excel", side_effect=mock_read_excel):
+            with pytest.raises(Exception, match="openpyxl 模擬失敗"):
+                importer._import_excel(str(xlsx_file))
+            # 確認嘗試了兩次（openpyxl + xlrd fallback）
+            assert call_count == 2
+
+    # --- _import_csv 編碼偵測 ---
+
+    def test_import_csv_all_encodings_fail_raises_valueerror(self, importer, tmp_path):
+        """驗證所有編碼都失敗時拋出 ValueError"""
+        csv_file = tmp_path / "unreadable.csv"
+        csv_file.write_bytes(b"\x80\x81\x82\xff\xfe")
+
+        # iso-8859-1 can read any byte sequence, so we must mock pd.read_csv
+        # to force UnicodeDecodeError on all encoding attempts
+        with patch("accrual_bot.data.importers.base_importer.pd.read_csv",
+                    side_effect=UnicodeDecodeError("codec", b"", 0, 1, "mock")):
+            with pytest.raises(ValueError, match="無法使用任何編碼格式讀取"):
+                importer._import_csv(str(csv_file), encoding="ascii")
+
+    def test_import_csv_utf8_sig_encoding(self, importer, tmp_path):
+        """驗證 UTF-8 BOM 編碼的 CSV 可正確讀取"""
+        csv_file = tmp_path / "bom.csv"
+        content = "\ufeffcol1,col2\nval1,val2\n"
+        csv_file.write_bytes(content.encode("utf-8-sig"))
+        result = importer._import_csv(str(csv_file), encoding="utf-8-sig")
+        assert len(result) == 1
+
+    # --- validate_dataframe None 輸入 ---
+
+    def test_validate_dataframe_none_returns_false(self, importer):
+        """驗證 None 輸入回傳 False"""
+        assert importer.validate_dataframe(None) is False

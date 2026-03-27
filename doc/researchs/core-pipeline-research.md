@@ -1207,17 +1207,19 @@ checkpoints/
 
 ### 8.6 測試覆蓋率參考
 
+> **2026-03-28 更新**：Phase 15 大規模測試擴充後覆蓋率顯著提升。
+
 | 模組 | 覆蓋率 | 備注 |
 |------|--------|------|
 | `context.py` | 100% | `test_context.py` 完整覆蓋 |
 | `base.py` | 90% | `test_base_classes.py` |
 | `pipeline.py` | 86% | `test_pipeline.py`, `test_pipeline_builder.py` |
-| `checkpoint.py` | ~60% | `test_checkpoint.py` |
+| `checkpoint.py` | ~85% | `test_checkpoint.py`（新增損毀 checkpoint、邊界情況測試） |
 | `steps/base_loading.py` | 80% | `test_base_loading.py` |
-| `steps/base_evaluation.py` | 65% | `test_base_evaluation.py` |
+| `steps/base_evaluation.py` | ~79% | `test_base_evaluation.py`（新增 prepayment, accrual, department 測試） |
 | `steps/post_processing.py` | 88% | `test_post_processing.py` |
 | `steps/business.py` | 84% | `test_business_steps.py` |
-| `steps/common.py` | 40% | `test_common_steps.py`（複雜整合測試較難覆蓋） |
+| `steps/common.py` | ~79% | `test_common_steps.py`（新增 8 個步驟類別測試：DateFormatting, DateParsing, Validation, Export, ProductFilter, PreviousWorkpaper, ProcurementIntegration, DateLogic） |
 
 ### 8.7 已知問題快速查找
 
@@ -1228,7 +1230,7 @@ checkpoints/
 | `as_completed()` `.cancel()` 無效 | 低 | `pipeline.py:261-264` | 並行模式下取消邏輯無效 |
 | `StatusEvaluationStep` stub | 中 | `business.py:100` | 直接使用會得到錯誤結果 |
 | `context.get_entity_config()` 硬編碼 | 低 | `context.py:297-317` | 可能與 TOML 配置不同步 |
-| `_determine_key_type()` 返回 None | 低 | `common.py:806` | 已知測試失敗（2 tests） |
+| ~~`_determine_key_type()` 返回 None~~ | ~~低~~ | ~~`common.py:806`~~ | ✅ 已修復（2026-03-28）— 新增 PO-only 分支 |
 | `_variables` 直接存取 | 低 | `checkpoint.py:151` | 違反封裝，但功能正確 |
 | `StepResult.data` 未被使用 | 低 | `pipeline.py:220-228` | 設計意圖與實現脫節 |
 | `Generic[T]` 未實際使用 | 低 | `base.py:66` | 泛型宣告形同虛設 |
