@@ -22,6 +22,7 @@ from accrual_bot.tasks.sct.steps import (
     SCTPRERMLogicStep,
     SCTAssetStatusUpdateStep,
     SCTAccountPredictionStep,
+    SCTPostProcessingStep,
     APInvoiceIntegrationStep
 )
 
@@ -216,6 +217,10 @@ class SCTPipelineOrchestrator:
             ),
             'SCTAccountPrediction': lambda: SCTAccountPredictionStep(
                 name="SCTAccountPrediction",
+                required=True
+            ),
+            'SCTPostProcessing': lambda: SCTPostProcessingStep(
+                name="SCTPostProcessing",
                 required=True
             ),
         }
