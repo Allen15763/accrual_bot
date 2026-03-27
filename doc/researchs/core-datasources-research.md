@@ -21,7 +21,7 @@
 
 ## 1. 背景
 
-Accrual Bot 是一套用於 PO/PR 應計帳款處理的非同步資料管線系統，涵蓋 SPT 與 SPX 兩個業務實體。在資料管線的各個步驟（Loading → Filtering → Integration → Export）中，系統需要從多種異質資料來源讀取資料，例如：
+Accrual Bot 是一套用於 PO/PR 應計帳款處理的非同步資料管線系統，涵蓋 SPT、SPX 與 SCT 三個業務實體。在資料管線的各個步驟（Loading → Filtering → Integration → Export）中，系統需要從多種異質資料來源讀取資料，例如：
 
 - 業務部門提供的 **Excel 檔案**（`.xlsx`）
 - 系統導出的 **CSV 報表**（`.csv`）

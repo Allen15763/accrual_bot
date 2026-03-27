@@ -32,7 +32,7 @@
 
 ## 1. 背景
 
-Accrual Bot 是一個處理 PO/PR（採購單/請購單）月結應計（Accrual）資料的批次資料處理系統，主要用於 SPT 和 SPX 兩個事業體的財務資料調節。原始系統僅支援 CLI（`main_pipeline.py`）執行，每次修改參數或切換 entity 都需要手動改程式碼或設定檔，對非技術人員極不友善。
+Accrual Bot 是一個處理 PO/PR（採購單/請購單）月結應計（Accrual）資料的批次資料處理系統，主要用於 SPT、SPX 和 SCT 三個事業體的財務資料調節。原始系統僅支援 CLI（`main_pipeline.py`）執行，每次修改參數或切換 entity 都需要手動改程式碼或設定檔，對非技術人員極不友善。
 
 2026 年 1 月起，系統新增了 Streamlit Web UI（`main_streamlit.py`），以視覺化操作介面取代命令列，讓財務人員可以自助完成整個 pipeline 的設定與執行。UI 層被設計為獨立模組 `accrual_bot/ui/`，與核心的 `accrual_bot/core/` 和 `accrual_bot/tasks/` 完全解耦，對外只透過 `UnifiedPipelineService` 這一個門面（Facade）溝通。
 
@@ -45,7 +45,7 @@ Accrual Bot 是一個處理 PO/PR（採購單/請購單）月結應計（Accrual
 UI 模組提供一個五步驟的有導引工作流程：
 
 ```
-Page 1: 配置   → 選擇 Entity (SPT/SPX)、Type (PO/PR/PPE/…)、處理日期
+Page 1: 配置   → 選擇 Entity (SPT/SPX/SCT)、Type (PO/PR/PPE/…)、處理日期
 Page 2: 上傳   → 上傳所需/選填檔案，支援 CSV/XLSX/XLS
 Page 3: 執行   → 啟動 pipeline，顯示步驟進度與日誌
 Page 4: 結果   → 預覽輸出資料，下載 CSV / Excel
@@ -709,7 +709,7 @@ enabled_inv_steps = ["SPXInvDataLoading", "SPXInvProcessing", "SPXInvExport"]
      → 新 thread + 新 event loop
      → UnifiedPipelineService.build_pipeline()
          → _enrich_file_paths()  ← 注入 params
-         → SPXPipelineOrchestrator().build_po_pipeline()
+         → SPXPipelineOrchestrator().build_po_pipeline() / SCTPipelineOrchestrator().build_po_pipeline()
          → Pipeline 物件
      → pipeline.execute(context)
      → 結果寫入 st.session_state.result
@@ -871,7 +871,7 @@ def _reset_downstream_states():
 **位置**：`components/entity_selector.py` 第 22 行、第 85 行；`components/step_preview.py` 第 30 行
 
 **問題描述**：
-`service = UnifiedPipelineService()` 在 render 函數的頂部。Streamlit 每次 rerun 都重新執行這些函數，每次都建立新的 `SPTPipelineOrchestrator()` 和 `SPXPipelineOrchestrator()` 實例（因為 `_get_orchestrator()` 在每次呼叫時都是 `orchestrator_class()`）。
+`service = UnifiedPipelineService()` 在 render 函數的頂部。Streamlit 每次 rerun 都重新執行這些函數，每次都建立新的 `SPTPipelineOrchestrator()`、`SPXPipelineOrchestrator()` 和 `SCTPipelineOrchestrator()` 實例（因為 `_get_orchestrator()` 在每次呼叫時都是 `orchestrator_class()`）。
 
 **改進建議**：
 使用 `st.cache_resource` 裝飾器快取 service 實例（`@st.cache_resource` 是跨 session 的 singleton），或在 session_state 中初始化一次：

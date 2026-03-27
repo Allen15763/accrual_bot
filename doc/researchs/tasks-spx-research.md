@@ -24,7 +24,7 @@
 
 ### 1.1 業務背景
 
-SPX（Shopee Express）是 accrual_bot 系統所支援的兩大業務實體之一（另一個是 SPT）。其應付帳款估計（Accrual）流程涵蓋四種作業類型：
+SPX（Shopee Express）是 accrual_bot 系統所支援的三大業務實體之一（另外兩個是 SPT 和 SCT）。其應付帳款估計（Accrual）流程涵蓋四種作業類型：
 
 | 類型 | 說明 | 資料來源 |
 |------|------|---------|

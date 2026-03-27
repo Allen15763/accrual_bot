@@ -69,7 +69,7 @@
 
 ### 1.1 專案脈絡
 
-`accrual_bot` 是一套為 SPT 與 SPX 兩個業務實體設計的**月度財務數據對帳系統**。每月執行一次的 PO（採購單）/ PR（採購申請）應計項目（accruals）處理是其核心業務需求：從多個來源匯入原始數據、套用複雜的商業規則、與前期底稿比對，最終輸出財務工作底稿供會計人員使用。
+`accrual_bot` 是一套為 SPT、SPX 與 SCT 三個業務實體設計的**月度財務數據對帳系統**。每月執行一次的 PO（採購單）/ PR（採購申請）應計項目（accruals）處理是其核心業務需求：從多個來源匯入原始數據、套用複雜的商業規則、與前期底稿比對，最終輸出財務工作底稿供會計人員使用。
 
 這類月度批次系統的特點是：
 - **執行頻率低**：每月僅執行一到數次，非持續性服務
@@ -111,7 +111,7 @@
 │  RunConfig           StepByStepExecutor                      │
 ├─────────────────────────────────────────────────────────────┤
 │                    Tasks 層（業務編排）                        │
-│  tasks/spt/ | tasks/spx/ | tasks/common/                     │
+│  tasks/spt/ | tasks/spx/ | tasks/sct/ | tasks/common/          │
 ├─────────────────────────────────────────────────────────────┤
 │                    Core 層（框架）                            │
 │  Pipeline | PipelineStep | ProcessingContext | DataSources   │
@@ -1690,13 +1690,13 @@ def _convert_params(params: Dict[str, Any]) -> Dict[str, Any]:
                                │ 呼叫
          ┌─────────────────────┼──────────────────────┐
          ▼                     ▼                      ▼
-  ┌─────────────┐     ┌─────────────────┐    ┌────────────────────┐
-  │ tasks/spt/  │     │   tasks/spx/    │    │  core/pipeline/    │
-  │             │     │                 │    │                    │
-  │ SPTPipeline │     │  SPXPipeline    │    │  Pipeline          │
-  │ Orchestrator│     │  Orchestrator   │    │  ProcessingContext │
-  └─────────────┘     └─────────────────┘    │  CheckpointManager │
-                                             └────────────────────┘
+  ┌─────────────┐  ┌───────────────┐  ┌─────────────┐  ┌────────────────────┐
+  │ tasks/spt/  │  │  tasks/spx/   │  │ tasks/sct/  │  │  core/pipeline/    │
+  │             │  │               │  │             │  │                    │
+  │ SPTPipeline │  │  SPXPipeline  │  │ SCTPipeline │  │  Pipeline          │
+  │ Orchestrator│  │  Orchestrator │  │ Orchestrator│  │  ProcessingContext │
+  └─────────────┘  └───────────────┘  └─────────────┘  │  CheckpointManager │
+                                                        └────────────────────┘
                                │ 使用
                     ┌──────────▼───────────────────────┐
                     │       utils/                     │

@@ -23,16 +23,16 @@
 
 ### 1.1 專案架構脈絡
 
-`accrual_bot` 是一套以非同步管道（async pipeline）為核心的財務資料處理系統，主要處理 SPT 與 SPX 兩個業務實體的應計費用（accrual）調節作業。整體架構採四層設計：
+`accrual_bot` 是一套以非同步管道（async pipeline）為核心的財務資料處理系統，主要處理 SPT、SPX 與 SCT 三個業務實體的應計費用（accrual）調節作業。整體架構採四層設計：
 
 ```
 UI Layer       → Streamlit 使用者介面
-Tasks Layer    → 各實體專屬的業務邏輯（tasks/spt/, tasks/spx/, tasks/common/）
+Tasks Layer    → 各實體專屬的業務邏輯（tasks/spt/, tasks/spx/, tasks/sct/, tasks/common/）
 Core Layer     → 管道框架（Pipeline, PipelineStep, ProcessingContext）
 Utils Layer    → 跨模組工具（ConfigManager, Logger, Data Utilities）
 ```
 
-在「Tasks Layer」中，SPT 與 SPX 各自維護獨立的步驟模組（steps/）和管道協調器（pipeline orchestrator）。隨著系統演進，部分業務邏輯是兩個實體共用的，如果分別在 `tasks/spt/` 和 `tasks/spx/` 中各維護一份，必然造成程式碼重複與維護負擔。
+在「Tasks Layer」中，SPT、SPX 與 SCT 各自維護獨立的步驟模組（steps/）和管道協調器（pipeline orchestrator）。隨著系統演進，部分業務邏輯是多個實體共用的，如果分別在 `tasks/spt/`、`tasks/spx/` 和 `tasks/sct/` 中各維護一份，必然造成程式碼重複與維護負擔。
 
 ### 1.2 tasks/common 的誕生
 
@@ -758,7 +758,7 @@ self.logger.error(...)
 
 - `DataShapeSummaryStep` 的核心邏輯（`_create_pivot_summary`、`_create_comparison_summary`）屬於純函數，非常適合單元測試，但缺乏覆蓋
 - 獨立執行模式（`run_standalone_summary`、`_load_file`）也未有測試
-- 在 725 個測試中，此模組的測試覆蓋率為 0%
+- 在 830 個測試中，此模組的測試覆蓋率為 0%
 
 這個問題特別值得關注，因為 `DataShapeSummaryStep` 是唯一跨實體共用的步驟，其正確性直接影響兩個實體的驗證報告。
 

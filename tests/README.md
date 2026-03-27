@@ -2,8 +2,8 @@
 
 ## 概述
 
-本項目使用 pytest 測試框架，包含 **725+ 測試**（674 unit + 12 integration + 39 unmarked），
-覆蓋 core pipeline、data sources、tasks（SPT/SPX）、utilities、UI 等模組。
+本項目使用 pytest 測試框架，包含 **830+ 測試**（712 unit + 12 integration + 106 unmarked），
+覆蓋 core pipeline、data sources、tasks（SPT/SPX/SCT）、utilities、UI 等模組。
 
 ## 測試結構
 
@@ -44,12 +44,17 @@ tests/
 │   │   │   ├── test_spt_loading.py          # SPT 資料載入測試
 │   │   │   ├── test_spt_evaluation_erm.py   # SPT ERM 評估測試
 │   │   │   └── test_spt_account_prediction.py # SPT 科目預測測試
-│   │   └── spx/
-│   │       ├── test_spx_orchestrator.py     # SPX Orchestrator 測試
-│   │       ├── test_spx_loading.py          # SPX 資料載入測試
-│   │       ├── test_spx_condition_engine.py # SPX 條件引擎測試
-│   │       ├── test_spx_evaluation.py       # SPX 評估步驟測試
-│   │       └── test_spx_ppe_steps.py        # SPX PPE 步驟測試
+│   │   ├── spx/
+│   │   │   ├── test_spx_orchestrator.py     # SPX Orchestrator 測試
+│   │   │   ├── test_spx_loading.py          # SPX 資料載入測試
+│   │   │   ├── test_spx_condition_engine.py # SPX 條件引擎測試
+│   │   │   ├── test_spx_evaluation.py       # SPX 評估步驟測試
+│   │   │   └── test_spx_ppe_steps.py        # SPX PPE 步驟測試
+│   │   └── sct/
+│   │       ├── test_sct_evaluation.py       # SCT ERM 評估測試
+│   │       ├── test_sct_asset_status.py     # SCT 資產狀態測試
+│   │       ├── test_sct_account_prediction.py # SCT 科目預測測試
+│   │       └── test_sct_post_processing.py  # SCT 後處理測試
 │   ├── utils/
 │   │   ├── config/
 │   │   │   └── test_config_manager.py       # ConfigManager 執行緒安全測試

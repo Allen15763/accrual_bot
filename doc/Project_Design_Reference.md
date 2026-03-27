@@ -35,7 +35,7 @@ Accrual Bot 是一個**批次式、多實體、多步驟的非同步資料處理
 
 | 特徵 | 說明 |
 |------|------|
-| **多實體** | 相同邏輯框架但不同業務規則（如 SPT/SPX 有各自的欄位和判斷條件） |
+| **多實體** | 相同邏輯框架但不同業務規則（如 SPT/SPX/SCT 有各自的欄位和判斷條件） |
 | **多類型** | 同一實體有多種處理類型（PO/PR/PPE），各類型步驟序列不同 |
 | **多步驟** | 處理流程由 10～20 個有序步驟組成，需要中斷點恢復能力 |
 | **配置驅動** | 業務規則、步驟序列、檔案路徑需可透過設定檔調整，不改程式碼 |
@@ -62,6 +62,7 @@ Accrual Bot 是一個**批次式、多實體、多步驟的非同步資料處理
 │                                                                  │
 │   tasks/spt/pipeline_orchestrator.py  → SPT 特定步驟序列         │
 │   tasks/spx/pipeline_orchestrator.py  → SPX 特定步驟序列         │
+│   tasks/sct/pipeline_orchestrator.py  → SCT 特定步驟序列         │
 │   tasks/common/                      → 共用任務步驟             │
 │                                                                  │
 │  職責：從 stagging_{entity}.toml 讀取啟用步驟，動態組裝 Pipeline  │
@@ -101,7 +102,7 @@ Accrual Bot 是一個**批次式、多實體、多步驟的非同步資料處理
 |----|--------|--------|
 | UI 層 | 服務層 API、Session State | 具體 Pipeline 步驟實作 |
 | 編排層 | 步驟類別、設定檔 | UI 框架細節 |
-| 核心框架 | 步驟介面、DataSource | 具體業務實體 (SPT/SPX) |
+| 核心框架 | 步驟介面、DataSource | 具體業務實體 (SPT/SPX/SCT) |
 | 工具層 | 系統資源（檔案/執行緒/日誌） | 業務邏輯 |
 
 ---
@@ -158,14 +159,17 @@ project_root/
 │   │   │       ├── spt_procurement_*.py   # Procurement 系列步驟
 │   │   │       ├── spt_combined_procurement_*.py  # Combined Procurement 步驟
 │   │   │       └── ...
-│   │   └── spx/
-│   │       ├── pipeline_orchestrator.py   # ★ SPXPipelineOrchestrator
-│   │       └── steps/                     # SPX 特定步驟 (12 檔)
-│   │           ├── spx_loading.py         # SPXDataLoadingStep, SPXPRDataLoadingStep
-│   │           ├── spx_evaluation.py      # StatusStage1Step, SPXERMLogicStep
-│   │           ├── spx_condition_engine.py # SPXConditionEngine
-│   │           ├── spx_ppe_desc.py        # PPE_DESC 步驟
-│   │           └── ...
+│   │   ├── spx/
+│   │   │   ├── pipeline_orchestrator.py   # ★ SPXPipelineOrchestrator
+│   │   │   └── steps/                     # SPX 特定步驟 (12 檔)
+│   │   │       ├── spx_loading.py         # SPXDataLoadingStep, SPXPRDataLoadingStep
+│   │   │       ├── spx_evaluation.py      # StatusStage1Step, SPXERMLogicStep
+│   │   │       ├── spx_condition_engine.py # SPXConditionEngine
+│   │   │       ├── spx_ppe_desc.py        # PPE_DESC 步驟
+│   │   │       └── ...
+│   │   └── sct/
+│   │       ├── pipeline_orchestrator.py   # ★ SCTPipelineOrchestrator
+│   │       └── steps/                     # ERM, asset status, account prediction, post-processing
 │   │
 │   ├── ui/                     # Web UI 完整實作
 │   │   ├── app.py              # Session state 初始化
@@ -211,7 +215,8 @@ project_root/
 │       ├── run_config.toml      # 執行時組態
 │       ├── stagging.toml        # 共用設定（路徑、日期模式、分類模式）
 │       ├── stagging_spt.toml    # SPT Pipeline 步驟 + 業務規則
-│       └── stagging_spx.toml    # SPX Pipeline 步驟 + 條件引擎規則
+│       ├── stagging_spx.toml    # SPX Pipeline 步驟 + 條件引擎規則
+│       └── stagging_sct.toml    # SCT Pipeline 步驟 + 業務規則
 │
 ├── tests/
 │   ├── conftest.py
@@ -284,7 +289,7 @@ class PipelineStep(ABC):
 ```python
 @dataclass
 class ContextMetadata:
-    entity_type: str        # 'SPT' | 'SPX' | 'MOB'
+    entity_type: str        # 'SPT' | 'SPX' | 'SCT'
     processing_date: int    # YYYYMM 格式，如 202512
     processing_type: str    # 'PO' | 'PR' | 'PPE'
 
@@ -487,7 +492,7 @@ class BasePipelineOrchestrator:
     """
 
     config: Dict              # 從 stagging_{entity}.toml 讀取
-    entity_type: str          # 'SPT' | 'SPX'
+    entity_type: str          # 'SPT' | 'SPX' | 'SCT'
 
     def build_po_pipeline(self, file_paths: Dict, custom_steps=None) -> Pipeline
     def build_pr_pipeline(self, file_paths: Dict, custom_steps=None) -> Pipeline
@@ -505,7 +510,7 @@ class BasePipelineOrchestrator:
 
 ### 5.1 模板方法模式（Template Method Pattern）
 
-**問題**：SPT 和 SPX 的資料載入步驟有 85% 相同邏輯（路徑正規化、並發載入、驗證），只有主檔案格式和參考資料不同。
+**問題**：SPT、SPX 和 SCT 的資料載入步驟有 85% 相同邏輯（路徑正規化、並發載入、驗證），只有主檔案格式和參考資料不同。
 
 **解法**：`BaseLoadingStep` 定義公共骨架，差異點抽取為 3 個抽象鉤子方法。
 
@@ -519,6 +524,7 @@ BaseLoadingStep.execute()        ← 模板（固定流程）
 
 SPTDataLoadingStep               ← 只寫差異部分（~50行）
 SPXDataLoadingStep               ← 只寫差異部分（~50行）
+SCTDataLoadingStep               ← 只寫差異部分（~50行）
 ```
 
 **效益**：消除約 500 行重複程式碼（每個基類）。
@@ -795,7 +801,8 @@ config/
 ├── run_config.toml     ← 執行時組態
 ├── stagging.toml       ← 共用設定（路徑、日期模式、分類模式）
 ├── stagging_spt.toml   ← ★ SPT Pipeline 步驟清單 + 業務規則
-└── stagging_spx.toml   ← ★ SPX Pipeline 步驟清單 + 條件引擎規則
+├── stagging_spx.toml   ← ★ SPX Pipeline 步驟清單 + 條件引擎規則
+└── stagging_sct.toml   ← ★ SCT Pipeline 步驟清單 + 業務規則
 ```
 
 ### 6.2 paths.toml — 檔案路徑模板
@@ -906,18 +913,19 @@ path_params = config.get_paths_config('spt', 'po', 'params')
 
 ### 6.5 配置管理器的深層細節
 
-#### 三檔深合併策略（Deep-Merge TOML Strategy）
+#### 四檔深合併策略（Deep-Merge TOML Strategy）
 
-ConfigManager 將三個 TOML 檔案深合併為單一的 `_config_toml` 字典：
+ConfigManager 將四個 TOML 檔案深合併為單一的 `_config_toml` 字典：
 
 ```
 stagging.toml（共用設定）
     + stagging_spt.toml（SPT 覆蓋/追加）
     + stagging_spx.toml（SPX 覆蓋/追加）
+    + stagging_sct.toml（SCT 覆蓋/追加）
     → 合併為 self._config_toml（多層巢狀 dict）
 ```
 
-**重要**：合併順序代表優先級——後合併的 key 會覆蓋先合併的。若 SPT 和 SPX 在 `stagging.toml` 有同名頂層 key，後者會覆蓋前者（雖然目前的 key 命名設計上避免了此衝突）。
+**重要**：合併順序代表優先級——後合併的 key 會覆蓋先合併的。若 SPT、SPX 和 SCT 在 `stagging.toml` 有同名頂層 key，後者會覆蓋前者（雖然目前的 key 命名設計上避免了此衝突）。
 
 #### `run_config.toml` 不在 ConfigManager 管理範圍內
 
@@ -1075,7 +1083,7 @@ main_pipeline.py / main_streamlit.py
 ui/services/unified_pipeline_service.py
        │
        ▼
-tasks/{spt|spx}/pipeline_orchestrator.py
+tasks/{spt|spx|sct}/pipeline_orchestrator.py
        │
        ├──▶ core/pipeline/pipeline.py
        │         │
@@ -1107,7 +1115,7 @@ stagging.toml
     └── 共用設定（日期模式、分類模式、路徑）
             └── 所有模組讀取共用配置
 
-stagging_spt.toml / stagging_spx.toml
+stagging_spt.toml / stagging_spx.toml / stagging_sct.toml
     └── orchestrator.get_enabled_steps(proc_type)
             └── 決定 Pipeline 中的步驟序列
     └── 業務規則（status_label_rules、condition_engine 等）
@@ -1122,11 +1130,15 @@ config.ini
 ```
 PipelineStep (ABC)
 ├── BaseLoadingStep (ABC)
-│   ├── SPTDataLoadingStep           # ⚠️ 實際上直接繼承 PipelineStep（非 BaseLoadingStep）
-│   ├── SPTPRDataLoadingStep         # ⚠️ 同上，DRY 違反：兩者相差不超過 50 行但各 ~450 行
+│   ├── SPTBaseDataLoadingStep (ABC)     # tasks/spt/steps/spt_loading.py（中間抽象層）
+│   │   ├── SPTDataLoadingStep           # tasks/spt/steps/spt_loading.py
+│   │   └── SPTPRDataLoadingStep         # tasks/spt/steps/spt_loading.py
 │   ├── SPXDataLoadingStep           # tasks/spx/steps/spx_loading.py
 │   ├── SPXPRDataLoadingStep         # tasks/spx/steps/spx_loading.py
 │   ├── PPEDataLoadingStep           # tasks/spx/steps/spx_loading.py
+│   ├── SCTBaseDataLoadingStep (ABC)     # tasks/sct/steps/sct_loading.py（中間抽象層）
+│   │   ├── SCTDataLoadingStep           # tasks/sct/steps/sct_loading.py
+│   │   └── SCTPRDataLoadingStep         # tasks/sct/steps/sct_loading.py
 │   ├── SPTProcurementDataLoadingStep    # tasks/spt/steps/spt_procurement_loading.py
 │   ├── SPTProcurementPRDataLoadingStep  # tasks/spt/steps/spt_procurement_loading.py
 │   └── CombinedProcurementDataLoadingStep  # tasks/spt/steps/spt_combined_procurement_loading.py
@@ -1135,6 +1147,8 @@ PipelineStep (ABC)
 │   ├── SPTERMLogicStep              # tasks/spt/steps/spt_evaluation_erm.py
 │   ├── SPXERMLogicStep              # tasks/spx/steps/spx_evaluation.py
 │   ├── SPXPRERMLogicStep            # tasks/spx/steps/spx_pr_evaluation.py
+│   ├── SCTERMLogicStep              # tasks/sct/steps/sct_evaluation_erm.py
+│   ├── SCTPRERMLogicStep            # tasks/sct/steps/sct_pr_evaluation_erm.py
 │   └── SPTProcurementStatusEvaluationStep  # tasks/spt/steps/spt_procurement_evaluation.py
 │
 └── （直接繼承的共用步驟）
@@ -1148,6 +1162,9 @@ PipelineStep (ABC)
     ├── ColumnAdditionStep           # tasks/spx/steps/spx_steps.py
     ├── SPTStatusLabelStep           # tasks/spt/steps/spt_steps.py
     ├── SPTAccountPredictionStep     # tasks/spt/steps/spt_account_prediction.py
+    ├── SCTAssetStatusUpdateStep     # tasks/sct/steps/sct_asset_status.py
+    ├── SCTAccountPredictionStep     # tasks/sct/steps/sct_account_prediction.py
+    ├── SCTPostProcessingStep        # tasks/sct/steps/sct_post_processing.py
     ├── DataShapeSummaryStep         # tasks/common/data_shape_summary.py
     └── ...（更多實體特定步驟）
 
@@ -1212,7 +1229,7 @@ class UnifiedPipelineService:
     # Pipeline 構建（UI 用於觸發執行）
     def build_pipeline(
         self,
-        entity: str,           # 'SPT' | 'SPX'
+        entity: str,           # 'SPT' | 'SPX' | 'SCT'
         proc_type: str,        # 'PO' | 'PR' | 'PPE' | 'PPE_DESC' | 'PROCUREMENT'
         file_paths: Dict,      # 使用者上傳的檔案路徑
         processing_date: int = None,  # YYYYMM（PPE/PPE_DESC 必填）
@@ -1243,6 +1260,11 @@ ENTITY_CONFIG = {
         'types': ['PO', 'PR', 'PPE', 'PPE_DESC'],
         'icon': '📦',
     },
+    'SCT': {
+        'display_name': 'SCT',
+        'types': ['PO', 'PR'],
+        'icon': '🏷️',
+    },
 }
 
 # 必填/選填檔案定義
@@ -1253,6 +1275,8 @@ REQUIRED_FILES = {
     ('SPX', 'PR'): ['raw_pr'],
     ('SPX', 'PPE'): ['contract_filing_list'],
     ('SPX', 'PPE_DESC'): ['workpaper', 'contract_periods'],
+    ('SCT', 'PO'): ['raw_po'],
+    ('SCT', 'PR'): ['raw_pr'],
     ('SPT', 'PROCUREMENT', 'PO'): ['raw_po'],
     ('SPT', 'PROCUREMENT', 'PR'): ['raw_pr'],
     ...
@@ -1263,6 +1287,8 @@ OPTIONAL_FILES = {
                      'procurement_pr', 'media_finished', 'media_left', 'media_summary'],
     ('SPX', 'PO'): ['previous', 'procurement_po', 'ap_invoice', 'previous_pr',
                      'procurement_pr', 'ops_validation'],
+    ('SCT', 'PO'): ['previous', 'procurement_po', 'ap_invoice', 'previous_pr'],
+    ('SCT', 'PR'): ['previous_pr', 'procurement_pr'],
     ('SPT', 'PROCUREMENT', 'PO'): ['procurement_previous', 'media_finished',
                                     'media_left', 'media_summary'],
     ...

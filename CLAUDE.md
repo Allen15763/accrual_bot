@@ -129,11 +129,15 @@ Three active entity types with configuration-driven pipeline orchestration (conf
   - Complex processing: config-driven condition engine (SPXConditionEngine), deposit/rental identification, locker/kiosk asset validation
 
 - **SCT** ([tasks/sct/](accrual_bot/tasks/sct/)):
-  - PO Pipeline: SCTDataLoading → SCTColumnAddition → APInvoiceIntegration → PreviousWorkpaperIntegration → ProcurementIntegration (後續核心邏輯待擴充)
-  - PR Pipeline: SCTPRDataLoading → SCTColumnAddition → PreviousWorkpaperIntegration → ProcurementIntegration (後續核心邏輯待擴充)
+  - PO Pipeline: SCTDataLoading → SCTColumnAddition → APInvoiceIntegration → PreviousWorkpaperIntegration → ProcurementIntegration → DateLogic → SCTERMLogic → SCTAssetStatusUpdate → SCTAccountPrediction → SCTPostProcessing
+  - PR Pipeline: SCTPRDataLoading → SCTColumnAddition → PreviousWorkpaperIntegration → ProcurementIntegration → DateLogic → SCTPRERMLogic → SCTAccountPrediction → SCTPostProcessing
   - Raw data format: xlsx (unlike SPT/SPX which use CSV)
   - Reference data: `ref_SCTTW.xlsx` for account mapping
   - SCT-specific ColumnAdditionStep (same as SPX but without 累計至本期驗收數量/金額)
+  - Config-driven ERM condition engine: 18 PO status rules (`sct_erm_status_rules`), 13 PR status rules (`sct_pr_erm_status_rules`)
+  - PPE asset status detection (`SCTAssetStatusUpdateStep`, PO only)
+  - Account prediction: 18 config-driven rules with product code + department + description matching
+  - Post-processing: data reformatting, output column ordering, config-driven field cleanup
 
 Pipeline steps can be enabled/disabled via configuration in TOML files:
 ```toml
@@ -162,9 +166,11 @@ enabled_pr_steps = ["SPXPRDataLoading", "ProductFilter", "ColumnAddition", ...]
 [pipeline.sct]
 enabled_po_steps = ["SCTDataLoading", "SCTColumnAddition",
     "APInvoiceIntegration", "PreviousWorkpaperIntegration",
-    "ProcurementIntegration"]
+    "ProcurementIntegration", "DateLogic", "SCTERMLogic",
+    "SCTAssetStatusUpdate", "SCTAccountPrediction", "SCTPostProcessing"]
 enabled_pr_steps = ["SCTPRDataLoading", "SCTColumnAddition",
-    "PreviousWorkpaperIntegration", "ProcurementIntegration"]
+    "PreviousWorkpaperIntegration", "ProcurementIntegration",
+    "DateLogic", "SCTPRERMLogic", "SCTAccountPrediction", "SCTPostProcessing"]
 ```
 
 ### Data Sources (core/datasources/)
@@ -222,7 +228,12 @@ Seven configuration files:
 
 - **config/stagging_sct.toml**: SCT-specific configuration:
   - Pipeline configuration (enabled steps for PO/PR)
-  - SCT column defaults (sm_accounts)
+  - SCT column defaults (sm_accounts, region, department, liability)
+  - PPE asset configuration (trigger keywords, acceptance/warranty logic)
+  - AP columns, logistics supplier list, deposit keywords
+  - ERM status rules: 18 PO conditions (`sct_erm_status_rules`), 13 PR conditions (`sct_pr_erm_status_rules`)
+  - Account prediction rules: 18 rules with product code + department + description matching
+  - Post-processing reformatting config (int/float/date columns, temp columns, output column orders)
 
 - **config/run_config.toml**: Runtime configuration for pipeline execution
 
@@ -395,7 +406,7 @@ st.switch_page("pages/1_configuration.py")  # ✗ Wrong - Streamlit won't find i
 
 ## Testing
 
-The project uses pytest with async support. **725 tests collected** (674 unit + 12 integration + 39 unmarked), **723 passing** (as of 2026-03). 2 pre-existing failures in `test_previous_workpaper.py` (`_determine_key_type` returns None for 'PO Line'). Overall coverage: 38%.
+The project uses pytest with async support. **830 tests collected** (712 unit + 12 integration + 106 unmarked), **828 passing** (as of 2026-03). 2 pre-existing failures in `test_previous_workpaper.py` (`_determine_key_type` returns None for 'PO Line'). Overall coverage: 38%.
 
 ### Test Structure
 
@@ -442,6 +453,11 @@ tests/
 │   │       ├── test_spx_condition_engine.py   # Config-driven condition engine
 │   │       ├── test_spx_evaluation.py         # StatusStage1, SPXERMLogic
 │   │       └── test_spx_ppe_steps.py          # PPE description extraction (PPE_DESC)
+│   │   └── sct/
+│   │       ├── test_sct_evaluation.py         # SCTERMLogicStep & SCTPRERMLogicStep
+│   │       ├── test_sct_asset_status.py       # SCTAssetStatusUpdateStep
+│   │       ├── test_sct_account_prediction.py # SCTAccountPredictionStep
+│   │       └── test_sct_post_processing.py    # SCTPostProcessingStep
 │   ├── utils/
 │   │   ├── config/
 │   │   │   └── test_config_manager.py     # ConfigManager thread-safety
@@ -476,7 +492,7 @@ tests/
 python -m pytest tests/
 
 # Run by category
-python -m pytest tests/ -m unit          # Unit tests only (674 tests, 39 unmarked not included)
+python -m pytest tests/ -m unit          # Unit tests only (712 tests, 106 unmarked not included)
 python -m pytest tests/ -m integration   # Integration tests only (12 tests)
 
 # Run with coverage
@@ -570,7 +586,7 @@ pipeline = spx_orchestrator.build_ppe_desc_pipeline(
     processing_date=202512
 )
 
-# Create SCT PO pipeline (xlsx input, up to ProcurementIntegration)
+# Create SCT PO pipeline (xlsx input, full pipeline with ERM/AccountPrediction/PostProcessing)
 sct_orchestrator = SCTPipelineOrchestrator()
 pipeline = sct_orchestrator.build_po_pipeline(file_paths={'raw_po': 'path/to/po.xlsx'})
 
@@ -757,7 +773,7 @@ accrual_bot/
 │   │   └── steps/              # PO/PR/PPE/PPE_DESC steps (12 files)
 │   └── sct/
 │       ├── pipeline_orchestrator.py  # SCTPipelineOrchestrator
-│       └── steps/              # PO/PR steps (sct_loading, sct_column_addition)
+│       └── steps/              # PO/PR steps (9 files: loading, column_addition, evaluation, pr_evaluation, asset_status, account_prediction, post_processing, integration)
 ├── ui/                         # Streamlit UI
 │   ├── config.py               # UI configuration constants
 │   ├── services/
@@ -771,7 +787,7 @@ accrual_bot/
 │   ├── stagging.toml           # Shared config (paths, date patterns, category patterns)
 │   ├── stagging_spt.toml       # SPT pipeline steps, pivot config, business rules
 │   ├── stagging_spx.toml       # SPX pipeline steps, supplier lists, condition rules
-│   └── stagging_sct.toml       # SCT pipeline steps, column defaults
+│   └── stagging_sct.toml       # SCT pipeline steps, column defaults, ERM status rules (PO/PR), PPE config, account prediction rules, reformatting config
 ├── runner/                     # Pipeline execution (config_loader, step_executor)
 ├── data/                       # Importers (base_importer, google_sheets_importer)
 └── utils/
@@ -808,10 +824,10 @@ accrual_bot/
   - `common/`: Shared task steps (DataShapeSummaryStep)
   - `spt/pipeline_orchestrator.py`: SPT pipeline configuration (PO/PR/PROCUREMENT with PO/PR/COMBINED sub-types)
   - `spx/pipeline_orchestrator.py`: SPX pipeline configuration (PO/PR/PPE/PPE_DESC)
-  - `sct/pipeline_orchestrator.py`: SCT pipeline configuration (PO/PR, up to ProcurementIntegration)
+  - `sct/pipeline_orchestrator.py`: SCT pipeline configuration (PO/PR, full pipeline with ERM, asset status, account prediction, post-processing)
   - `spt/steps/`: SPT-specific steps — loading, ERM, status label, account prediction, procurement, combined procurement
   - `spx/steps/`: SPX-specific steps — loading, condition engine, evaluation, exporting, integration, PPE, PPE_DESC
-  - `sct/steps/`: SCT-specific steps — loading (xlsx), column addition (without cumulative receipt)
+  - `sct/steps/`: SCT-specific steps — loading (xlsx), column addition, ERM evaluation (PO/PR), asset status update, account prediction, post-processing, AP invoice integration
 - **accrual_bot/config/stagging_spt.toml**, **stagging_spx.toml**, **stagging_sct.toml**: Entity-specific configuration with `[pipeline.spt]`, `[pipeline.spx]`, and `[pipeline.sct]` sections for step enablement
 - **checkpoints/**: Saved pipeline states (excluded from git)
 - **output/**: Processed results (excluded from git)
@@ -849,7 +865,7 @@ The codebase underwent significant refactoring to improve code quality and maint
 - **Impact**: Removed ~558 lines of code (~22% reduction in UI layer)
 
 ### Phase 6: Comprehensive Test Suite (2026-03)
-- **725 tests**: 674 unit + 12 integration + 39 unmarked, covering core pipeline, data sources, tasks, utilities, and UI
+- **830 tests**: 712 unit + 12 integration + 106 unmarked, covering core pipeline, data sources, tasks, utilities, and UI
 - **Three-phase rollout**: P0 core infrastructure → P1 business logic → P2 extended coverage
 - **Scripts**: `scripts/` directory with `.sh`/`.bat` pairs for running unit, integration, coverage, and quick tests
 - **Test data generators**: Synthetic data factories in `tests/fixtures/test_data_generators.py`
@@ -891,14 +907,15 @@ The codebase underwent significant refactoring to improve code quality and maint
 - **Result dict alignment (Fix 9, P1)**: Normal execution path adds `result.setdefault("aborted", False)` after `pipeline.execute()`, aligning with `StepByStepExecutor`'s result structure and eliminating `KeyError` for callers that check `result["aborted"]`
 - **Dead branch removed (Fix 10, P3)**: `_convert_params()` `elif key == "keep_default_na"` branch deleted — it was identical to the `else` branch and TOML already parses booleans natively
 
-### Phase 12: SCT Entity Pipeline (2026-03-23)
-- **New entity: SCT** — Third business entity added with PO/PR pipeline support (up to ProcurementIntegration step)
-- **Files created**: `tasks/sct/` module with `SCTPipelineOrchestrator`, `SCTBaseDataLoadingStep` (BaseLoadingStep template), `SCTColumnAdditionStep` (SPX variant without cumulative receipt), `config/stagging_sct.toml`
+### Phase 12: SCT Entity Pipeline (2026-03)
+- **New entity: SCT** — Third business entity added with full PO/PR pipeline support (10 PO steps, 8 PR steps)
+- **Files created**: `tasks/sct/` module with `SCTPipelineOrchestrator`, `SCTBaseDataLoadingStep` (BaseLoadingStep template), `SCTColumnAdditionStep` (SPX variant without cumulative receipt), `config/stagging_sct.toml` (894 lines)
 - **Key differences from SPT/SPX**: Raw data format is xlsx (not CSV); reference data from `ref_SCTTW.xlsx`; no ProductFilter; SCT-specific ColumnAddition
-- **Reused steps**: `APInvoiceIntegrationStep`, `PreviousWorkpaperIntegrationStep`, `ProcurementIntegrationStep` directly from core/spx
+- **Reused steps**: `APInvoiceIntegrationStep`, `PreviousWorkpaperIntegrationStep`, `ProcurementIntegrationStep`, `DateLogicStep` from core
+- **SCT-specific steps**: `SCTERMLogicStep` (18 PO status rules), `SCTPRERMLogicStep` (13 PR status rules), `SCTAssetStatusUpdateStep` (PPE asset detection, PO only), `SCTAccountPredictionStep` (18 account prediction rules), `SCTPostProcessingStep` (config-driven reformatting and output selection)
 - **Config updates**: `config_manager.py` loads `stagging_sct.toml`; `paths.toml` has `[sct.po]`/`[sct.pr]` sections; `stagging.toml` has `ref_path_sct` under `[paths]` and `sct` under `[fa_accounts]`
 - **UI integration**: SCT registered in `ENTITY_CONFIG`, `REQUIRED_FILES`, `OPTIONAL_FILES`, and `UnifiedPipelineService._get_orchestrator()`
-- **Pending**: Core business logic (ERM evaluation, status labeling, export) to be implemented in subsequent phases
+- **Tests**: 105 unit tests across 4 test files (evaluation, asset status, account prediction, post-processing)
 
 ### Benefits
 - **Maintainability**: Single source of truth for shared logic reduces bug surface area
