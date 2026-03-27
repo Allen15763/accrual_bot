@@ -406,7 +406,7 @@ st.switch_page("pages/1_configuration.py")  # ✗ Wrong - Streamlit won't find i
 
 ## Testing
 
-The project uses pytest with async support. **830 tests collected** (712 unit + 12 integration + 106 unmarked), **828 passing** (as of 2026-03). 2 pre-existing failures in `test_previous_workpaper.py` (`_determine_key_type` returns None for 'PO Line'). Overall coverage: 38%.
+The project uses pytest with async support. **779 tests collected** (661 unit + 12 integration + 106 unmarked), **777 passing** (as of 2026-03). 2 pre-existing failures in `test_previous_workpaper.py` (`_determine_key_type` returns None for 'PO Line'). Overall coverage: 38%.
 
 ### Test Structure
 
@@ -467,10 +467,6 @@ tests/
 │   │   │   └── test_file_utils.py         # File validation, copy, hash
 │   │   ├── logging/
 │   │   │   └── test_logger.py             # Singleton, thread-safety
-│   │   ├── duckdb_manager/
-│   │   │   └── test_duckdb_manager.py     # DuckDBConfig, Manager CRUD
-│   │   └── metadata_builder/
-│   │       └── test_metadata_builder.py   # SourceSpec, ColumnSpec, SchemaConfig
 │   ├── ui/
 │   │   ├── services/
 │   │   │   ├── test_unified_pipeline_service.py  # Pipeline service (94%)
@@ -527,14 +523,11 @@ Overall: **38%** (14030 statements, 8661 missed). Key modules with high coverage
 | `core/datasources/parquet_source.py` | 82% |
 | `utils/helpers/column_utils.py` | 100% |
 | `utils/helpers/file_utils.py` | 79% |
-| `utils/duckdb_manager/config.py` | 77% |
-| `utils/duckdb_manager/manager.py` | 81% |
-| `utils/metadata_builder/config.py` | 81% |
 | `ui/services/unified_pipeline_service.py` | 94% |
 | `ui/models/state_models.py` | 100% |
 
 Low coverage modules (large/complex, many external dependencies):
-- `core/pipeline/steps/common.py` (40%), `core/datasources/duckdb_source.py` (15%), `utils/duckdb_manager/operations/*` (8-34%), `utils/metadata_builder/processors/*` (19-26%)
+- `core/pipeline/steps/common.py` (40%), `core/datasources/duckdb_source.py` (15%)
 
 ### Key Fixtures
 
@@ -798,9 +791,7 @@ accrual_bot/
     │   ├── column_utils.py     # ColumnResolver
     │   ├── data_utils.py       # TOML loading, regex patterns
     │   └── file_utils.py       # File validation, copy, hash
-    ├── logging/logger.py       # Unified logging
-    ├── duckdb_manager/         # DuckDB operations, migration, config
-    └── metadata_builder/       # Schema config, processors, transformers
+    └── logging/logger.py       # Unified logging
 
 # Project root
 ├── main_pipeline.py            # CLI entry point
@@ -865,7 +856,7 @@ The codebase underwent significant refactoring to improve code quality and maint
 - **Impact**: Removed ~558 lines of code (~22% reduction in UI layer)
 
 ### Phase 6: Comprehensive Test Suite (2026-03)
-- **830 tests**: 712 unit + 12 integration + 106 unmarked, covering core pipeline, data sources, tasks, utilities, and UI
+- **779 tests**: 661 unit + 12 integration + 106 unmarked, covering core pipeline, data sources, tasks, utilities, and UI
 - **Three-phase rollout**: P0 core infrastructure → P1 business logic → P2 extended coverage
 - **Scripts**: `scripts/` directory with `.sh`/`.bat` pairs for running unit, integration, coverage, and quick tests
 - **Test data generators**: Synthetic data factories in `tests/fixtures/test_data_generators.py`
@@ -876,8 +867,8 @@ The codebase underwent significant refactoring to improve code quality and maint
 - **SPX PPE_DESC**: New pipeline type for PO/PR description extraction with contract period mapping
 
 ### Phase 8: Utils Layer Bug Fixes (2026-03-14)
-- **metadata_builder (3 fixes)**: `validate_only()` silent-pass bug (exception swallowed, `cb_result is None` incorrectly treated as success); `cast_failures` counted pre-existing NULLs rather than conversion-induced NULLs; `ColumnMappingError` defined but never raised (Regex errors silently returned `None`)
-- **duckdb_manager (5 fixes)**: `clean_and_convert_column()` ignored `_validate_conversion()` return value (transaction started unconditionally); `upsert_df_into_table()` and `backup_table()` used manual string escaping instead of existing `SafeSQL` utilities; `execute_transaction()` called `conn.sql("BEGIN/COMMIT/ROLLBACK")` directly, bypassing `OperationMixin._rollback()`'s built-in silent try/except; `connection_timeout: int = 30` was dead config (DuckDB Python API does not support this parameter) — field removed from `DuckDBConfig`
+- **metadata_builder (3 fixes)** *(now in standalone package `seafin-metadata-builder`)*: `validate_only()` silent-pass bug; `cast_failures` counted pre-existing NULLs; `ColumnMappingError` defined but never raised
+- **duckdb_manager (5 fixes)** *(now in standalone package `seafin-duckdb-manager`)*: `clean_and_convert_column()` ignored validation; manual string escaping instead of `SafeSQL`; `execute_transaction()` bypassed `_rollback()`; `connection_timeout` dead config removed
 
 ### Phase 9: SPX Tasks Bug Fixes (2026-03-17)
 - **Orphaned steps (Fix 1)**: 6 legacy prototype steps in `spx_steps.py` (`SPXDepositCheckStep` etc.) removed from `__all__` and marked deprecated in docstrings — were in public API but absent from orchestrator step registry
@@ -917,6 +908,14 @@ The codebase underwent significant refactoring to improve code quality and maint
 - **UI integration**: SCT registered in `ENTITY_CONFIG`, `REQUIRED_FILES`, `OPTIONAL_FILES`, and `UnifiedPipelineService._get_orchestrator()`
 - **Tests**: 105 unit tests across 4 test files (evaluation, asset status, account prediction, post-processing)
 
+### Phase 13: Plugin Module Extraction to Standalone Packages (2026-03-27)
+- **Extracted `duckdb_manager`** → standalone GitHub package [`seafin-duckdb-manager`](https://github.com/Allen15763/seafin-duckdb-manager) (v2.1.0)
+- **Extracted `metadata_builder`** → standalone GitHub package [`seafin-metadata-builder`](https://github.com/Allen15763/seafin-metadata-builder) (v1.0.0)
+- **Rationale**: Both modules had zero business logic coupling to the host project; different dependency trees (`duckdb` vs `numpy+openpyxl`); independent version lifecycles
+- **Changes**: Removed `accrual_bot/utils/duckdb_manager/` (18 files) and `accrual_bot/utils/metadata_builder/` (13 files) from the project; cleaned `utils/__init__.py` re-exports; removed corresponding test directories (51 tests moved to standalone repos)
+- **Installation** (if needed): `pip install "seafin-duckdb-manager @ git+https://github.com/Allen15763/seafin-duckdb-manager.git@v2.1.0"` / `pip install "seafin-metadata-builder @ git+https://github.com/Allen15763/seafin-metadata-builder.git@v1.0.0"`
+- **Impact**: Test count reduced from 830 → 779; no business logic tests affected
+
 ### Benefits
 - **Maintainability**: Single source of truth for shared logic reduces bug surface area
 - **Extensibility**: New entities/types can be added via configuration + orchestrator updates
@@ -937,7 +936,7 @@ The codebase underwent significant refactoring to improve code quality and maint
 | `doc/SPE_Project_Architecture_Reference.md` | SPE project architecture reference |
 | `doc/Project_Review_And_Merger_Analysis.md` | Project review and merger analysis |
 | `doc/Task Pipeline Structure Unit Test Plan.md` | Test plan for pipeline structure |
-| `tests/README.md` | Test suite guide (725+ tests) |
+| `tests/README.md` | Test suite guide (779 tests) |
 
 ## Language
 

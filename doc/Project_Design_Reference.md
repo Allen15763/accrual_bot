@@ -206,8 +206,7 @@ project_root/
 │   │   │   └── file_utils.py       # 檔案驗證、複製、雜湊
 │   │   ├── logging/
 │   │   │   └── logger.py           # ★ 統一日誌框架
-│   │   ├── duckdb_manager/         # DuckDB 操作、遷移、設定
-│   │   └── metadata_builder/       # Schema 設定、處理器、轉換器
+│   │   └── (duckdb_manager/ 和 metadata_builder/ 已提取為獨立套件)
 │   │
 │   └── config/                 # 設定檔
 │       ├── config.ini           # 一般設定、正則表達式、憑證
@@ -1779,22 +1778,14 @@ s_logger.log_operation_end('data_loading', success=True, duration=2.3)
 | ✅ | `utils/logging/logger.py:71` | ~~`sys.stderr.write(err)` 拋出 TypeError~~ — **已修復（2026-03-14）**：改為 `f"{err}\n"` |
 | ✅ | `utils/logging/logger.py` `__init__()` | ~~`_initialized` 讀寫跨鎖域，多執行緒同時初始化 race condition~~ — **已修復（2026-03-14）**：`__init__` 加 `with Logger._lock:`，`_setup_root_logger()` 無鎖問題同時消除 |
 | ✅ | `utils/logging/logger.py` `add_custom_handler()` | ~~添加至所有子記錄器導致 log 重複輸出~~ — **已修復（2026-03-14）**：改為只添加至 root logger，`propagate` 自然分發 |
-| ✅ | `utils/metadata_builder/processors/silver.py` `validate_only()` | ~~`except Exception` 吞噬異常，`cb_result is None` 被誤判為「通過」~~ — **已修復（2026-03-14）**：加入 `validation_error` 欄位；`valid` 條件改為 `cb_result is not None and cb_result.is_ok` |
-| ✅ | `utils/metadata_builder/transformers/type_caster.py` `cast_columns()` | ~~`cast_failures` 記錄轉換後總 NULL 數（含原始空值），名實不符~~ — **已修復（2026-03-14）**：改用差值（`null_after - null_before`）只統計轉換新引入的 NULL |
-| ✅ | `utils/metadata_builder/transformers/column_mapper.py` `find_matching_column()` | ~~`ColumnMappingError` 定義但從未拋出；Regex 語法錯誤只 `logger.warning` 靜默返回 `None`~~ — **已修復（2026-03-14）**：`re.error` 改為 `raise ColumnMappingError(reason=...)`；`exceptions.py` 加入 `reason` 參數 |
+| ✅ | ~~`utils/metadata_builder/`~~ *(已提取至 `seafin-metadata-builder` 獨立套件)* | 3 項修復（2026-03-14）：`validate_only()` 異常吞噬、`cast_failures` 含原始空值、`ColumnMappingError` 未拋出 — 均已在獨立套件中修復 |
 | 🔴 | `utils/helpers/data_utils.py` `extract_date_range_from_description()` | 當 `description` 為空且 `logger=None` 時，`logger.warning()` 呼叫會拋出 `AttributeError` |
 | 🔴 | `utils/helpers/data_utils.py` `give_account_by_keyword()` | `rules` 參數被立即覆蓋為 `ACCOUNT_RULES` 硬編碼常數，傳入的規則參數完全無效 |
 | 🟡 | `utils/helpers/data_utils.py` `safe_string_operation()` | `astype(str)` 將 NaN 轉為字串 `'nan'`，後續 `fillna('')` 無法再還原，`'nan'` 字串流入下游 |
 | ✅ | `utils/config/config_manager.py` `get()` / `get_list()` / `get_boolean()` 等 | ~~`get(section, key)` 只查 INI，無法讀取 TOML-only 的值；`get_list()` 對 TOML 原生陣列呼叫 `.split()` 導致 `AttributeError`；TOML 段落名稱大小寫不匹配~~ — **已修復（2026-03-17）**：新增 `_get_toml_section()` 大小寫不敏感查詢；所有 `get*` / `has*` / `get_section` / `get_all` 方法改為 TOML 優先 + INI fallback |
 | ✅ | `utils/logging/logger.py` `DETAILED_FORMAT` | ~~控制台日誌格式不含 thread ID，無法從輸出確認並發載入是否正常~~ — **已修復（2026-03-17）**：`DETAILED_FORMAT` 加入 `%(process)d-%(thread)d`，與 `FILE_FORMAT` 一致 |
 | 🟡 | `utils/config/config_manager.py` | 硬編碼 Windows 路徑 `r'C:\SEA\Accrual\...\accrual_bot.zip'`（ZIP fallback），在非 Windows 環境無效 |
-| ✅ | `utils/duckdb_manager/operations/data_cleaning.py` `clean_and_convert_column()` | ~~`_validate_conversion()` 回傳值存入 `validation_success` 但從未判斷，事務無條件啟動~~ — **已修復（2026-03-14）**：加入 `if not validation_success: return False`，確保驗證失敗時提前返回 |
-| ✅ | `utils/duckdb_manager/operations/crud.py` `upsert_df_into_table()` | ~~手動 `str.replace("'", "''")` 轉義，未使用已存在的 `SafeSQL`~~ — **已修復（2026-03-14）**：改用 `SafeSQL.build_in_clause()` |
-| ✅ | `utils/duckdb_manager/operations/table_management.py` `backup_table()` | ~~手動 `backup_path.replace("'", "''")`，未使用 `SafeSQL`~~ — **已修復（2026-03-14）**：改用 `SafeSQL.escape_string()` |
-| ✅ | `utils/duckdb_manager/operations/transaction.py` `execute_transaction()` | ~~直接呼叫 `self.conn.sql("BEGIN TRANSACTION/COMMIT/ROLLBACK")`，繞過 `OperationMixin._rollback()` 的靜默 try/except 保護~~ — **已修復（2026-03-14）**：改用 `_begin()/_commit()/_rollback()` |
-| ✅ | `utils/duckdb_manager/config.py` `DuckDBConfig` | ~~`connection_timeout: int = 30` 從未傳入 `duckdb.connect()`，DuckDB Python API 不支援此參數，為死設定~~ — **已修復（2026-03-14）**：欄位已移除，`_connect()` 加注釋說明設計決定 |
-| 🟡 | `utils/duckdb_manager/` `check_null_values()` / `list_tables_with_info()` | N+1 查詢問題（每個欄位/每張資料表各執行一次查詢） |
-| ⚪ | `utils/duckdb_manager/operations/` `OperationMixin.logger: any` | 型別標注應為 `Any`（大寫，從 `typing` 匯入）而非 `any`（Python 內建函數） |
+| ✅ | ~~`utils/duckdb_manager/`~~ *(已提取至 `seafin-duckdb-manager` 獨立套件)* | 5 項修復（2026-03-14）：`clean_and_convert_column()` 驗證跳過、手動 SQL 轉義（×2）、`execute_transaction()` 繞過 `_rollback()`、`connection_timeout` 死設定 — 均已在獨立套件中修復。剩餘 🟡 N+1 查詢和 ⚪ 型別標注問題亦移至套件追蹤 |
 
 ### 14.3 Tasks 層
 

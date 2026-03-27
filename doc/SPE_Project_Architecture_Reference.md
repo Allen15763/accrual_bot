@@ -113,32 +113,9 @@ project/
 │   │   ├── logging/                 #   Logger, StructuredLogger, ColoredFormatter
 │   │   ├── helpers/                 #   file_utils
 │   │   ├── database/               #   DuckDBManager 簡易包裝
-│   │   ├── duckdb_manager/         #   DuckDB Manager 插件 (完整版)
-│   │   │   ├── manager.py          #     DuckDBManager (Mixin 組合)
-│   │   │   ├── config.py           #     DuckDBConfig
-│   │   │   ├── exceptions.py       #     自定義異常
-│   │   │   ├── operations/         #     操作 Mixin 集
-│   │   │   │   ├── base.py         #       OperationMixin (事務 Helper)
-│   │   │   │   ├── crud.py         #       CRUDMixin
-│   │   │   │   ├── table_management.py  #  TableManagementMixin
-│   │   │   │   ├── data_cleaning.py     #  DataCleaningMixin
-│   │   │   │   └── transaction.py       #  TransactionMixin
-│   │   │   ├── migration/          #     Schema 遷移
-│   │   │   │   ├── schema_diff.py  #       Schema 差異比對
-│   │   │   │   ├── strategies.py   #       遷移策略
-│   │   │   │   └── migrator.py     #       遷移執行器
-│   │   │   └── utils/              #     輔助工具
-│   │   │       ├── type_mapping.py #       Pandas→DuckDB 型別對映
-│   │   │       ├── query_builder.py#       SQL 建構器
-│   │   │       └── logging.py      #       可插拔日誌
-│   │   └── metadata_builder/       #   Metadata Builder 插件 (Bronze/Silver)
-│   │       ├── builder.py          #     MetadataBuilder 核心類
-│   │       ├── config.py           #     SourceSpec, SchemaConfig, ColumnSpec
-│   │       ├── reader.py           #     SourceReader (強健讀取)
-│   │       ├── exceptions.py       #     自定義異常
-│   │       ├── processors/         #     Bronze/Silver 處理器
-│   │       ├── transformers/       #     Column Mapper, Type Caster
-│   │       └── validation/         #     Circuit Breaker
+│   │   # NOTE: duckdb_manager/ 和 metadata_builder/ 插件已提取為獨立 GitHub 套件
+│   │   # → seafin-duckdb-manager v2.1.0 (github.com/Allen15763/seafin-duckdb-manager)
+│   │   # → seafin-metadata-builder v1.0.0 (github.com/Allen15763/seafin-metadata-builder)
 │   │
 │   └── config/                      # === 配置檔案 ===
 │       ├── config.toml              #   全域配置 (logging, paths, pipeline)
@@ -158,8 +135,8 @@ project/
 |------|------|---------|------|
 | Pipeline Framework | `src/core/pipeline/` | 直接複製 | 通用管線引擎 |
 | DataSource | `src/core/datasources/` | 直接複製 | 資料源抽象 + 快取 |
-| DuckDB Manager | `src/utils/duckdb_manager/` | 直接複製 | 完整 DB 操作套件 |
-| Metadata Builder | `src/utils/metadata_builder/` | 直接複製 | 髒資料處理工具 |
+| DuckDB Manager | ~~`src/utils/duckdb_manager/`~~ → [`seafin-duckdb-manager`](https://github.com/Allen15763/seafin-duckdb-manager) | `pip install` from GitHub | 完整 DB 操作套件 |
+| Metadata Builder | ~~`src/utils/metadata_builder/`~~ → [`seafin-metadata-builder`](https://github.com/Allen15763/seafin-metadata-builder) | `pip install` from GitHub | 髒資料處理工具 |
 | Config Manager | `src/utils/config/` | 直接複製 | TOML 配置管理 |
 | Logger | `src/utils/logging/` | 直接複製 | 彩色日誌 + 結構化日誌 |
 

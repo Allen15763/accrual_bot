@@ -208,13 +208,11 @@ project/
 │   │   │   └── logger.py            #   Logger + StructuredLogger + ColoredFormatter
 │   │   ├── helpers/
 │   │   │   └── file_utils.py        #   路徑驗證、目錄建立、安全複製
-│   │   ├── database/
-│   │   │   └── duckdb_manager.py    #   Mixin 組合的 DuckDB 操作套件
-│   │   └── metadata_builder/        #   ★ 髒資料處理（Bronze/Silver）
-│   │       ├── builder.py           #     MetadataBuilder（核心）
-│   │       ├── config.py            #     SourceSpec, SchemaConfig, ColumnSpec
-│   │       ├── reader.py            #     強健讀取（全字串）
-│   │       ├── processors/          #     BronzeProcessor, SilverProcessor
+│   │   └── database/
+│   │       └── duckdb_manager.py    #   Mixin 組合的 DuckDB 操作套件
+│   │   # NOTE: metadata_builder/ 和 duckdb_manager/ 插件已提取為獨立套件
+│   │   # → seafin-metadata-builder (github.com/Allen15763/seafin-metadata-builder)
+│   │   # → seafin-duckdb-manager (github.com/Allen15763/seafin-duckdb-manager)
 │   │       ├── transformers/        #     ColumnMapper, TypeCaster
 │   │       └── validation/          #     CircuitBreaker（NULL 率保護）
 │   │
@@ -275,7 +273,8 @@ project/
 ### 4.2 MetadataBuilder 核心 API
 
 ```python
-from src.utils.metadata_builder import MetadataBuilder, SchemaConfig, ColumnSpec, SourceSpec
+from seafin_metadata_builder import MetadataBuilder, SchemaConfig, ColumnSpec, SourceSpec
+# pip install "seafin-metadata-builder @ git+https://github.com/Allen15763/seafin-metadata-builder.git@v1.0.0"
 
 builder = MetadataBuilder()
 
@@ -792,7 +791,8 @@ with DuckDBManager("./data.duckdb") as db:
 當資料表結構需要隨時間演進時（新增欄位、型別變更），避免手工 ALTER TABLE：
 
 ```python
-from src.utils.duckdb_manager.migration import SchemaMigrator, MigrationStrategy
+from seafin_duckdb_manager.migration import SchemaMigrator, MigrationStrategy
+# pip install "seafin-duckdb-manager @ git+https://github.com/Allen15763/seafin-duckdb-manager.git@v2.1.0"
 
 migrator = SchemaMigrator(db)
 
@@ -1009,8 +1009,8 @@ config.get_path('paths', 'output_dir')          # 自動轉 Path 物件
 |------|------|------|---------|
 | **Pipeline Framework** | `src/core/pipeline/` | Pipeline/Step/Context/Checkpoint | 直接複製目錄 |
 | **DataSource** | `src/core/datasources/` | Excel/CSV/Parquet/GSheets + 快取 | 直接複製目錄 |
-| **MetadataBuilder** | `src/utils/metadata_builder/` | Bronze/Silver ELT | 直接複製目錄 |
-| **DuckDB Manager** | `src/utils/duckdb_manager/` | Mixin DB 操作 + Schema 遷移 | 直接複製目錄 |
+| **MetadataBuilder** | ~~`src/utils/metadata_builder/`~~ → [`seafin-metadata-builder`](https://github.com/Allen15763/seafin-metadata-builder) | Bronze/Silver ELT | `pip install` from GitHub |
+| **DuckDB Manager** | ~~`src/utils/duckdb_manager/`~~ → [`seafin-duckdb-manager`](https://github.com/Allen15763/seafin-duckdb-manager) | Mixin DB 操作 + Schema 遷移 | `pip install` from GitHub |
 | **ConfigManager** | `src/utils/config/` | Thread-safe TOML 單例 | 直接複製目錄 |
 | **Logger** | `src/utils/logging/` | 彩色 + 結構化日誌 | 直接複製目錄 |
 | **file_utils** | `src/utils/helpers/` | 路徑驗證、目錄建立 | 直接複製檔案 |
@@ -1121,7 +1121,7 @@ output_file = "./output/{YYYYMM}_result.xlsx"
 # src/tasks/my_task/steps/step_01_load_data.py
 from src.core.pipeline.base import PipelineStep, StepResult, StepStatus
 from src.core.pipeline.context import ProcessingContext
-from src.utils.metadata_builder import MetadataBuilder, SchemaConfig, ColumnSpec
+from seafin_metadata_builder import MetadataBuilder, SchemaConfig, ColumnSpec
 
 class LoadDataStep(PipelineStep):
     def __init__(self, file_path: str, **kwargs):
@@ -1348,7 +1348,7 @@ class MyBusinessStep(PipelineStep):
 
 ```python
 from src.core.pipeline.steps.base_loading import BaseLoadingStep
-from src.utils.metadata_builder import MetadataBuilder, SchemaConfig, ColumnSpec
+from seafin_metadata_builder import MetadataBuilder, SchemaConfig, ColumnSpec
 from typing import Tuple
 import pandas as pd
 

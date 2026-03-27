@@ -2,8 +2,10 @@
 
 ## 概述
 
-本項目使用 pytest 測試框架，包含 **830+ 測試**（712 unit + 12 integration + 106 unmarked），
+本項目使用 pytest 測試框架，包含 **779 測試**（661 unit + 12 integration + 106 unmarked），
 覆蓋 core pipeline、data sources、tasks（SPT/SPX/SCT）、utilities、UI 等模組。
+
+> **注意**：`duckdb_manager` 和 `metadata_builder` 的測試已隨模組提取至獨立套件（[seafin-duckdb-manager](https://github.com/Allen15763/seafin-duckdb-manager)、[seafin-metadata-builder](https://github.com/Allen15763/seafin-metadata-builder)）。
 
 ## 測試結構
 
@@ -62,12 +64,8 @@ tests/
 │   │   │   ├── test_column_utils.py         # ColumnResolver 測試
 │   │   │   ├── test_data_utils.py           # 資料工具函式測試
 │   │   │   └── test_file_utils.py           # 檔案工具函式測試
-│   │   ├── logging/
-│   │   │   └── test_logger.py               # Logger 單例 / 執行緒安全測試
-│   │   ├── duckdb_manager/
-│   │   │   └── test_duckdb_manager.py       # DuckDBConfig / DuckDBManager 測試
-│   │   └── metadata_builder/
-│   │       └── test_metadata_builder.py     # SourceSpec / ColumnSpec / SchemaConfig 測試
+│   │   └── logging/
+│   │       └── test_logger.py               # Logger 單例 / 執行緒安全測試
 │   ├── ui/
 │   │   ├── services/
 │   │   │   ├── test_unified_pipeline_service.py # UnifiedPipelineService 測試
