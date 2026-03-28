@@ -47,7 +47,7 @@ echo [1/3] 建立虛擬環境...
 call "%INSTALL_DIR%accrual_venv\Scripts\activate.bat"
 
 echo [2/3] 安裝 Accrual Bot...
-pip install "accrual-bot @ git+https://github.com/Allen15763/accrual_bot.git"
+pip install "accrual-bot @ git+https://github.com/Allen15763/accrual_bot.git@packaging"
 
 echo [3/3] 初始化工作區...
 set "ACCRUAL_BOT_WORKSPACE=%WORKSPACE%"
@@ -107,7 +107,7 @@ if errorlevel 1 (
 
 echo [4/5] 安裝 Accrual Bot...
 "%PY_DIR%\python.exe" -m pip install ^
-    "accrual-bot @ git+https://github.com/Allen15763/accrual_bot.git" ^
+    "accrual-bot @ git+https://github.com/Allen15763/accrual_bot.git@packaging" ^
     --no-warn-script-location
 if errorlevel 1 (
     echo [ERROR] 套件安裝失敗！

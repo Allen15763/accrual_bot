@@ -54,7 +54,7 @@ def _resolve_credentials() -> Optional[str]:
             return str(ws_cred)
 
     # 3. 相對路徑 fallback
-    from accrual_bot.utils.helpers.file_utils import resolve_flexible_path
+    from accrual_bot.utils.config.config_manager import resolve_flexible_path
     fallback = resolve_flexible_path("./secret/credentials.json")
     if fallback and Path(fallback).exists():
         return fallback
