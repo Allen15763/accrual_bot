@@ -45,7 +45,13 @@ class RunConfig:
 
 
 def get_config_dir() -> Path:
-    """取得配置檔案目錄"""
+    """取得配置檔案目錄（workspace 環境變數優先）"""
+    import os
+    workspace = os.environ.get("ACCRUAL_BOT_WORKSPACE")
+    if workspace:
+        ws_config = Path(workspace) / "config"
+        if ws_config.is_dir():
+            return ws_config
     return Path(__file__).parent.parent / "config"
 
 

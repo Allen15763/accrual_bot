@@ -14,8 +14,9 @@ Google Sheets 統一數據源
 import asyncio
 import concurrent.futures
 import json
+import os
 import warnings
-import zipfile
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import gspread
@@ -32,12 +33,33 @@ _DEFAULT_SCOPES = [
     'https://www.googleapis.com/auth/drive',
 ]
 
-# Colab / 打包環境中的 ZIP 路徑候選（依序嘗試）
-_ZIP_CANDIDATES = [
-    r'C:\SEA\Accrual\prpo_bot\prpo_bot_renew_v2\accrual_bot.zip',
-    '/content/drive/Shareddrives/INT_TWN_SEA_FN_Shared_Resources/15_FBA/Allen/accrual_bot.zip',
-]
-_JSON_IN_ZIP = 'accrual_bot/secret/credentials.json'
+
+def _resolve_credentials() -> Optional[str]:
+    """
+    依序嘗試多種方式找到 credentials.json：
+    1. 環境變數 ACCRUAL_BOT_CREDENTIALS
+    2. 工作區 secret/ 目錄
+    3. 相對路徑 ./secret/credentials.json
+    """
+    # 1. 環境變數
+    env_path = os.environ.get("ACCRUAL_BOT_CREDENTIALS")
+    if env_path and Path(env_path).exists():
+        return env_path
+
+    # 2. 工作區目錄
+    workspace = os.environ.get("ACCRUAL_BOT_WORKSPACE")
+    if workspace:
+        ws_cred = Path(workspace) / "secret" / "credentials.json"
+        if ws_cred.exists():
+            return str(ws_cred)
+
+    # 3. 相對路徑 fallback
+    from accrual_bot.utils.helpers.file_utils import resolve_flexible_path
+    fallback = resolve_flexible_path("./secret/credentials.json")
+    if fallback and Path(fallback).exists():
+        return fallback
+
+    return None
 
 
 class GoogleSheetsSource(DataSource):
@@ -139,14 +161,14 @@ class GoogleSheetsSource(DataSource):
     # ────────────────────────────────────────────────
 
     def _init_connection(self) -> None:
-        """初始化 gspread 連線（支援 ZIP fallback）"""
+        """初始化 gspread 連線（支援環境變數 / 工作區 fallback）"""
         try:
             creds = self._load_credentials_from_file()
             self._gc = gspread.authorize(creds)
             self._open_default_spreadsheet()
-        except FileNotFoundError:
-            self.logger.warning("憑證檔案不存在，嘗試從 ZIP 載入")
-            self._initialize_service_from_zip()
+        except (FileNotFoundError, ValueError):
+            self.logger.warning("憑證檔案不存在，嘗試自動解析路徑")
+            self._initialize_service_from_resolved_path()
         except Exception as e:
             self.logger.error(f"初始化 Google Sheets 連線失敗: {e}")
             raise
@@ -170,30 +192,25 @@ class GoogleSheetsSource(DataSource):
             self._spreadsheet = self._gc.open_by_key(self.spreadsheet_key)
             self.logger.info(f"已連接試算表（ID）: {self._spreadsheet.title}")
 
-    def _initialize_service_from_zip(self) -> None:
-        """從 ZIP 檔案載入憑證（Colab 或打包環境 fallback）"""
-        for zip_path in _ZIP_CANDIDATES:
-            try:
-                with zipfile.ZipFile(zip_path, 'r') as zf:
-                    if _JSON_IN_ZIP not in zf.namelist():
-                        continue
-                    service_account_info = json.loads(
-                        zf.read(_JSON_IN_ZIP).decode('utf-8')
-                    )
-                    creds = Credentials.from_service_account_info(
-                        service_account_info, scopes=self.scopes
-                    )
-                    self._gc = gspread.authorize(creds)
-                    self._open_default_spreadsheet()
-                    self.logger.info(f"從 ZIP 成功初始化 Google Sheets 連線: {zip_path}")
-                    return
-            except FileNotFoundError:
-                continue
-            except Exception as e:
-                self.logger.error(f"從 ZIP 初始化失敗 ({zip_path}): {e}")
-                continue
+    def _initialize_service_from_resolved_path(self) -> None:
+        """從自動解析的路徑載入憑證（環境變數 / 工作區 / 相對路徑）"""
+        resolved = _resolve_credentials()
+        if not resolved:
+            self.logger.error(
+                "找不到 credentials.json。"
+                "請設定環境變數 ACCRUAL_BOT_CREDENTIALS 或將檔案放到 secret/ 目錄"
+            )
+            return
 
-        self.logger.error("所有 ZIP 路徑均無法初始化，Google Sheets 連線不可用")
+        try:
+            creds = Credentials.from_service_account_file(
+                resolved, scopes=self.scopes
+            )
+            self._gc = gspread.authorize(creds)
+            self._open_default_spreadsheet()
+            self.logger.info(f"從解析路徑成功初始化 Google Sheets 連線: {resolved}")
+        except Exception as e:
+            self.logger.error(f"從解析路徑初始化失敗 ({resolved}): {e}")
 
     # ────────────────────────────────────────────────
     # DataSource 標準介面（async）

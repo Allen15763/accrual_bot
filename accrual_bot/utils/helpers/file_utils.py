@@ -32,6 +32,40 @@ def get_resource_path(relative_path: str) -> str:
     return os.path.join(os.path.abspath('.'), relative_path)
 
 
+def resolve_config_ref_path(ref_path: str) -> str:
+    """
+    解析 config 參照表路徑，支援 pip install 後的 importlib.resources fallback。
+
+    優先順序：
+    1. ref_path 本身存在 → 直接回傳
+    2. 從套件內 accrual_bot.config 取得同名檔案
+
+    Args:
+        ref_path: 原始路徑（如 "accrual_bot/config/ref_SPTTW.xlsx"）
+
+    Returns:
+        str: 可存取的實際路徑
+    """
+    if ref_path and Path(ref_path).exists():
+        return ref_path
+
+    # pip install 後，相對路徑不存在，改從套件資源取得
+    try:
+        from importlib.resources import files as pkg_files
+        filename = Path(ref_path).name if ref_path else ""
+        if filename:
+            pkg_path = pkg_files("accrual_bot.config").joinpath(filename)
+            resolved = str(pkg_path)
+            if Path(resolved).exists():
+                logger.info(f"從套件資源解析 ref 路徑: {resolved}")
+                return resolved
+    except Exception:
+        pass
+
+    # 都找不到，回傳原始路徑（讓呼叫端處理錯誤）
+    return ref_path
+
+
 def validate_file_path(file_path: str, check_exists: bool = True) -> bool:
     """
     驗證檔案路徑是否有效

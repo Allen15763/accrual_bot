@@ -85,7 +85,9 @@ class SPTBaseDataLoadingStep(BaseLoadingStep):
         PO 與 PR 使用相同的參考數據路徑（ref_path_spt）。
         """
         try:
+            from accrual_bot.utils.helpers.file_utils import resolve_config_ref_path
             ref_data_path = config_manager._config_data.get('PATHS').get('ref_path_spt')
+            ref_data_path = resolve_config_ref_path(ref_data_path)
             count = 0
 
             # Colab 環境：從 ZIP 載入
