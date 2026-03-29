@@ -116,15 +116,15 @@ python -m pip install -e ".[dev]"
 
 ```bash
 # Windows
-.\run_tests.bat              # 全部測試
-.\run_tests.bat unit         # 僅 unit
-.\run_tests.bat integration  # 僅 integration
-.\run_tests.bat coverage     # 含覆蓋率報告
+scripts\test_all.bat              # 全部測試
+scripts\test_unit.bat             # 僅 unit
+scripts\test_integration.bat      # 僅 integration
+scripts\test_coverage.bat         # 含覆蓋率報告
 
-# Linux / macOS（若有 scripts/ 目錄）
-bash scripts/run_all.sh
-bash scripts/run_unit.sh
-bash scripts/run_coverage.sh
+# Linux / macOS
+bash scripts/test_all.sh
+bash scripts/test_unit.sh
+bash scripts/test_coverage.sh
 ```
 
 ### 使用 pytest 命令
