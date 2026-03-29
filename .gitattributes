@@ -1,0 +1,3 @@
+# 確保 .bat 在任何 OS checkout 後都是 CRLF（Windows cmd.exe 要求）
+scripts/*.bat text eol=crlf
+*.sh text eol=lf

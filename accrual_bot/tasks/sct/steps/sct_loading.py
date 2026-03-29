@@ -88,7 +88,9 @@ class SCTBaseDataLoadingStep(BaseLoadingStep):
         SCT 使用 ref_path_sct 指向 ref_SCTTW.xlsx（從 stagging.toml [paths] 讀取）。
         """
         try:
+            from accrual_bot.utils.helpers.file_utils import resolve_config_ref_path
             ref_data_path = config_manager._config_toml.get('paths', {}).get('ref_path_sct')
+            ref_data_path = resolve_config_ref_path(ref_data_path)
             count = 0
 
             # Colab 環境：從 ZIP 載入

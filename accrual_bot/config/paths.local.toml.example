@@ -5,3 +5,7 @@
 
 [base]
 resources = "D:/MyLocalData/accrual"    # 修改為本機實際的資源根目錄
+
+# SPX PPE 合約歸檔清單（G:/ 共用雲端硬碟路徑因人而異）
+[spx.ppe]
+contract_filing_list = "G:/共用雲端硬碟/INT_TWN_SEA_FN_Shared_Resources/00_Temp_Internal_share/SPX/租金/SPX租金合約歸檔清單及匯款狀態_marge1.xlsx"

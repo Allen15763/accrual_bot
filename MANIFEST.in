@@ -1,0 +1,2 @@
+recursive-include accrual_bot/config *.toml *.ini *.xlsx *.example
+recursive-include accrual_bot/ui/_streamlit_app *.py

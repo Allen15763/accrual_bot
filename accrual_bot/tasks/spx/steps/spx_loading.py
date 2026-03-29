@@ -374,8 +374,10 @@ class SPXDataLoadingStep(PipelineStep):
         try:
             # 這裡假設參考數據存放在固定位置
             # 實際使用時應該從配置讀取
+            from accrual_bot.utils.helpers.file_utils import resolve_config_ref_path
             ref_data_path = config_manager._config_data.get('PATHS').get('ref_path_spt')
-            
+            ref_data_path = resolve_config_ref_path(ref_data_path)
+
             count = 0
 
             # if in colab, return dataframe, otherwise, return None
@@ -1629,8 +1631,10 @@ class SPXPRDataLoadingStep(PipelineStep):
             # 從配置讀取參考數據路徑
             # 注意：這裡使用與 PO 相同的參考數據路徑
             # 如果 PR 有專用的參考數據，需要在 config.ini 中新增對應配置
+            from accrual_bot.utils.helpers.file_utils import resolve_config_ref_path
             ref_data_path = config_manager._config_data.get('PATHS').get('ref_path_spt')
-            
+            ref_data_path = resolve_config_ref_path(ref_data_path)
+
             count = 0
             
             # if in colab, return dataframe, otherwise, return None
