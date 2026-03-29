@@ -13,12 +13,13 @@ class AsyncBridge:
     """在 sync Streamlit 中執行 async coroutines"""
 
     @staticmethod
-    def run_async(coro) -> Any:
+    def run_async(coro, timeout: int = 600) -> Any:
         """
         同步執行 async coroutine
 
         Args:
             coro: Async coroutine 物件
+            timeout: 超時秒數（預設 600 秒 = 10 分鐘）
 
         Returns:
             Coroutine 的執行結果
@@ -45,21 +46,22 @@ class AsyncBridge:
 
         thread = threading.Thread(target=run_in_thread, daemon=True)
         thread.start()
-        thread.join(timeout=300)  # 5 分鐘超時
+        thread.join(timeout=timeout)
 
         # 檢查是否有異常
         if not exception_queue.empty():
             raise exception_queue.get()
 
-        # 檢查是否超時
-        if thread.is_alive():
-            raise TimeoutError("Pipeline 執行超時（5分鐘）")
-
-        # 返回結果
+        # 先檢查是否有結果（修復 race condition：thread 在 timeout 邊界完成時，
+        # is_alive() 可能短暫仍為 True，但 result 已在 queue 中）
         if not result_queue.empty():
             return result_queue.get()
-        else:
-            raise RuntimeError("Pipeline 執行失敗：無返回結果")
+
+        # 最後才判斷超時
+        if thread.is_alive():
+            raise TimeoutError(f"Pipeline 執行超時（{timeout // 60}分鐘）")
+
+        raise RuntimeError("Pipeline 執行失敗：無返回結果")
 
     @staticmethod
     def run_in_thread(
