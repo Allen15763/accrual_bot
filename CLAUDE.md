@@ -6,6 +6,72 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Accrual Bot is an async data processing system for PO/PR (Purchase Order/Purchase Request) accrual processing. It handles monthly financial data reconciliation for three active business entities: SPT, SPX, and SCT. The system includes both a command-line pipeline execution mode and a Streamlit-based Web UI.
 
+## Distribution (pip install)
+
+Accrual Bot 支援透過 `pip install` 分發給使用者。使用者只需三個 bat 腳本即可安裝、執行、更新。
+
+### 使用者安裝流程
+
+```
+安裝目錄/
+├── install.bat    — 安裝（自動偵測系統 Python 或下載 Embedded Python）
+├── run.bat        — 啟動 Streamlit UI（自動從 G: drive 複製 credentials）
+└── update.bat     — 更新 accrual-bot（--force-reinstall --no-deps）
+```
+
+`install.bat` 兩種路徑：
+- **系統 Python ≥ 3.11**：建立 venv → `pip install "accrual-bot @ git+https://github.com/Allen15763/accrual_bot.git"` → `accrual-bot init`
+- **無 Python**：下載 Embedded Python 3.11.9 → 修改 `._pth` → `get-pip.py` → 直接安裝到 Embedded Python
+
+### CLI 入口
+
+```bash
+accrual-bot          # 預設啟動 Streamlit UI
+accrual-bot init     # 初始化工作區（config/secret/output/logs + Streamlit app scaffold）
+accrual-bot version  # 顯示版本
+```
+
+### 工作區結構
+
+`accrual-bot init` 在 `ACCRUAL_BOT_WORKSPACE`（預設 `~/accrual-bot`）建立：
+
+```
+workspace/
+├── config/
+│   ├── paths.local.toml    — 使用者本機路徑覆蓋（從 .example 複製）
+│   └── run_config.toml     — 執行配置
+├── secret/
+│   └── credentials.json    — Google API 憑證（run.bat 自動從 G: drive 複製）
+├── output/                 — Pipeline 輸出目錄
+├── logs/                   — 日誌目錄
+└── app/
+    ├── main_streamlit.py   — Streamlit 入口（thin wrapper）
+    └── pages/              — 5 個 emoji page stubs（exec() 載入套件內邏輯）
+```
+
+### 關鍵設計決策
+
+| 決策 | 說明 |
+|------|------|
+| `paths.toml` 不修改 | 保持開發者硬編碼路徑；pip install 使用者用 `paths.local.toml` 覆蓋 |
+| `importlib.resources` fallback | config_manager、ref*.xlsx、credentials 查找都有套件內 fallback |
+| `ACCRUAL_BOT_WORKSPACE` env var | `run.bat` 設定；`config_loader.get_config_dir()` 和 `_resolve_credentials()` 優先讀取 |
+| credentials auto-copy | `run.bat` 啟動時從 G: drive 複製到 workspace/secret/（避免 `chcp 65001` 中文 env var bug） |
+| Streamlit pages exec() | pip install 後 `pages/` 必須在 entry point 旁邊；stub 用 `exec(compile(...))` 載入套件內實際邏輯 |
+
+### 相關檔案
+
+| 檔案 | 用途 |
+|------|------|
+| `accrual_bot/cli.py` | CLI 入口（init / ui / version） |
+| `accrual_bot/ui/_streamlit_app/` | pip install 版 Streamlit 模板 |
+| `scripts/install.bat` | 使用者安裝腳本 |
+| `scripts/run.bat` | 使用者啟動腳本 |
+| `scripts/update.bat` | 使用者更新腳本 |
+| `pyproject.toml` | package metadata、entry point、package-data |
+| `MANIFEST.in` | sdist 非 Python 檔案清單 |
+| `.gitattributes` | bat=CRLF / sh=LF 行尾強制 |
+
 ## Common Commands
 
 ### Windows PowerShell
@@ -288,6 +354,7 @@ See [doc/UI_Architecture.md](doc/UI_Architecture.md) for detailed UI architectur
 | `doc/SPE_Project_Architecture_Reference.md` | SPE project architecture reference |
 | `doc/Project_Review_And_Merger_Analysis.md` | Project review and merger analysis |
 | `doc/Task Pipeline Structure Unit Test Plan.md` | Test plan for pipeline structure |
+| `doc/Package_Distribution_Guide.md` | pip install 套件化分發指南 |
 | `tests/README.md` | Test suite guide (1,535 tests) |
 
 ## Language

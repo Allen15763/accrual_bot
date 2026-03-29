@@ -20,6 +20,7 @@
 12. [可複用的程式碼模板](#12-可複用的程式碼模板)
 13. [業務邏輯配置驅動：SPX 完整範例](#13-業務邏輯配置驅動spx-完整範例)
 14. [已知問題與技術債清單](#14-已知問題與技術債清單)
+15. [套件化分發架構](#15-套件化分發架構)
 
 ---
 
@@ -1822,6 +1823,54 @@ s_logger.log_operation_end('data_loading', success=True, duration=2.3)
 | ⚪ | `ui/models/state_models.py` `ResultState.checkpoint_path` | 欄位定義但整個 UI 中從未被設定（孤兒欄位） |
 | ⚪ | `ui/services/unified_pipeline_service.py` `_enrich_file_paths()` | 例外處理使用 `print()` 而非 `get_logger()` |
 | 🟡 | `ui/utils/async_bridge.py` | `run_in_thread()` 非阻塞方法定義了但 UI 中完全未使用；`ExecutionStatus.PAUSED` 定義了但沒有任何程式碼設定它 |
+
+---
+
+## 15. 套件化分發架構
+
+> 詳細指南見 [Package_Distribution_Guide.md](Package_Distribution_Guide.md)
+
+### 15.1 設計目標
+
+將開發環境的程式碼打包為可 `pip install` 的 Python 套件，使用者透過三個 bat 腳本（install/run/update）即可完成安裝、執行、更新，無需接觸 Python 或命令列。
+
+### 15.2 關鍵設計模式
+
+#### Workspace 分離模式
+
+套件程式碼（`site-packages/accrual_bot/`）與使用者配置（`workspace/`）完全分離。`ACCRUAL_BOT_WORKSPACE` 環境變數串聯兩者。
+
+```
+site-packages/accrual_bot/     workspace/
+├── config/                     ├── config/
+│   ├── paths.toml (預設值)      │   └── paths.local.toml (使用者覆蓋)
+│   └── ref*.xlsx (隨套件打包)   ├── secret/credentials.json
+├── cli.py (entry point)        ├── output/
+└── ui/_streamlit_app/ (模板)    └── app/ (Streamlit pages scaffold)
+```
+
+#### 多層 Fallback 模式
+
+所有路徑解析都遵循「環境變數 → 工作區 → 套件內 → 相對路徑」的 fallback 鏈：
+
+| 資源 | Fallback 順序 |
+|------|---------------|
+| 配置目錄 | `ACCRUAL_BOT_WORKSPACE/config` → `accrual_bot/config/` |
+| credentials | `ACCRUAL_BOT_CREDENTIALS` → `workspace/secret/` → `./secret/` |
+| ref*.xlsx | 原始路徑 → `importlib.resources("accrual_bot.config")` |
+| config.ini | 原始路徑搜索 → `importlib.resources` |
+
+#### Streamlit Pages Proxy 模式
+
+pip install 後無法控制 `pages/` 目錄位置。解法：在工作區產生 thin stub 檔，用 `exec(compile(...))` 載入套件內的實際頁面邏輯。
+
+### 15.3 對擴充的影響
+
+新增 entity 或 processing type 時，除了原有的步驟（見 [§10](#10-擴充指南)），還需注意：
+
+- `pyproject.toml` 的 `[tool.setuptools.package-data]` — 如果新增了需要打包的非 Python 檔案
+- `MANIFEST.in` — 同上（影響 sdist）
+- `cli.py:cmd_init()` — 如果需要在工作區建立新的配置模板
 
 ---
 

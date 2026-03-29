@@ -126,6 +126,24 @@
 - **Extended test files (9)**: `test_data_utils.py` (+25 tests, 48%→76%), `test_common_steps.py` (+30 tests, 42%→79%), `test_spx_condition_engine.py` (+48 tests, 54%→80%), `test_base_evaluation.py` (+8 tests, 65%→79%), `test_config_manager.py` (+24 tests, 55%→69%), `test_base_importer.py` (+8 tests, →69%), `test_checkpoint.py` (+10 tests), `test_logger.py` (+9 tests, →81%), `test_spx_ppe_steps.py` (+46 tests, 42%→74%)
 - **Known source bug documented**: `spt_combined_procurement_processing.py:151,207` — `ProcessingContext()` called without required args; `_process_po_data()` / `_process_pr_data()` always fail in try/except
 
+## Phase 16: Package Distribution via pip install (2026-03-29)
+- **Distribution model**: 從「複製 code 到 Embedded Python → 上傳 Google Drive ~500MB → 使用者下載」改為 `pip install` + 3 個 bat 腳本（install/run/update），更新只需 `update.bat`
+- **CLI entry point**: 新增 `accrual_bot/cli.py`，提供 `accrual-bot init/ui/version` 子命令；`pyproject.toml` 註冊 `[project.scripts]` entry point
+- **Workspace concept**: `accrual-bot init` 建立獨立工作區（config/secret/output/logs/app），與套件安裝目錄分離；`ACCRUAL_BOT_WORKSPACE` 環境變數控制路徑
+- **Streamlit pages scaffold**: `accrual_bot/ui/_streamlit_app/` 提供 pip install 版 Streamlit 模板；page stubs 用 `exec(compile(...))` + `importlib.resources` 載入套件內實際邏輯（解決 Streamlit 要求 `pages/` 在 entry point 旁的限制）
+- **Hardcoded path removal (6 locations)**:
+  - `config_manager.py`: ZIP fallback（`r'C:\SEA\...\accrual_bot.zip'`）→ `importlib.resources` 查找套件內 `config.ini`
+  - `google_sheet_source.py`: `_ZIP_CANDIDATES` → `_resolve_credentials()`（env var → workspace/secret → flexible_path fallback）
+  - `config_loader.py`: `get_config_dir()` 新增 `ACCRUAL_BOT_WORKSPACE` 優先查找
+  - `constants.py`: `REF_PATH_MOB/SPT`（`G:/共用雲端硬碟/...`）→ `""` (Deprecated，已無 production code 使用)
+  - `file_utils.py`: 新增 `resolve_config_ref_path()` — 原始路徑不存在時 fallback 到 `importlib.resources`
+  - `spt/spx/sct_loading.py`: ref_path 讀取後經 `resolve_config_ref_path()` 處理
+- **paths.toml 保留開發者路徑**: `resources` 和 `contract_filing_list` 維持原始硬編碼值；pip install 使用者透過 `paths.local.toml` 覆蓋
+- **ref*.xlsx tracked**: `.gitignore` 新增 `!accrual_bot/config/ref*.xlsx` 例外；`pyproject.toml` 的 `[tool.setuptools.package-data]` 確保隨 wheel 打包
+- **Installer scripts**: `scripts/install.bat` 自動偵測系統 Python（venv 路線）或下載 Embedded Python 3.11.9（直裝路線）；`scripts/run.bat` 啟動時自動從 G: drive 複製 credentials.json 到 workspace/secret/（繞過 `chcp 65001` 中文 env var 編碼問題）；`scripts/update.bat` 使用 `--force-reinstall --no-deps` 只更新 accrual-bot 本身
+- **Build artifacts**: `MANIFEST.in`（sdist 非 Python 檔案）、`.gitattributes`（bat=CRLF, sh=LF 行尾強制）
+- **Impact**: 使用者安裝從 ~500MB 下載 + 手動設定 → 雙擊 install.bat 一鍵完成；更新從重新打包上傳 → 雙擊 update.bat 幾秒完成
+
 ## Benefits
 
 - **Maintainability**: Single source of truth for shared logic reduces bug surface area
