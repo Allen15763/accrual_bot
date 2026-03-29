@@ -57,7 +57,6 @@ omit = [
     "accrual_bot/ui/pages/*",
     "accrual_bot/ui/components/*",
     "accrual_bot/ui/app.py",
-    "accrual_bot/test_data_generator.py",
     "accrual_bot/core/pipeline/steps/spt_*.py",
     "accrual_bot/core/pipeline/steps/spx_*.py",
 ]
