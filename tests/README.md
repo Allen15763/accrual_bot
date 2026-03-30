@@ -2,7 +2,7 @@
 
 ## 概述
 
-本項目使用 pytest 測試框架，包含 **1,535 測試**（~1,400 unit + 12 integration + ~120 unmarked），
+本項目使用 pytest 測試框架，包含 **1,568 測試**（1,556 unit + 12 integration），
 覆蓋 core pipeline、data sources、tasks（SPT/SPX/SCT）、utilities、runner、UI 等模組。整體覆蓋率 **74%**。
 
 > **注意**：`duckdb_manager` 和 `metadata_builder` 的測試已隨模組提取至獨立套件（[seafin-duckdb-manager](https://github.com/Allen15763/seafin-duckdb-manager)、[seafin-metadata-builder](https://github.com/Allen15763/seafin-metadata-builder)）。
@@ -68,7 +68,11 @@ tests/
 │   │   │   ├── test_sct_post_processing.py  # SCT 後處理測試
 │   │   │   ├── test_sct_column_addition.py  # SCT 欄位添加測試（15 tests）
 │   │   │   ├── test_sct_integration.py      # SCT 整合步驟測試（7 tests）
-│   │   │   └── test_sct_loading.py          # SCT 資料載入測試（12 tests）
+│   │   │   ├── test_sct_loading.py          # SCT 資料載入測試（12 tests）
+│   │   │   ├── test_sct_variance_loading.py # SCT 差異分析 - 資料載入測試（8 tests）
+│   │   │   ├── test_sct_variance_api_call.py # SCT 差異分析 - API 呼叫測試（8 tests）
+│   │   │   ├── test_sct_variance_preprocessing.py # SCT 差異分析 - 預處理測試（13 tests）
+│   │   │   └── test_sct_variance_result_export.py # SCT 差異分析 - 結果匯出測試（15 tests）
 │   │   └── common/
 │   │       └── test_data_shape_summary.py   # 資料形狀摘要測試（10 tests）
 │   ├── utils/
@@ -78,8 +82,10 @@ tests/
 │   │   │   ├── test_column_utils.py         # ColumnResolver 測試
 │   │   │   ├── test_data_utils.py           # 資料工具函式測試
 │   │   │   └── test_file_utils.py           # 檔案工具函式測試
-│   │   └── logging/
-│   │       └── test_logger.py               # Logger 單例 / 執行緒安全測試
+│   │   ├── logging/
+│   │   │   └── test_logger.py               # Logger 單例 / 執行緒安全測試
+│   │   └── api/
+│   │       └── test_dify_client.py          # DifyClient API 客戶端測試（19 tests）
 │   ├── runner/
 │   │   ├── test_config_loader.py            # ConfigLoader 測試（30 tests, 97%）
 │   │   └── test_step_executor.py            # StepExecutor 測試（12 tests, 93%）

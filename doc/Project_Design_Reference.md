@@ -37,7 +37,7 @@ Accrual Bot 是一個**批次式、多實體、多步驟的非同步資料處理
 | 特徵 | 說明 |
 |------|------|
 | **多實體** | 相同邏輯框架但不同業務規則（如 SPT/SPX/SCT 有各自的欄位和判斷條件） |
-| **多類型** | 同一實體有多種處理類型（PO/PR/PPE），各類型步驟序列不同 |
+| **多類型** | 同一實體有多種處理類型（PO/PR/PPE/VARIANCE），各類型步驟序列不同 |
 | **多步驟** | 處理流程由 10～20 個有序步驟組成，需要中斷點恢復能力 |
 | **配置驅動** | 業務規則、步驟序列、檔案路徑需可透過設定檔調整，不改程式碼 |
 | **混合使用者** | 同時需要 CLI（技術人員）和 Web UI（非技術人員）入口 |
@@ -94,6 +94,9 @@ Accrual Bot 是一個**批次式、多實體、多步驟的非同步資料處理
 │  DataSourceFactory  DataSourcePool  ExcelSource / CSVSource      │
 │  GoogleSheetsSource ParquetSource   DuckDBSource                 │
 │  （工廠 + 連接池）   （資源管理）     （多格式資料存取）           │
+│                                                                  │
+│  DifyClient（Dify Workflow API 客戶端）                          │
+│  （非同步呼叫、重試機制、多層級 API key 解析）                    │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -169,8 +172,8 @@ project_root/
 │   │   │       ├── spx_ppe_desc.py        # PPE_DESC 步驟
 │   │   │       └── ...
 │   │   └── sct/
-│   │       ├── pipeline_orchestrator.py   # ★ SCTPipelineOrchestrator
-│   │       └── steps/                     # ERM, asset status, account prediction, post-processing
+│   │       ├── pipeline_orchestrator.py   # ★ SCTPipelineOrchestrator（PO/PR/VARIANCE）
+│   │       └── steps/                     # ERM, asset status, account prediction, post-processing, variance analysis
 │   │
 │   ├── ui/                     # Web UI 完整實作
 │   │   ├── app.py              # Session state 初始化
@@ -207,6 +210,8 @@ project_root/
 │   │   │   └── file_utils.py       # 檔案驗證、複製、雜湊
 │   │   ├── logging/
 │   │   │   └── logger.py           # ★ 統一日誌框架
+│   │   ├── api/
+│   │   │   └── dify_client.py      # Dify Workflow API 客戶端（非同步、重試、超時控制）
 │   │   └── (duckdb_manager/ 和 metadata_builder/ 已提取為獨立套件)
 │   │
 │   └── config/                 # 設定檔
@@ -291,7 +296,7 @@ class PipelineStep(ABC):
 class ContextMetadata:
     entity_type: str        # 'SPT' | 'SPX' | 'SCT'
     processing_date: int    # YYYYMM 格式，如 202512
-    processing_type: str    # 'PO' | 'PR' | 'PPE'
+    processing_type: str    # 'PO' | 'PR' | 'PPE' | 'VARIANCE'
 
 class ProcessingContext:
     """Pipeline 執行中的共享狀態容器"""
@@ -496,6 +501,7 @@ class BasePipelineOrchestrator:
 
     def build_po_pipeline(self, file_paths: Dict, custom_steps=None) -> Pipeline
     def build_pr_pipeline(self, file_paths: Dict, custom_steps=None) -> Pipeline
+    def build_variance_pipeline(self, file_paths: Dict, custom_steps=None) -> Pipeline  # SCT 差異分析
 
     def get_enabled_steps(self, processing_type: str, **kwargs) -> List[str]
         # 從 config 讀取 enabled_{type}_steps 清單
@@ -1230,7 +1236,7 @@ class UnifiedPipelineService:
     def build_pipeline(
         self,
         entity: str,           # 'SPT' | 'SPX' | 'SCT'
-        proc_type: str,        # 'PO' | 'PR' | 'PPE' | 'PPE_DESC' | 'PROCUREMENT'
+        proc_type: str,        # 'PO' | 'PR' | 'PPE' | 'PPE_DESC' | 'PROCUREMENT' | 'VARIANCE'
         file_paths: Dict,      # 使用者上傳的檔案路徑
         processing_date: int = None,  # YYYYMM（PPE/PPE_DESC 必填）
         source_type: str = None       # PROCUREMENT 子類型 ('PO'|'PR'|'COMBINED')
@@ -1262,7 +1268,7 @@ ENTITY_CONFIG = {
     },
     'SCT': {
         'display_name': 'SCT',
-        'types': ['PO', 'PR'],
+        'types': ['PO', 'PR', 'VARIANCE'],
         'icon': '🏷️',
     },
 }
@@ -1277,6 +1283,7 @@ REQUIRED_FILES = {
     ('SPX', 'PPE_DESC'): ['workpaper', 'contract_periods'],
     ('SCT', 'PO'): ['raw_po'],
     ('SCT', 'PR'): ['raw_pr'],
+    ('SCT', 'VARIANCE'): ['current_worksheet', 'previous_worksheet'],
     ('SPT', 'PROCUREMENT', 'PO'): ['raw_po'],
     ('SPT', 'PROCUREMENT', 'PR'): ['raw_pr'],
     ...
@@ -1289,6 +1296,7 @@ OPTIONAL_FILES = {
                      'procurement_pr', 'ops_validation'],
     ('SCT', 'PO'): ['previous', 'procurement_po', 'ap_invoice', 'previous_pr'],
     ('SCT', 'PR'): ['previous_pr', 'procurement_pr'],
+    ('SCT', 'VARIANCE'): [],
     ('SPT', 'PROCUREMENT', 'PO'): ['procurement_previous', 'media_finished',
                                     'media_left', 'media_summary'],
     ...

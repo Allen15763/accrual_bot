@@ -144,6 +144,20 @@
 - **Build artifacts**: `MANIFEST.in`（sdist 非 Python 檔案）、`.gitattributes`（bat=CRLF, sh=LF 行尾強制）
 - **Impact**: 使用者安裝從 ~500MB 下載 + 手動設定 → 雙擊 install.bat 一鍵完成；更新從重新打包上傳 → 雙擊 update.bat 幾秒完成
 
+## Phase 17: SCT Variance Analysis via Dify AI Workflow (2026-03-30)
+- **New processing type**: SCT VARIANCE — 比較當期與前期 PO 底稿差異，透過 Dify AI Workflow API 進行 LLM 分析，產出差異明細表 + Executive Summary + Top 5 Insights
+- **4-step pipeline**: `SCTVarianceDataLoading → SCTVariancePreprocessing → SCTVarianceAPICall → SCTVarianceResultExport`
+- **New utility**: `accrual_bot/utils/api/dify_client.py` — Dify Workflow API 客戶端，支援多層級 API key 解析（env var → workspace/.env → flexible_path fallback）、exponential backoff 重試、`asyncio.to_thread()` 非同步包裝
+- **SCTVarianceDataLoadingStep**: 載入當期底稿（current_worksheet → `context.data`）與前期底稿（previous_worksheet → `context.auxiliary_data`）；不繼承 BaseLoadingStep（雙檔案對等模型）
+- **SCTVariancePreprocessingStep**: 統一處理流程 — 欄位正規化（小寫+底線）→ 別名解析（`column_aliases` 配置驅動）→ 公式合成（`previous_column_formulas`，如 `po# + line# → po_line`）→ 篩選 → 選取標準欄位；兼容原始底稿與已清理底稿
+- **SCTVarianceAPICallStep**: 呼叫 Dify Workflow API，檢查 `data.status == 'succeeded'`，失敗時聚合多路徑錯誤訊息（`response.error` + `data.error`）
+- **SCTVarianceResultExportStep**: 配置驅動的點分隔路徑解析（`data.outputs.result_df`）；支援 JSON string / list / dict → DataFrame 轉換；可配置輸出欄位順序（`result_output_columns`）；多 Sheet Excel 匯出（差異明細 + 分析摘要）
+- **Config** (`stagging_sct.toml`): 新增 `[sct.variance]` 區段（API URL/timeout/retry、request/response 欄位名稱、column_aliases、previous_column_formulas、export sheet names）
+- **UI**: 結果頁（`4_results.py`）VARIANCE 專用 Tabs 佈局（📋 差異明細 + 📝 分析摘要）；執行頁傳遞 `executive_summary`/`top_5_insight` 到 session state；`ui/config.py` 註冊 VARIANCE 類型
+- **CLI**: `main_pipeline.py` 新增 VARIANCE 分支（main + resume）；`scripts/run.bat` 新增 `.env` 自動複製
+- **Tests**: 5 個新測試檔案（63 tests）— `test_sct_variance_loading.py`(8)、`test_sct_variance_preprocessing.py`(13)、`test_sct_variance_api_call.py`(8)、`test_sct_variance_result_export.py`(15)、`test_dify_client.py`(19)
+- **Impact**: 測試數 1,535 → **1,568**（全部通過）
+
 ## Benefits
 
 - **Maintainability**: Single source of truth for shared logic reduces bug surface area

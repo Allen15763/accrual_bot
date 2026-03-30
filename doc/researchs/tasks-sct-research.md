@@ -1,8 +1,8 @@
 # `accrual_bot/tasks/sct` 深度技術研究文件
 
 > 作者：Claude Code 自動研究報告
-> 研究範圍：`accrual_bot/tasks/sct/` 全部 10 個 Python 原始碼檔案
-> 研究日期：2026-03-27
+> 研究範圍：`accrual_bot/tasks/sct/` 全部 14 個 Python 原始碼檔案 + `utils/api/dify_client.py`
+> 研究日期：2026-03-30
 
 ---
 
@@ -29,6 +29,7 @@ SCT（Shopee Commerce Taiwan）是 accrual_bot 系統所支援的三大業務實
 |------|------|---------|
 | **PO** | 採購訂單估計（主流程） | HRIS 系統匯出的 xlsx |
 | **PR** | 請購單估計（輔助流程） | HRIS 系統匯出的 xlsx |
+| **VARIANCE** | 差異分析（比較當期與前期 PO 底稿） | PO Pipeline 產出的底稿 xlsx |
 
 SCT 業務特有的複雜性包括：
 - **PPE（固定資產）** 項目的多期款項追蹤（訂金 → 安裝款 → 驗收款 → 保固），以雙重確認（ERM 日期 + 採購備註）判定完成狀態
@@ -55,21 +56,29 @@ SCT 業務特有的複雜性包括：
 
 ```
 accrual_bot/tasks/sct/
-├── __init__.py                    (8 行)   - 模組初始化，導出 SCTPipelineOrchestrator
-├── pipeline_orchestrator.py       (256 行) - Pipeline 組裝與步驟工廠
+├── __init__.py                         (8 行)   - 模組初始化，導出 SCTPipelineOrchestrator
+├── pipeline_orchestrator.py            (331 行) - Pipeline 組裝與步驟工廠（PO/PR/VARIANCE）
 └── steps/
-    ├── __init__.py                (26 行)  - 子模組初始化，10 個符號
-    ├── sct_loading.py             (216 行) - PO/PR 數據載入（xlsx）
-    ├── sct_column_addition.py     (253 行) - SCT 專屬欄位添加
-    ├── sct_integration.py         (139 行) - AP Invoice VOUCHER_NUMBER 整合
-    ├── sct_evaluation.py          (541 行) - PO ERM 狀態評估（18 條規則）
-    ├── sct_pr_evaluation.py       (377 行) - PR ERM 狀態評估（13 條規則）
-    ├── sct_asset_status.py        (395 行) - PPE 資產狀態更新
-    ├── sct_account_prediction.py  (338 行) - 會計科目預測（18 條規則）
-    └── sct_post_processing.py     (373 行) - 資料格式化與輸出篩選
+    ├── __init__.py                     (26 行)  - 子模組初始化，14 個符號
+    ├── sct_loading.py                  (216 行) - PO/PR 數據載入（xlsx）
+    ├── sct_column_addition.py          (253 行) - SCT 專屬欄位添加
+    ├── sct_integration.py              (139 行) - AP Invoice VOUCHER_NUMBER 整合
+    ├── sct_evaluation.py               (541 行) - PO ERM 狀態評估（18 條規則）
+    ├── sct_pr_evaluation.py            (377 行) - PR ERM 狀態評估（13 條規則）
+    ├── sct_asset_status.py             (395 行) - PPE 資產狀態更新
+    ├── sct_account_prediction.py       (338 行) - 會計科目預測（18 條規則）
+    ├── sct_post_processing.py          (373 行) - 資料格式化與輸出篩選
+    ├── sct_variance_loading.py         (118 行) - 差異分析：當期/前期底稿載入
+    ├── sct_variance_preprocessing.py   (232 行) - 差異分析：欄位正規化與篩選
+    ├── sct_variance_api_call.py        (162 行) - 差異分析：Dify AI Workflow API 呼叫
+    └── sct_variance_result_export.py   (284 行) - 差異分析：結果解析與 Excel 匯出
+
+accrual_bot/utils/api/
+├── __init__.py                         - 導出 DifyClient, DifyAPIError
+└── dify_client.py                      (227 行) - Dify Workflow API 客戶端
 ```
 
-**合計**：2,921 行程式碼（含 `__init__.py`）
+**合計**：3,717 行程式碼（含 `__init__.py`，不含 `utils/api/`）
 
 ---
 
@@ -134,6 +143,24 @@ SCTAccountPrediction        ← 科目預測
 SCTPostProcessing           ← 格式化 → 輸出（57 欄位）
 ```
 
+#### VARIANCE Pipeline（4 步驟）
+
+```
+SCTVarianceDataLoading      ← 載入當期 PO 底稿 + 前期 PO 底稿
+    ↓
+SCTVariancePreprocessing    ← 欄位正規化 + 別名解析 + 公式合成 + 篩選
+    ↓
+SCTVarianceAPICall          ← 將兩期底稿送至 Dify AI Workflow API 分析
+    ↓
+SCTVarianceResultExport     ← 解析 API 回應 + 匯出多 Sheet Excel
+```
+
+**VARIANCE 與 PO/PR 的根本差異**：
+- **不使用 ERM / BaseERMEvaluationStep**：差異分析的目的並非判定估計狀態，而是比較兩期底稿的金額與科目變動
+- **透過 Dify AI Workflow API 分析**：將預處理後的兩期資料以 JSON 傳送至 LLM Workflow，由 AI 回傳差異明細表、executive summary、top 5 insights
+- **DifyClient 封裝**：`utils/api/dify_client.py` 提供 API key 多層級解析（環境變數 → workspace/.env → 彈性路徑 fallback）、exponential backoff 重試、async 包裝
+- **輸入檔案不同**：PO/PR 使用原始資料 xlsx，VARIANCE 使用 PO Pipeline 已處理的底稿
+
 **PO vs PR 關鍵差異**：
 - PR 無 `APInvoiceIntegration`（無發票對帳）
 - PR 無 `SCTAssetStatusUpdate`（無收貨/PPE 追蹤）
@@ -187,6 +214,10 @@ SCT 模組將所有可變業務規則外移至 `config/stagging_sct.toml`（894 
 | `[sct_pr_erm_status_rules]` | 13 條 PR ERM 狀態規則 | `SCTPRERMLogicStep` via `ConditionEngine` |
 | `[sct_account_prediction]` | 18 條科目預測規則 | `SCTAccountPredictionStep` |
 | `[sct_reformatting]` | 數值/日期/臨時/輸出欄位清單 | `SCTPostProcessingStep` |
+| `[sct.variance]` | API URL/timeout/retry、標準欄位、篩選條件 | `SCTVariancePreprocessingStep`, `SCTVarianceAPICallStep`, `SCTVarianceResultExportStep` |
+| `[sct.variance.column_aliases]` | 欄位別名表 | `SCTVariancePreprocessingStep` |
+| `[sct.variance.previous_column_formulas]` | 前期底稿公式合成 | `SCTVariancePreprocessingStep` |
+| `[sct.variance.export]` | Excel 匯出 sheet 名稱 | `SCTVarianceResultExportStep` |
 
 **好處**：新增/修改業務規則時只需編輯 TOML，無需改動程式碼。
 
@@ -199,7 +230,12 @@ step_registry = {
     'SCTDataLoading':    lambda: SCTDataLoadingStep(name="SCTDataLoading", file_paths=file_paths),
     'SCTERMLogic':       lambda: SCTERMLogicStep(name="SCTERMLogic", required=True),
     'SCTPostProcessing': lambda: SCTPostProcessingStep(name="SCTPostProcessing", required=True),
-    # ... 共 12 個步驟
+    # 差異分析步驟
+    'SCTVarianceDataLoading':  lambda: SCTVarianceDataLoadingStep(name="...", file_paths=file_paths),
+    'SCTVariancePreprocessing': lambda: SCTVariancePreprocessingStep(name="...", required=True),
+    'SCTVarianceAPICall':       lambda: SCTVarianceAPICallStep(name="...", required=True),
+    'SCTVarianceResultExport':  lambda: SCTVarianceResultExportStep(name="...", required=True),
+    # ... 共 16 個步驟
 }
 ```
 
@@ -289,11 +325,12 @@ def __init__(self):
 |------|------|------|------|
 | `build_po_pipeline()` | `file_paths, custom_steps=None` | `Pipeline` | 建構 PO Pipeline（10 步驟） |
 | `build_pr_pipeline()` | `file_paths, custom_steps=None` | `Pipeline` | 建構 PR Pipeline（8 步驟） |
-| `get_enabled_steps()` | `processing_type, source_type=None` | `List[str]` | 查詢配置中的啟用步驟 |
+| `build_variance_pipeline()` | `file_paths, custom_steps=None` | `Pipeline` | 建構 VARIANCE Pipeline（4 步驟） |
+| `get_enabled_steps()` | `processing_type, source_type=None` | `List[str]` | 查詢配置中的啟用步驟（支援 PO/PR/VARIANCE） |
 
 #### 步驟工廠（_create_step）
 
-完整 12 個注册項：
+完整 16 個注册項：
 
 | 步驟名稱 | 步驟類別 | 來源 | 備註 |
 |----------|---------|------|------|
@@ -309,11 +346,16 @@ def __init__(self):
 | `SCTAssetStatusUpdate` | `SCTAssetStatusUpdateStep` | sct/steps | PPE 狀態 |
 | `SCTAccountPrediction` | `SCTAccountPredictionStep` | sct/steps | 科目預測 |
 | `SCTPostProcessing` | `SCTPostProcessingStep` | sct/steps | 格式化 |
+| `SCTVarianceDataLoading` | `SCTVarianceDataLoadingStep` | sct/steps | 差異分析載入 |
+| `SCTVariancePreprocessing` | `SCTVariancePreprocessingStep` | sct/steps | 差異分析預處理 |
+| `SCTVarianceAPICall` | `SCTVarianceAPICallStep` | sct/steps | 差異分析 API 呼叫 |
+| `SCTVarianceResultExport` | `SCTVarianceResultExportStep` | sct/steps | 差異分析結果匯出 |
 
 #### 預設步驟（config 缺失時的 fallback）
 
 - **PO 預設**：`SCTDataLoading → SCTColumnAddition → APInvoiceIntegration → PreviousWorkpaperIntegration → ProcurementIntegration`
 - **PR 預設**：`SCTPRDataLoading → SCTColumnAddition → PreviousWorkpaperIntegration → ProcurementIntegration`
+- **VARIANCE 預設**：`SCTVarianceDataLoading → SCTVariancePreprocessing → SCTVarianceAPICall → SCTVarianceResultExport`
 
 ### 4.3 資料載入步驟群
 
@@ -665,6 +707,94 @@ class AccountPredictionConditions:
 - 數值轉換失敗時 try/except 包裹（逐欄處理）
 - 輸出篩選時只保留實際存在的欄位
 
+### 4.11 差異分析 Pipeline（VARIANCE）
+
+VARIANCE Pipeline 是 SCT 模組的第三種處理類型，用途為**比較當期與前期 PO 底稿**，透過 AI 產生差異明細與摘要分析。其設計與 PO/PR Pipeline 有根本性差異——不經過 ERM 評估，而是將資料送至外部 Dify AI Workflow API。
+
+#### 4.11.1 SCTVarianceDataLoadingStep
+
+**檔案**：`sct_variance_loading.py`（118 行）
+
+繼承 `PipelineStep`（**非** `BaseLoadingStep`），因為需要載入兩個對等的主要檔案（非一主多輔模式）。
+
+| 項目 | 說明 |
+|------|------|
+| 輸入 | `file_paths['current_worksheet']`、`file_paths['previous_worksheet']` |
+| 輸出 | `context.data` = 當期底稿 DataFrame |
+|       | `context.auxiliary_data['previous_worksheet']` = 前期底稿 DataFrame |
+| 格式支援 | 字串路徑 或 `{'path': str, 'params': dict}` 字典格式 |
+
+透過 `DataSourceFactory.create_from_file()` 建立資料源，支援 `_enrich_file_paths` 產生的 params 參數（如 `sheet_name`、`header`）。
+
+#### 4.11.2 SCTVariancePreprocessingStep
+
+**檔案**：`sct_variance_preprocessing.py`（232 行）
+
+繼承 `PipelineStep`，負責將當期和前期底稿正規化為統一格式。處理流程（當期/前期共用）：
+
+| 階段 | 說明 |
+|------|------|
+| 1. 欄位正規化 | 小寫 + 空白轉底線 |
+| 2. 欄位別名解析 | 根據 `[sct.variance.column_aliases]` 將各種來源名稱統一為標準名 |
+| 3. 公式合成（前期限定） | 根據 `[sct.variance.previous_column_formulas]` 合成缺失欄位（如 `po# + line#` → `po_line`） |
+| 4. 篩選 | 當期: `是否估計入帳 == 'Y'`；前期: `是否需要估計入帳 == 'Y'` |
+| 5. 選取標準欄位 | 只保留 `standard_columns` 定義的欄位 |
+
+**設計亮點**：無論輸入是原始底稿或已清理過的底稿，透過別名解析 + 公式合成，最終輸出欄位一致。
+
+#### 4.11.3 SCTVarianceAPICallStep
+
+**檔案**：`sct_variance_api_call.py`（162 行）
+
+繼承 `PipelineStep`，負責呼叫 Dify Workflow API。
+
+| 項目 | 說明 |
+|------|------|
+| 輸入 | `context.data`（當期）、`context.auxiliary_data['previous_worksheet']`（前期） |
+| 輸出 | `context.variable['api_response']`（原始 API 回應 dict） |
+| API 配置 | `sct.variance.api_url`、`api_timeout`（預設 300 秒）、`api_max_retries`（預設 2 次） |
+| Payload | `{prev_wp: previous_df.to_json(), curr_wp: current_df.to_json()}` |
+| 錯誤處理 | 檢查 `data.status == 'succeeded'`，非成功則回傳詳細錯誤訊息（狀態、耗時、outputs keys） |
+
+使用 `DifyClient` 進行 API 呼叫，支援 exponential backoff 重試。
+
+#### 4.11.4 SCTVarianceResultExportStep
+
+**檔案**：`sct_variance_result_export.py`（284 行）
+
+繼承 `PipelineStep`，負責解析 API 回應並匯出 Excel。
+
+**解析流程**：
+1. 從 `context.variable['api_response']` 提取三項結果（路徑從 TOML 配置讀取）：
+   - `data.outputs.result_df` → 差異明細表 DataFrame
+   - `data.outputs.executive_summary` → 摘要文字
+   - `data.outputs.top_5_insight` → Top 5 洞察文字
+2. `_parse_result_df()` 支援多種格式：JSON 字串、list of dict、dict、已是 DataFrame
+3. 依 `result_output_columns` 配置排序欄位
+
+**匯出格式**（多 Sheet Excel）：
+| Sheet | 內容 |
+|-------|------|
+| 差異明細 | result_df（差異明細表） |
+| 分析摘要 | executive_summary + top_5_insight 文字 |
+
+**輸出路徑**：`{ACCRUAL_BOT_WORKSPACE}/output/SCT_差異分析報表_{processing_date}_{timestamp}.xlsx`
+
+#### 4.11.5 DifyClient（utils/api/）
+
+**檔案**：`utils/api/dify_client.py`（227 行）
+
+Dify Workflow API 的通用客戶端，非 SCT 專屬，可供其他實體或用途複用。
+
+| 功能 | 說明 |
+|------|------|
+| API key 解析 | 三層級 fallback：`DIFY_API_KEY` 環境變數 → `ACCRUAL_BOT_WORKSPACE/secret/.env` → `./secret/.env` |
+| `.env` 解析 | 支援 `KEY=VALUE`、`KEY="VALUE"`、`#` 註解、空行 |
+| `run_workflow()` | async 方法，透過 `asyncio.to_thread` 包裝 `requests.post` |
+| 重試機制 | exponential backoff（2^attempt 秒），可設定 `max_retries` |
+| 超時控制 | 可設定 `timeout`（預設 300 秒，適配 LLM workflow 較長的回應時間） |
+| 錯誤型別 | `DifyAPIError`（含 `status_code`、`response_body` 屬性） |
+
 ---
 
 ## 5. 應用範例
@@ -696,7 +826,30 @@ pipeline = orchestrator.build_pr_pipeline(
 )
 ```
 
-### 5.3 查詢啟用的步驟清單
+### 5.3 建立並執行 VARIANCE Pipeline
+
+```python
+pipeline = orchestrator.build_variance_pipeline(
+    file_paths={
+        'current_worksheet': 'path/to/202603_po_worksheet.xlsx',
+        'previous_worksheet': 'path/to/202602_po_worksheet.xlsx',
+    }
+)
+
+context = ProcessingContext(
+    entity_type='SCT',
+    processing_type='VARIANCE',
+    processing_date=202603
+)
+result = await pipeline.execute(context)
+
+# 取得結果
+export_path = context.get_variable('export_path')
+summary = context.get_variable('executive_summary')
+insights = context.get_variable('top_5_insight')
+```
+
+### 5.4 查詢啟用的步驟清單
 
 ```python
 po_steps = orchestrator.get_enabled_steps('PO')
@@ -707,9 +860,13 @@ po_steps = orchestrator.get_enabled_steps('PO')
 
 pr_steps = orchestrator.get_enabled_steps('PR')
 # ['SCTPRDataLoading', 'SCTColumnAddition', ... (8 steps)]
+
+variance_steps = orchestrator.get_enabled_steps('VARIANCE')
+# ['SCTVarianceDataLoading', 'SCTVariancePreprocessing',
+#  'SCTVarianceAPICall', 'SCTVarianceResultExport']
 ```
 
-### 5.4 從 UnifiedPipelineService 呼叫
+### 5.5 從 UnifiedPipelineService 呼叫
 
 ```python
 from accrual_bot.ui.services import UnifiedPipelineService
@@ -753,7 +910,7 @@ pipeline = service.build_pipeline(
 
 | 面向 | SPT | SPX | SCT |
 |------|-----|-----|-----|
-| Pipeline 類型 | PO/PR/PROCUREMENT | PO/PR/PPE/PPE_DESC | PO/PR |
+| Pipeline 類型 | PO/PR/PROCUREMENT | PO/PR/PPE/PPE_DESC | PO/PR/**VARIANCE** |
 | 原始資料格式 | CSV | CSV | **xlsx** |
 | ERM 條件引擎 | 硬編碼 | ConditionEngine | ConditionEngine |
 | PPE 處理 | 無 | 獨立 Pipeline | **嵌入 PO Pipeline** |
@@ -816,6 +973,10 @@ SCT 目前依賴 `SCTPostProcessingStep` 的輸出欄位篩選作為最終輸出
 | | `[sct_pr_erm_status_rules]` | SCTPRERMLogic (13 rules) |
 | | `[sct_account_prediction]` | AccountPrediction (18 rules) |
 | | `[sct_reformatting]` | PostProcessing |
+| | `[sct.variance]` | Variance Preprocessing, APICall, ResultExport |
+| | `[sct.variance.column_aliases]` | Variance Preprocessing（欄位別名表） |
+| | `[sct.variance.previous_column_formulas]` | Variance Preprocessing（前期公式合成） |
+| | `[sct.variance.export]` | Variance ResultExport（Excel sheet 名稱） |
 | `stagging.toml` | `[paths].ref_path_sct` | Loading |
 | | `[fa_accounts].sct` | ColumnAddition, ERM, AssetStatus |
 | `config.ini` | `ref_path_sct` | Loading (legacy fallback) |
@@ -823,7 +984,7 @@ SCT 目前依賴 `SCTPostProcessingStep` 的輸出欄位篩選作為最終輸出
 
 ### 8.2 測試覆蓋率現況
 
-> **2026-03-28 更新**：Phase 15 新增 3 個測試檔案，覆蓋原先空白的步驟。
+> **2026-03-30 更新**：新增差異分析 4 個步驟測試 + DifyClient 測試。
 
 | 測試檔案 | 測試數 | 測試範圍 |
 |----------|--------|---------|
@@ -834,9 +995,14 @@ SCT 目前依賴 `SCTPostProcessingStep` 的輸出欄位篩選作為最終輸出
 | `test_sct_column_addition.py` | 15 | SCTColumnAdditionStep（FA/S&M 判斷、欄位添加、PR 重命名） |
 | `test_sct_integration.py` | 7 | APInvoiceIntegrationStep |
 | `test_sct_loading.py` | 12 | SCTDataLoadingStep + SCTPRDataLoadingStep |
-| **合計** | **~95** | — |
+| `test_sct_variance_loading.py` | 8 | SCTVarianceDataLoadingStep |
+| `test_sct_variance_preprocessing.py` | 13 | SCTVariancePreprocessingStep |
+| `test_sct_variance_api_call.py` | 8 | SCTVarianceAPICallStep |
+| `test_sct_variance_result_export.py` | 15 | SCTVarianceResultExportStep |
+| `test_dify_client.py`（utils/api/） | 19 | DifyClient（API key 解析、重試、錯誤處理） |
+| **合計** | **~158** | — |
 
-**已覆蓋所有主要步驟**。剩餘未覆蓋：`SCTPipelineOrchestrator` 部分分支。
+**已覆蓋所有主要步驟**，包含差異分析全流程。剩餘未覆蓋：`SCTPipelineOrchestrator` 部分分支。
 
 ### 8.3 檔案行數統計
 
@@ -869,6 +1035,11 @@ SCT 目前依賴 `SCTPostProcessingStep` 的輸出欄位篩選作為最終輸出
 | SCTAssetStatusUpdate | ✓ | ✓ | — | — | processing_date | — |
 | SCTAccountPrediction | ✓ | ✓ | — | — | — | — |
 | SCTPostProcessing | ✓ | ✓ | — | result_with_temp_cols | — | — |
+| **VARIANCE Pipeline** | | | | | | |
+| SCTVarianceDataLoading | — | ✓ | — | previous_worksheet | — | — |
+| SCTVariancePreprocessing | ✓ | ✓ | previous_worksheet | previous_worksheet | — | — |
+| SCTVarianceAPICall | ✓ | — | previous_worksheet | — | — | api_response |
+| SCTVarianceResultExport | — | ✓ | — | — | api_response | executive_summary, top_5_insight, export_path |
 
 ### 8.5 類別繼承樹
 
@@ -885,5 +1056,12 @@ PipelineStep (core/pipeline/base.py)
 ├── SCTERMLogicStep (sct_evaluation.py)
 ├── SCTPRERMLogicStep (sct_pr_evaluation.py)
 ├── SCTAssetStatusUpdateStep (sct_asset_status.py)
-└── SCTAccountPredictionStep (sct_account_prediction.py)
+├── SCTAccountPredictionStep (sct_account_prediction.py)
+├── SCTVarianceDataLoadingStep (sct_variance_loading.py)     ← 非 BaseLoadingStep
+├── SCTVariancePreprocessingStep (sct_variance_preprocessing.py)
+├── SCTVarianceAPICallStep (sct_variance_api_call.py)
+└── SCTVarianceResultExportStep (sct_variance_result_export.py)
 ```
+
+> **注意**：`SCTVarianceDataLoadingStep` 直接繼承 `PipelineStep` 而非 `BaseLoadingStep`，
+> 因為差異分析需要載入兩個對等的主要檔案（當期/前期），不適用一主多輔的 `BaseLoadingStep` 模板。
