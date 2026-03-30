@@ -5,10 +5,10 @@
 
 [run]
 # 業務實體類型: SPX, SPT, MOB
-entity = "SPX"
+entity = "SCT"
 
-# 處理類型: PO, PR, PPE, PPE_DESC, PROCUREMENT
-processing_type = "PO"
+# 處理類型: PO, PR, PPE, PPE_DESC, PROCUREMENT, VARIANCE
+processing_type = "VARIANCE"
 
 # 處理日期 (YYYYMM 格式)
 processing_date = 202602

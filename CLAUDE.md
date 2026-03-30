@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Accrual Bot is an async data processing system for PO/PR (Purchase Order/Purchase Request) accrual processing. It handles monthly financial data reconciliation for three active business entities: SPT, SPX, and SCT. The system includes both a command-line pipeline execution mode and a Streamlit-based Web UI.
+Accrual Bot is an async data processing system for PO/PR (Purchase Order/Purchase Request) accrual processing. It handles monthly financial data reconciliation for three active business entities: SPT, SPX, and SCT. SCT additionally supports VARIANCE analysis (comparing two periods via Dify AI Workflow API). The system includes both a command-line pipeline execution mode and a Streamlit-based Web UI.
 
 ## Distribution (pip install)
 
@@ -150,14 +150,14 @@ git log --oneline -10
 │  Pipeline | PipelineStep | ProcessingContext | DataSources   │
 ├─────────────────────────────────────────────────────────────┤
 │                    Utils Layer (Cross-cutting)               │
-│  ConfigManager | Logger | Data Utilities                     │
+│  ConfigManager | Logger | Data Utilities | DifyClient        │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 - **ui/**: Streamlit Web UI — 5-page workflow (Configuration → Upload → Execution → Results → Checkpoint). See [doc/UI_Architecture.md](doc/UI_Architecture.md).
 - **core/**: Framework — Pipeline, PipelineStep, ProcessingContext, BaseLoadingStep, BaseERMEvaluationStep, DataSources abstraction layer.
-- **tasks/**: Entity-specific implementations — SPT (PO/PR/PROCUREMENT), SPX (PO/PR/PPE/PPE_DESC), SCT (PO/PR). Each entity has a `pipeline_orchestrator.py` and `steps/` directory.
-- **utils/**: Cross-cutting — Thread-safe ConfigManager singleton, unified logging (`get_logger()`), data/file/column utilities.
+- **tasks/**: Entity-specific implementations — SPT (PO/PR/PROCUREMENT), SPX (PO/PR/PPE/PPE_DESC), SCT (PO/PR/VARIANCE). Each entity has a `pipeline_orchestrator.py` and `steps/` directory.
+- **utils/**: Cross-cutting — Thread-safe ConfigManager singleton, unified logging (`get_logger()`), data/file/column utilities, DifyClient for external API integration.
 
 ### Pipeline System
 
@@ -185,7 +185,7 @@ Seven config files in `accrual_bot/config/`:
 | `stagging.toml` | Shared config (reference paths, date patterns, categories) |
 | `stagging_spt.toml` | SPT pipeline steps, status/account rules, pivot config |
 | `stagging_spx.toml` | SPX pipeline steps, supplier lists, condition rules |
-| `stagging_sct.toml` | SCT pipeline steps, ERM rules, account prediction, reformatting |
+| `stagging_sct.toml` | SCT pipeline steps (PO/PR/VARIANCE), ERM rules, account prediction, variance API config |
 
 Config accessed via thread-safe singleton `ConfigManager` (double-checked locking). Steps enabled/disabled via `enabled_*_steps` arrays in entity TOML files.
 
@@ -207,6 +207,11 @@ pipeline = spx_orchestrator.build_pr_pipeline(file_paths={'pr_file': 'path/to/pr
 
 sct_orchestrator = SCTPipelineOrchestrator()
 pipeline = sct_orchestrator.build_po_pipeline(file_paths={'raw_po': 'path/to/po.xlsx'})
+
+# SCT VARIANCE pipeline (差異分析 via Dify AI Workflow)
+pipeline = sct_orchestrator.build_variance_pipeline(
+    file_paths={'current_worksheet': 'path/to/current.xlsx', 'previous_worksheet': 'path/to/previous.xlsx'}
+)
 
 # SPT PROCUREMENT pipeline (PO/PR/COMBINED)
 pipeline = spt_orchestrator.build_procurement_pipeline(
@@ -315,7 +320,7 @@ See SCT implementation (`tasks/sct/`) as a complete reference. Detailed guide: [
 
 ## Testing
 
-1,535 tests (unit + integration), all passing. Coverage: 74% (with UI pages/components excluded from measurement via `pyproject.toml` omit config).
+1,568 tests (unit + integration), all passing. Coverage: 74% (with UI pages/components excluded from measurement via `pyproject.toml` omit config).
 
 ```bash
 # Windows PowerShell（activate 後）
@@ -346,7 +351,7 @@ See [doc/UI_Architecture.md](doc/UI_Architecture.md) for detailed UI architectur
 | Document | Description |
 |----------|-------------|
 | `CLAUDE.md` | This file — development guidance |
-| `doc/Changelog.md` | Architecture improvements changelog (Phase 1-15) |
+| `doc/Changelog.md` | Architecture improvements changelog (Phase 1-17) |
 | `doc/Project_Design_Reference.md` | Architecture, patterns, templates |
 | `doc/UI_Architecture.md` | UI architecture, components, extension guide |
 | `doc/SPT_PROCUREMENT_Implementation.md` | SPT Procurement pipeline details |
@@ -355,7 +360,7 @@ See [doc/UI_Architecture.md](doc/UI_Architecture.md) for detailed UI architectur
 | `doc/Project_Review_And_Merger_Analysis.md` | Project review and merger analysis |
 | `doc/Task Pipeline Structure Unit Test Plan.md` | Test plan for pipeline structure |
 | `doc/Package_Distribution_Guide.md` | pip install 套件化分發指南 |
-| `tests/README.md` | Test suite guide (1,535 tests) |
+| `tests/README.md` | Test suite guide (1,568 tests) |
 
 ## Language
 

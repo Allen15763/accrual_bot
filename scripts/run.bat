@@ -13,6 +13,13 @@ if exist "%CRED_SRC%" (
     copy /Y "%CRED_SRC%" "%CRED_DST%" >nul 2>&1
 )
 
+:: Dify API key — auto-copy .env from shared drive
+set "ENV_SRC=G:\共用雲端硬碟\INT_TWN_SEA_FN_Shared_Resources\00_Temp_Internal_share\To Allen\libraries\.env"
+set "ENV_DST=%ACCRUAL_BOT_WORKSPACE%\secret\.env"
+if exist "%ENV_SRC%" (
+    copy /Y "%ENV_SRC%" "%ENV_DST%" >nul 2>&1
+)
+
 :: 判斷使用 venv 或 embedded
 if exist "%INSTALL_DIR%accrual_venv\Scripts\activate.bat" (
     call "%INSTALL_DIR%accrual_venv\Scripts\activate.bat"

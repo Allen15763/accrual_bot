@@ -135,6 +135,12 @@ async def main() -> Dict[str, Any]:
             source_type=config.source_type
         )
         logger.info(f"使用 PROCUREMENT pipeline, source_type={config.source_type}")
+    elif config.processing_type == "VARIANCE":
+        # VARIANCE 差異分析（目前僅限 SCT）
+        if config.entity != "SCT":
+            raise ValueError(f"{config.entity} 不支援 VARIANCE 處理類型")
+        pipeline = orchestrator.build_variance_pipeline(file_paths)
+        logger.info("使用 VARIANCE pipeline")
     else:
         raise ValueError(f"不支援的處理類型: {config.processing_type}")
 
@@ -200,9 +206,17 @@ def _print_result_summary(result: Dict[str, Any]):
     # 顯示輸出路徑
     context = result.get("context")
     if context:
-        output_path = context.get_variable("po_export_output_path") or context.get_variable("pr_export_output_path")
-        if output_path:
-            print(f"輸出路徑: {output_path}")
+        # VARIANCE 差異分析結果
+        export_path = context.get_variable("export_path")
+        if export_path:
+            print(f"差異分析報表: {export_path}")
+            summary = context.get_variable("executive_summary")
+            if summary:
+                print(f"\n【Executive Summary】\n{summary}")
+        else:
+            output_path = context.get_variable("po_export_output_path") or context.get_variable("pr_export_output_path")
+            if output_path:
+                print(f"輸出路徑: {output_path}")
 
     print("=" * 60 + "\n")
 
@@ -281,6 +295,10 @@ async def resume_from_checkpoint(
             pipeline = orchestrator.build_procurement_pipeline(file_paths, source_type)
         else:
             raise ValueError(f"{entity} 不支援 PROCUREMENT 處理類型")
+    elif processing_type == 'VARIANCE':
+        if entity != 'SCT':
+            raise ValueError(f"{entity} 不支援 VARIANCE 處理類型")
+        pipeline = orchestrator.build_variance_pipeline(file_paths)
     else:
         raise ValueError(f"不支援的處理類型: {processing_type}")
 

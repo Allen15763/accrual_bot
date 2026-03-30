@@ -32,6 +32,64 @@ enabled_pr_steps = [
     "SCTPostProcessing",
 ]
 
+enabled_variance_steps = [
+    "SCTVarianceDataLoading",
+    "SCTVariancePreprocessing",
+    "SCTVarianceAPICall",
+    "SCTVarianceResultExport",
+]
+
+
+# =============================================================================
+# SCT 差異分析配置
+# =============================================================================
+[sct.variance]
+# API 配置
+api_url = "https://ai.insea.io/api/workflows/18220/run"
+api_timeout = 300
+api_max_retries = 2
+
+# API request payload 欄位名稱（可微調）
+api_request_prev_key = "prev_wp"
+api_request_curr_key = "curr_wp"
+
+# API response 解析路徑（可微調）
+api_response_result_path = "data.outputs.result_df"
+api_response_summary_path = "data.outputs.executive_summary"
+api_response_insight_path = "data.outputs.top_5_insight"
+
+# 差異明細表輸出欄位順序（配置欄位排前面，API 回傳的其他欄位附加在後）
+result_output_columns = ["account_code", "currency_c", "amt_prev", "amt_curr", "diff", "pct"]
+
+# 標準化欄位（最終輸出欄位名稱）
+standard_columns = ["item_description", "po_line", "account_code", "currency_c", "amount"]
+
+# 當期底稿配置
+current_filter_column = "是否估計入帳"
+current_filter_value = "Y"
+
+# 前期底稿配置
+previous_filter_column = "是否需要估計入帳"
+previous_filter_value = "Y"
+
+# 欄位別名表（標準欄位名 → 可能的來源欄位名，優先順序由左到右）
+# 正規化後（小寫 + 底線）再比對，所以不需處理大小寫差異
+[sct.variance.column_aliases]
+amount = ["amount", "accr._amount", "amount-未稅"]
+currency_c = ["currency_c", "currency"]
+po_line = ["po_line"]
+account_code = ["account_code"]
+item_description = ["item_description"]
+
+# 前期底稿欄位合成規則（當別名都找不到時，用公式合成）
+[sct.variance.previous_column_formulas]
+po_line = { formula = "po# + line#", type = "concat" }
+
+# Excel 匯出配置
+[sct.variance.export]
+detail_sheet_name = "差異明細"
+summary_sheet_name = "分析摘要"
+
 
 # =============================================================================
 # SCT Column Defaults

@@ -22,7 +22,7 @@ ENTITY_CONFIG: Dict[str, Dict] = {
     },
     'SCT': {
         'display_name': 'SCT',
-        'types': ['PO', 'PR'],
+        'types': ['PO', 'PR', 'VARIANCE'],
         'description': 'SCT Platform for opened PR/PO',
         'icon': '🏷️',
     },
@@ -53,6 +53,11 @@ PROCESSING_TYPE_CONFIG: Dict[str, Dict] = {
     'PPE_DESC': {
         'display_name': '未結 PPE 摘要 (PPE_DESC)',
         'description': 'PO/PR 底稿說明欄位提取與年限對應',
+        'icon': '📊',
+    },
+    'VARIANCE': {
+        'display_name': '差異分析報表 (VARIANCE)',
+        'description': '比較前後期 PO 底稿差異，透過 AI 分析產生差異明細與洞察',
         'icon': '📊',
     },
 }
@@ -93,6 +98,8 @@ FILE_LABELS: Dict[str, str] = {
     'media_summary': '媒體總表 (選填)',
     'workpaper': 'PO/PR 底稿 Excel (必填，含 PO_yyyymm 和 PR_yyyymm sheet)',
     'contract_periods': '年限表 (必填)',
+    'current_worksheet': '當期 PO 底稿 (必填，需含 PO sheet)',
+    'previous_worksheet': '前期 PO 底稿 (必填)',
 }
 
 # 各 entity/type 的必要檔案
@@ -107,6 +114,7 @@ REQUIRED_FILES: Dict[Tuple, List[str]] = {
     # SCT
     ('SCT', 'PO'): ['raw_po'],
     ('SCT', 'PR'): ['raw_pr'],
+    ('SCT', 'VARIANCE'): ['current_worksheet', 'previous_worksheet'],
     # 3-tuple keys (PROCUREMENT 子類型)
     ('SPT', 'PROCUREMENT', 'PO'): ['raw_po'],
     ('SPT', 'PROCUREMENT', 'PR'): ['raw_pr'],
@@ -158,6 +166,7 @@ OPTIONAL_FILES: Dict[Tuple, List[str]] = {
         'previous_pr',
         'procurement_pr',
     ],
+    ('SCT', 'VARIANCE'): [],
     # 3-tuple keys (PROCUREMENT 子類型)
     ('SPT', 'PROCUREMENT', 'PO'): [
         'procurement_previous',

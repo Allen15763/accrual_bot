@@ -81,45 +81,105 @@ with col4:
 # 主數據預覽
 st.markdown("---")
 if result.output_data is not None and isinstance(result.output_data, pd.DataFrame):
-    render_data_preview(
-        data=result.output_data,
-        title="主要輸出數據",
-        max_rows=200,
-        show_stats=True
-    )
+
+    # 差異分析專用：Tabs 佈局（差異明細 + 分析摘要）
+    if config.processing_type == 'VARIANCE':
+        summary = st.session_state.get('variance_executive_summary', '')
+        insights = st.session_state.get('variance_top_5_insight', '')
+
+        tab_detail, tab_analysis = st.tabs(["📋 差異明細", "📝 分析摘要"])
+
+        with tab_detail:
+            render_data_preview(
+                data=result.output_data,
+                title="差異明細表",
+                max_rows=200,
+                show_stats=True
+            )
+
+        with tab_analysis:
+            if summary:
+                st.subheader("📝 Executive Summary")
+                st.info(summary, icon="📊")
+
+            if insights:
+                st.markdown("---")
+                st.subheader("🔍 Top 5 Insights")
+                st.markdown(insights)
+
+            if not summary and not insights:
+                st.info("本次分析未產生摘要內容")
+    else:
+        render_data_preview(
+            data=result.output_data,
+            title="主要輸出數據",
+            max_rows=200,
+            show_stats=True
+        )
 
     # Excel 下載按鈕
     st.markdown("---")
     st.subheader("💾 匯出數據")
 
-    col1, col2 = st.columns(2)
+    if config.processing_type == 'VARIANCE':
+        # 差異分析：提供完整報告下載（多 Sheet Excel）
+        export_path = st.session_state.get('variance_export_path')
+        if export_path:
+            try:
+                with open(export_path, 'rb') as f:
+                    excel_data = f.read()
+                st.download_button(
+                    label="📥 下載完整差異分析報告 (Excel)",
+                    data=excel_data,
+                    file_name=Path(export_path).name,
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True
+                )
+            except FileNotFoundError:
+                st.warning("匯出檔案不存在，請重新執行")
+        else:
+            # fallback: 只下載差異明細表
+            from io import BytesIO
+            excel_buffer = BytesIO()
+            with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
+                result.output_data.to_excel(writer, index=False, sheet_name='差異明細')
+            excel_buffer.seek(0)
+            st.download_button(
+                label="📥 下載差異明細表 (Excel)",
+                data=excel_buffer,
+                file_name=f"SCT_差異分析_{config.processing_date}_output.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True
+            )
+    else:
+        col1, col2 = st.columns(2)
 
-    with col1:
-        # CSV 下載
-        csv_data = result.output_data.to_csv(index=False).encode('utf-8-sig')
-        st.download_button(
-            label="📥 下載 CSV",
-            data=csv_data,
-            file_name=f"{config.entity}_{config.processing_type}_{config.processing_date}_output.csv",
-            mime="text/csv",
-            use_container_width=True
-        )
+        with col1:
+            # CSV 下載
+            csv_data = result.output_data.to_csv(index=False).encode('utf-8-sig')
+            st.download_button(
+                label="📥 下載 CSV",
+                data=csv_data,
+                file_name=f"{config.entity}_{config.processing_type}_{config.processing_date}_output.csv",
+                mime="text/csv",
+                use_container_width=True
+            )
 
-    with col2:
-        # Excel 下載
-        from io import BytesIO
-        excel_buffer = BytesIO()
-        with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
-            result.output_data.to_excel(writer, index=False, sheet_name='Output')
-        excel_buffer.seek(0)
+        with col2:
+            # Excel 下載
+            from io import BytesIO
+            excel_buffer = BytesIO()
+            with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
+                result.output_data.to_excel(writer, index=False, sheet_name='Output')
+            excel_buffer.seek(0)
 
-        st.download_button(
-            label="📥 下載 Excel",
-            data=excel_buffer,
-            file_name=f"{config.entity}_{config.processing_type}_{config.processing_date}_output.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True
-        )
+            st.download_button(
+                label="📥 下載 Excel",
+                data=excel_buffer,
+                file_name=f"{config.entity}_{config.processing_type}_{config.processing_date}_output.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True
+            )
 else:
     st.warning("無輸出數據")
 
