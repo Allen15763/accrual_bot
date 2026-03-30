@@ -4,7 +4,7 @@ SCT Pipeline Orchestrator
 Manages SCT-specific pipeline configuration and construction.
 Supports configuration-driven step loading for flexible pipeline composition.
 
-支援 PO/PR 兩種處理類型，包含 ERM 邏輯判斷步驟。
+支援 PO/PR/VARIANCE 三種處理類型，包含 ERM 邏輯判斷步驟與差異分析。
 """
 
 from typing import List, Dict, Any, Optional
@@ -23,7 +23,12 @@ from accrual_bot.tasks.sct.steps import (
     SCTAssetStatusUpdateStep,
     SCTAccountPredictionStep,
     SCTPostProcessingStep,
-    APInvoiceIntegrationStep
+    APInvoiceIntegrationStep,
+    # 差異分析步驟
+    SCTVarianceDataLoadingStep,
+    SCTVariancePreprocessingStep,
+    SCTVarianceAPICallStep,
+    SCTVarianceResultExportStep,
 )
 
 # Import shared steps from core
@@ -40,7 +45,7 @@ class SCTPipelineOrchestrator:
 
     功能:
     1. 根據配置動態創建 pipeline
-    2. 支援 PO/PR 兩種處理類型
+    2. 支援 PO/PR/VARIANCE 三種處理類型
     3. 可選擇啟用/禁用特定步驟
     """
 
@@ -148,6 +153,57 @@ class SCTPipelineOrchestrator:
 
         return pipeline
 
+    def build_variance_pipeline(
+        self,
+        file_paths: Dict[str, Any],
+        custom_steps: Optional[List[PipelineStep]] = None
+    ) -> Pipeline:
+        """
+        構建 SCT 差異分析 pipeline
+
+        比對前後兩期 PO 底稿差異，透過 Dify AI Workflow API 分析。
+
+        Args:
+            file_paths: 文件路徑配置（current_worksheet, previous_worksheet）
+            custom_steps: 自定義步驟（可選）
+
+        Returns:
+            Pipeline: 配置好的 pipeline
+        """
+        pipeline_config = PipelineConfig(
+            name="SCT_Variance_Analysis",
+            description="SCT PO variance analysis pipeline",
+            entity_type=self.entity_type,
+            stop_on_error=True
+        )
+
+        pipeline = Pipeline(pipeline_config)
+
+        # 獲取啟用的步驟列表
+        enabled_steps = self.config.get('enabled_variance_steps', [])
+
+        if not enabled_steps:
+            # 默認步驟順序
+            enabled_steps = [
+                "SCTVarianceDataLoading",
+                "SCTVariancePreprocessing",
+                "SCTVarianceAPICall",
+                "SCTVarianceResultExport",
+            ]
+
+        # 動態添加步驟
+        for step_name in enabled_steps:
+            step = self._create_step(step_name, file_paths, processing_type='VARIANCE')
+            if step:
+                pipeline.add_step(step)
+
+        # 添加自定義步驟
+        if custom_steps:
+            for step in custom_steps:
+                pipeline.add_step(step)
+
+        return pipeline
+
     def _create_step(
         self,
         step_name: str,
@@ -223,6 +279,24 @@ class SCTPipelineOrchestrator:
                 name="SCTPostProcessing",
                 required=True
             ),
+
+            # 差異分析步驟
+            'SCTVarianceDataLoading': lambda: SCTVarianceDataLoadingStep(
+                name="SCTVarianceDataLoading",
+                file_paths=file_paths
+            ),
+            'SCTVariancePreprocessing': lambda: SCTVariancePreprocessingStep(
+                name="SCTVariancePreprocessing",
+                required=True
+            ),
+            'SCTVarianceAPICall': lambda: SCTVarianceAPICallStep(
+                name="SCTVarianceAPICall",
+                required=True
+            ),
+            'SCTVarianceResultExport': lambda: SCTVarianceResultExportStep(
+                name="SCTVarianceResultExport",
+                required=True
+            ),
         }
 
         step_factory = step_registry.get(step_name)
@@ -241,7 +315,7 @@ class SCTPipelineOrchestrator:
         獲取啟用的步驟列表
 
         Args:
-            processing_type: 處理類型 (PO/PR)
+            processing_type: 處理類型 (PO/PR/VARIANCE)
             source_type: 保留參數，目前未使用
 
         Returns:
@@ -251,5 +325,7 @@ class SCTPipelineOrchestrator:
             return self.config.get('enabled_po_steps', [])
         elif processing_type == 'PR':
             return self.config.get('enabled_pr_steps', [])
+        elif processing_type == 'VARIANCE':
+            return self.config.get('enabled_variance_steps', [])
         else:
             return []

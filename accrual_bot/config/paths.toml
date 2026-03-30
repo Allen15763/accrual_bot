@@ -170,6 +170,18 @@ procurement_pr = { dtype = "str" }
 
 
 # =============================================================================
+# SCT VARIANCE 路徑配置（差異分析報表）
+# =============================================================================
+[sct.variance]
+current_worksheet = "C:/Users/lia/Downloads/SCT_PO_202602_output (1).xlsx"
+previous_worksheet = "C:/SEA/Accrual/prpo_bot/resources/頂一下/202602/SCT/前期底稿/202601_PO_FN.xlsx"
+
+[sct.variance.params]
+current_worksheet = { sheet_name = "PO", header = 0, dtype = "str" }
+previous_worksheet = { sheet_name = "PO", header = 0, dtype = "str" }
+
+
+# =============================================================================
 # MOB 路徑配置 (待實作)
 # =============================================================================
 [mob.po]

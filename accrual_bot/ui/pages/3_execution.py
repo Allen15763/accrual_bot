@@ -138,6 +138,16 @@ if start_button and execution.status != ExecutionStatus.RUNNING:
             st.session_state.result.output_data = result['context'].data
             st.session_state.result.auxiliary_data = result['context'].auxiliary_data
             st.session_state.result.execution_time = result['execution_time']
+
+            # 差異分析專用：儲存文字結果到 session_state
+            ctx = result['context']
+            if ctx.has_variable('executive_summary'):
+                st.session_state['variance_executive_summary'] = ctx.get_variable('executive_summary')
+            if ctx.has_variable('top_5_insight'):
+                st.session_state['variance_top_5_insight'] = ctx.get_variable('top_5_insight')
+            if ctx.has_variable('export_path'):
+                st.session_state['variance_export_path'] = ctx.get_variable('export_path')
+
             st.success("✅ 執行成功！")
             time.sleep(1)
             st.switch_page("pages/4_📊_結果.py")
