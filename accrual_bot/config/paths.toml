@@ -20,7 +20,7 @@ output = "./output"
 # SPX PO 路徑配置
 # =============================================================================
 [spx.po]
-raw_po = "{resources}/{YYYYMM}/Original Data/{YYYYMM}_purchase_order_*.csv"
+raw_po = "{resources}/{YYYYMM}/Original Data/purchase_order_*.csv"
 previous = "{resources}/{YYYYMM}/前期底稿/SPX/{PREV_YYYYMM}_PO_FN.xlsx"
 procurement_po = "{resources}/{YYYYMM}/Original Data/{YYYYMM}_PO_PQ.xlsx"
 ap_invoice = "{resources}/{YYYYMM}/Original Data/{YYYYMM}_AP_Invoice_Match_Monitoring_Ext.xlsx"
@@ -42,7 +42,7 @@ ops_validation = { sheet_name = "智取櫃驗收明細(分DA)", header = 3, usec
 # SPX PR 路徑配置
 # =============================================================================
 [spx.pr]
-raw_pr = "{resources}/{YYYYMM}/Original Data/{YYYYMM}_purchase_request_*.csv"
+raw_pr = "{resources}/{YYYYMM}/Original Data/purchase_request_*.csv"
 previous_pr = "{resources}/{YYYYMM}/前期底稿/SPX/{PREV_YYYYMM}_PR_FN.xlsx"
 procurement_pr = "{resources}/{YYYYMM}/Original Data/{YYYYMM}_PR_PQ.xlsx"
 
@@ -79,7 +79,7 @@ contract_periods = {}
 # SPT PO 路徑配置
 # =============================================================================
 [spt.po]
-raw_po = "{resources}/{YYYYMM}/Original Data/{YYYYMM}_purchase_order_*.csv"
+raw_po = "{resources}/{YYYYMM}/Original Data/purchase_order_*.csv"
 previous = "{resources}/{YYYYMM}/前期底稿/{PREV_YYYYMM}_PO_FN.xlsx"
 procurement_po = "{resources}/{YYYYMM}/Original Data/{YYYYMM}_PO_PQ.xlsx"
 ap_invoice = "{resources}/{YYYYMM}/Original Data/{YYYYMM}_AP_Invoice_Match_Monitoring_Ext.xlsx"
@@ -105,7 +105,7 @@ media_summary = { dtype = "str", sheet_name = "2024-2025新聞總表(已用記�
 # SPT PR 路徑配置
 # =============================================================================
 [spt.pr]
-raw_pr = "{resources}/{YYYYMM}/Original Data/{YYYYMM}_purchase_request_*.csv"
+raw_pr = "{resources}/{YYYYMM}/Original Data/purchase_request_*.csv"
 previous_pr = "{resources}/{YYYYMM}/前期底稿/{PREV_YYYYMM}_PR_FN.xlsx"
 procurement_pr = "{resources}/{YYYYMM}/Original Data/{YYYYMM}_PR_PQ.xlsx"
 media_finished = "{resources}/{PREV_YYYYMM}/SPT/Sea TV program coverage list-2025.xlsx"
@@ -125,8 +125,8 @@ media_summary = { dtype = "str", sheet_name = "2024-2025新聞總表(已用記�
 # SPT PROCUREMENT 路徑配置
 # =============================================================================
 [spt.procurement]
-raw_po = "{resources}/{YYYYMM}/Original Data/{YYYYMM}_purchase_order_*.csv"
-raw_pr = "{resources}/{YYYYMM}/Original Data/{YYYYMM}_purchase_request_*.csv"
+raw_po = "{resources}/{YYYYMM}/Original Data/purchase_order_*.csv"
+raw_pr = "{resources}/{YYYYMM}/Original Data/purchase_request_*.csv"
 procurement_previous_pr = "{resources}/{YYYYMM}/採購底稿/未結PO {PREV_YYYYMM} SPTTW.xlsx"
 procurement_previous_po = "{resources}/{YYYYMM}/採購底稿/未結PO {PREV_YYYYMM} SPTTW.xlsx"
 
@@ -141,7 +141,7 @@ procurement_previous_po = { dtype = "str", sheet_name = "PO"}
 # SCT PO 路徑配置
 # =============================================================================
 [sct.po]
-raw_po = "{resources}/{YYYYMM}/SCT/Original Data/{YYYYMM}_purchase_order_*.xlsx"
+raw_po = "{resources}/{YYYYMM}/SCT/Original Data/purchase_order_*.xlsx"
 previous = "{resources}/{YYYYMM}/SCT/前期底稿/{PREV_YYYYMM}_PO_FN.xlsx"
 procurement_po = "{resources}/{YYYYMM}/SCT/Original Data/{YYYYMM}_PO_PQ.xlsx"
 ap_invoice = "{resources}/{YYYYMM}/SCT/Original Data/{YYYYMM} AP_Invoice_Match_Monitoring_Ext_Ka.xlsx"
@@ -159,7 +159,7 @@ previous_pr = { dtype = "str" }
 # SCT PR 路徑配置
 # =============================================================================
 [sct.pr]
-raw_pr = "{resources}/{YYYYMM}/SCT/Original Data/{YYYYMM}_purchase_request_*.xlsx"
+raw_pr = "{resources}/{YYYYMM}/SCT/Original Data/purchase_request_*.xlsx"
 previous_pr = "{resources}/{YYYYMM}/SCT/前期底稿/{PREV_YYYYMM}_PR_FN.xlsx"
 procurement_pr = "{resources}/{YYYYMM}/SCT/Original Data/{YYYYMM}_PR_PQ.xlsx"
 
