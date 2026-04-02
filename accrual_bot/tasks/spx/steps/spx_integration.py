@@ -1847,6 +1847,9 @@ class PPEDataCleaningStep(PipelineStep):
                 continue
             
             if target_col == 'sp_code':
+                # 移除空白字串，避免 astype(int) 報錯
+                mask = df[matched_col].astype(str).str.strip().ne('')
+                df = df.loc[mask].copy()
                 df_std[target_col] = df[matched_col].astype(int)
             elif target_col == 'address':
                 df_std[target_col] = df[matched_col].astype(str)
