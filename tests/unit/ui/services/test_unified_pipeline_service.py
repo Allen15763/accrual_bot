@@ -122,7 +122,7 @@ class TestGetEntityTypes:
 class TestGetEnabledSteps:
     """測試 get_enabled_steps 方法"""
 
-    @patch('accrual_bot.ui.services.unified_pipeline_service.SPTPipelineOrchestrator')
+    @patch('accrual_bot.tasks.pipeline_service.SPTPipelineOrchestrator')
     def test_spt_po_steps(self, mock_class, service):
         """SPT PO 應回傳已啟用步驟清單"""
         mock_instance = MagicMock()
@@ -134,7 +134,7 @@ class TestGetEnabledSteps:
         assert len(steps) > 0
         mock_instance.get_enabled_steps.assert_called_once_with('PO')
 
-    @patch('accrual_bot.ui.services.unified_pipeline_service.SPXPipelineOrchestrator')
+    @patch('accrual_bot.tasks.pipeline_service.SPXPipelineOrchestrator')
     def test_spx_pr_steps(self, mock_class, service):
         """SPX PR 應回傳已啟用步驟清單"""
         mock_instance = MagicMock()
@@ -144,7 +144,7 @@ class TestGetEnabledSteps:
         steps = service.get_enabled_steps('SPX', 'PR')
         assert steps == ['SPXPRDataLoading', 'ColumnAddition']
 
-    @patch('accrual_bot.ui.services.unified_pipeline_service.SPTPipelineOrchestrator')
+    @patch('accrual_bot.tasks.pipeline_service.SPTPipelineOrchestrator')
     def test_procurement_with_source_type(self, mock_class, service):
         """PROCUREMENT 帶 source_type 時應傳入 source_type 參數"""
         mock_instance = MagicMock()
@@ -168,8 +168,8 @@ class TestGetEnabledSteps:
 class TestBuildPipeline:
     """測試 build_pipeline 方法"""
 
-    @patch('accrual_bot.ui.services.unified_pipeline_service.ConfigManager')
-    @patch('accrual_bot.ui.services.unified_pipeline_service.SPTPipelineOrchestrator')
+    @patch('accrual_bot.tasks.pipeline_service.ConfigManager')
+    @patch('accrual_bot.tasks.pipeline_service.SPTPipelineOrchestrator')
     def test_build_spt_po_pipeline(self, mock_orch_class, mock_config_cls, service):
         """應成功建立 SPT PO pipeline"""
         # Mock ConfigManager 讓 _enrich_file_paths 不報錯
@@ -188,8 +188,8 @@ class TestBuildPipeline:
         assert result == mock_pipeline
         mock_orch.build_po_pipeline.assert_called_once()
 
-    @patch('accrual_bot.ui.services.unified_pipeline_service.ConfigManager')
-    @patch('accrual_bot.ui.services.unified_pipeline_service.SPXPipelineOrchestrator')
+    @patch('accrual_bot.tasks.pipeline_service.ConfigManager')
+    @patch('accrual_bot.tasks.pipeline_service.SPXPipelineOrchestrator')
     def test_build_spx_pr_pipeline(self, mock_orch_class, mock_config_cls, service):
         """應成功建立 SPX PR pipeline"""
         mock_config_instance = MagicMock()
@@ -207,8 +207,8 @@ class TestBuildPipeline:
         assert result == mock_pipeline
         mock_orch.build_pr_pipeline.assert_called_once()
 
-    @patch('accrual_bot.ui.services.unified_pipeline_service.ConfigManager')
-    @patch('accrual_bot.ui.services.unified_pipeline_service.SPXPipelineOrchestrator')
+    @patch('accrual_bot.tasks.pipeline_service.ConfigManager')
+    @patch('accrual_bot.tasks.pipeline_service.SPXPipelineOrchestrator')
     def test_build_spx_ppe_requires_date(self, mock_orch_class, mock_config_cls, service):
         """SPX PPE 未提供 processing_date 應拋出 ValueError"""
         mock_config_instance = MagicMock()
@@ -220,8 +220,8 @@ class TestBuildPipeline:
         with pytest.raises(ValueError, match="PPE 處理需要提供 processing_date"):
             service.build_pipeline('SPX', 'PPE', {'contract_filing_list': '/tmp/test.xlsx'})
 
-    @patch('accrual_bot.ui.services.unified_pipeline_service.ConfigManager')
-    @patch('accrual_bot.ui.services.unified_pipeline_service.SPXPipelineOrchestrator')
+    @patch('accrual_bot.tasks.pipeline_service.ConfigManager')
+    @patch('accrual_bot.tasks.pipeline_service.SPXPipelineOrchestrator')
     def test_build_spx_ppe_with_date(self, mock_orch_class, mock_config_cls, service):
         """SPX PPE 提供 processing_date 應成功建立"""
         mock_config_instance = MagicMock()
@@ -241,8 +241,8 @@ class TestBuildPipeline:
         assert result == mock_pipeline
         mock_orch.build_ppe_pipeline.assert_called_once()
 
-    @patch('accrual_bot.ui.services.unified_pipeline_service.ConfigManager')
-    @patch('accrual_bot.ui.services.unified_pipeline_service.SPTPipelineOrchestrator')
+    @patch('accrual_bot.tasks.pipeline_service.ConfigManager')
+    @patch('accrual_bot.tasks.pipeline_service.SPTPipelineOrchestrator')
     def test_build_procurement_requires_source_type(self, mock_orch_class, mock_config_cls, service):
         """PROCUREMENT 未提供 source_type 應拋出 ValueError"""
         mock_config_instance = MagicMock()
@@ -254,7 +254,7 @@ class TestBuildPipeline:
         with pytest.raises(ValueError, match="PROCUREMENT 需要指定 source_type"):
             service.build_pipeline('SPT', 'PROCUREMENT', {'raw_po': '/tmp/test.csv'})
 
-    @patch('accrual_bot.ui.services.unified_pipeline_service.ConfigManager')
+    @patch('accrual_bot.tasks.pipeline_service.ConfigManager')
     def test_build_pipeline_unsupported_type(self, mock_config_cls, service):
         """不支援的處理類型應拋出 ValueError"""
         mock_config_instance = MagicMock()
@@ -278,7 +278,7 @@ class TestBuildPipeline:
 class TestEnrichFilePaths:
     """測試 _enrich_file_paths 方法"""
 
-    @patch('accrual_bot.ui.services.unified_pipeline_service.ConfigManager')
+    @patch('accrual_bot.tasks.pipeline_service.ConfigManager')
     def test_enrich_with_params(self, mock_config_cls, service):
         """當 paths.toml 有對應參數時，應將 path 包裝成帶 params 的字典"""
         mock_config_instance = MagicMock()
@@ -295,7 +295,7 @@ class TestEnrichFilePaths:
         assert result['raw_po']['path'] == '/tmp/test.csv'
         assert result['raw_po']['params'] == {'encoding': 'utf-8', 'sep': ','}
 
-    @patch('accrual_bot.ui.services.unified_pipeline_service.ConfigManager')
+    @patch('accrual_bot.tasks.pipeline_service.ConfigManager')
     def test_enrich_without_params(self, mock_config_cls, service):
         """當 paths.toml 無對應參數時，應保持原始字串路徑"""
         mock_config_instance = MagicMock()
@@ -310,7 +310,7 @@ class TestEnrichFilePaths:
         )
         assert result['raw_po'] == '/tmp/test.csv'
 
-    @patch('accrual_bot.ui.services.unified_pipeline_service.ConfigManager')
+    @patch('accrual_bot.tasks.pipeline_service.ConfigManager')
     def test_enrich_with_source_type_suffix(self, mock_config_cls, service):
         """PROCUREMENT 帶 source_type 時，應嘗試 suffixed key 查找參數"""
         mock_config_instance = MagicMock()
@@ -327,7 +327,7 @@ class TestEnrichFilePaths:
         assert isinstance(result['procurement_previous'], dict)
         assert result['procurement_previous']['params'] == {'sheet_name': 0, 'header': 0}
 
-    @patch('accrual_bot.ui.services.unified_pipeline_service.ConfigManager')
+    @patch('accrual_bot.tasks.pipeline_service.ConfigManager')
     def test_enrich_fallback_on_exception(self, mock_config_cls, service):
         """ConfigManager 拋出異常時，應回傳原始 file_paths"""
         mock_config_cls.side_effect = Exception("Config error")
@@ -336,7 +336,7 @@ class TestEnrichFilePaths:
         result = service._enrich_file_paths(file_paths, 'SPX', 'PO')
         assert result == file_paths
 
-    @patch('accrual_bot.ui.services.unified_pipeline_service.ConfigManager')
+    @patch('accrual_bot.tasks.pipeline_service.ConfigManager')
     def test_enrich_with_none_params_config(self, mock_config_cls, service):
         """當 get_paths_config 回傳 None 時，應回傳原始 file_paths"""
         mock_config_instance = MagicMock()
@@ -356,13 +356,13 @@ class TestEnrichFilePaths:
 class TestGetOrchestrator:
     """測試 _get_orchestrator 方法"""
 
-    @patch('accrual_bot.ui.services.unified_pipeline_service.SPTPipelineOrchestrator')
+    @patch('accrual_bot.tasks.pipeline_service.SPTPipelineOrchestrator')
     def test_returns_spt_orchestrator(self, mock_class, service):
         """SPT 應回傳 SPTPipelineOrchestrator 實例"""
         service._get_orchestrator('SPT')
         mock_class.assert_called_once()
 
-    @patch('accrual_bot.ui.services.unified_pipeline_service.SPXPipelineOrchestrator')
+    @patch('accrual_bot.tasks.pipeline_service.SPXPipelineOrchestrator')
     def test_returns_spx_orchestrator(self, mock_class, service):
         """SPX 應回傳 SPXPipelineOrchestrator 實例"""
         service._get_orchestrator('SPX')

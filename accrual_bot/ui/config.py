@@ -1,199 +1,24 @@
 """
 UI Configuration Constants
 
-定義 UI 使用的設定常數，包含 entity 配置、檔案標籤、必填檔案清單等。
+定義 UI 專屬的設定常數（頁面配置、主題色彩）。
+業務邏輯常數（entity、檔案需求等）已搬移至 accrual_bot.tasks.config，
+此處 re-export 以維持向後相容。
 """
 
 from typing import Dict, List, Tuple
 
-# Entity 配置 (MOB 暫時隱藏)
-ENTITY_CONFIG: Dict[str, Dict] = {
-    'SPT': {
-        'display_name': 'SPT',
-        'types': ['PO', 'PR', 'PROCUREMENT'],
-        'description': 'SPT Platform for opened PR/PO',
-        'icon': '🛒',
-    },
-    'SPX': {
-        'display_name': 'SPX',
-        'types': ['PO', 'PR', 'PPE', 'PPE_DESC'],
-        'description': 'SPX Platform for opened PR/PO',
-        'icon': '📦',
-    },
-    'SCT': {
-        'display_name': 'SCT',
-        'types': ['PO', 'PR', 'VARIANCE'],
-        'description': 'SCT Platform for opened PR/PO',
-        'icon': '🏷️',
-    },
-}
-
-# Processing Type 配置
-PROCESSING_TYPE_CONFIG: Dict[str, Dict] = {
-    'PO': {
-        'display_name': '採購單 (PO)',
-        'description': 'Purchase Order 處理流程',
-        'icon': '📋',
-    },
-    'PR': {
-        'display_name': '請購單 (PR)',
-        'description': 'Purchase Request 處理流程',
-        'icon': '📝',
-    },
-    'PPE': {
-        'display_name': '固定資產 (PPE)',
-        'description': 'Property, Plant & Equipment 處理流程',
-        'icon': '🏢',
-    },
-    'PROCUREMENT': {
-        'display_name': '採購審核 (PROCUREMENT)',
-        'description': '採購人員專用處理流程，支援 PO/PR 單獨或合併處理',
-        'icon': '📋',
-    },
-    'PPE_DESC': {
-        'display_name': '未結 PPE 摘要 (PPE_DESC)',
-        'description': 'PO/PR 底稿說明欄位提取與年限對應',
-        'icon': '📊',
-    },
-    'VARIANCE': {
-        'display_name': '差異分析報表 (VARIANCE)',
-        'description': '比較前後期 PO 底稿差異，透過 AI 分析產生差異明細與洞察',
-        'icon': '📊',
-    },
-}
-
-# PROCUREMENT 子類型配置 (COMBINED 暫時隱藏)
-PROCUREMENT_SOURCE_TYPES: Dict[str, Dict] = {
-    'PO': {
-        'display_name': '僅 PO',
-        'description': '僅處理採購單',
-        'icon': '📋',
-    },
-    'PR': {
-        'display_name': '僅 PR',
-        'description': '僅處理請購單',
-        'icon': '📝',
-    },
-    # 'COMBINED': {  # TODO: 待測試完成後啟用
-    #     'display_name': 'PO + PR',
-    #     'description': '同時處理採購單與請購單',
-    #     'icon': '📑',
-    # },
-}
-
-# 檔案標籤對照
-FILE_LABELS: Dict[str, str] = {
-    'raw_po': '採購單原始資料 (必填)',
-    'raw_pr': '請購單原始資料 (必填)',
-    'previous': 'FN 前期底稿 (選填)',
-    'procurement_po': '採購 PO 底稿 (選填)',
-    'procurement_pr': '採購 PR 底稿 (選填)',
-    'procurement_previous': '採購前期底稿 (選填)',
-    'ap_invoice': 'AP Invoice (選填)',
-    'previous_pr': 'FN前期 PR 底稿 (選填)',
-    'ops_validation': 'OPS 驗收明細 (選填)',
-    'contract_filing_list': '合約歸檔清單 (必填)',
-    'media_finished': '媒體使用完畢清單 (選填)',
-    'media_left': '媒體剩餘量清單 (選填)',
-    'media_summary': '媒體總表 (選填)',
-    'workpaper': 'PO/PR 底稿 Excel (必填，含 PO_yyyymm 和 PR_yyyymm sheet)',
-    'contract_periods': '年限表 (必填)',
-    'current_worksheet': '當期 PO 底稿 (必填，需含 PO sheet)',
-    'previous_worksheet': '前期 PO 底稿 (必填)',
-}
-
-# 各 entity/type 的必要檔案
-REQUIRED_FILES: Dict[Tuple, List[str]] = {
-    # 2-tuple keys (標準處理類型)
-    ('SPT', 'PO'): ['raw_po'],
-    ('SPT', 'PR'): ['raw_pr'],
-    ('SPX', 'PO'): ['raw_po'],
-    ('SPX', 'PR'): ['raw_pr'],
-    ('SPX', 'PPE'): ['contract_filing_list'],
-    ('SPX', 'PPE_DESC'): ['workpaper', 'contract_periods'],
-    # SCT
-    ('SCT', 'PO'): ['raw_po'],
-    ('SCT', 'PR'): ['raw_pr'],
-    ('SCT', 'VARIANCE'): ['current_worksheet', 'previous_worksheet'],
-    # 3-tuple keys (PROCUREMENT 子類型)
-    ('SPT', 'PROCUREMENT', 'PO'): ['raw_po'],
-    ('SPT', 'PROCUREMENT', 'PR'): ['raw_pr'],
-    # ('SPT', 'PROCUREMENT', 'COMBINED'): ['raw_po', 'raw_pr'],  # TODO: 待測試完成後啟用
-}
-
-# 各 entity/type 的選填檔案
-OPTIONAL_FILES: Dict[Tuple, List[str]] = {
-    # 2-tuple keys (標準處理類型)
-    ('SPT', 'PO'): [
-        'previous',
-        'procurement_po',
-        'ap_invoice',
-        'previous_pr',
-        'procurement_pr',
-        'media_finished',
-        'media_left',
-        'media_summary',
-    ],
-    ('SPT', 'PR'): [
-        'previous_pr',
-        'procurement_pr',
-        'media_finished',
-        'media_left',
-        'media_summary',
-    ],
-    ('SPX', 'PO'): [
-        'previous',
-        'procurement_po',
-        'ap_invoice',
-        'previous_pr',
-        'procurement_pr',
-        'ops_validation',
-    ],
-    ('SPX', 'PR'): [
-        'previous_pr',
-        'procurement_pr',
-    ],
-    ('SPX', 'PPE'): [],
-    ('SPX', 'PPE_DESC'): [],
-    # SCT
-    ('SCT', 'PO'): [
-        'previous',
-        'procurement_po',
-        'ap_invoice',
-        'previous_pr',
-    ],
-    ('SCT', 'PR'): [
-        'previous_pr',
-        'procurement_pr',
-    ],
-    ('SCT', 'VARIANCE'): [],
-    # 3-tuple keys (PROCUREMENT 子類型)
-    ('SPT', 'PROCUREMENT', 'PO'): [
-        'procurement_previous',
-        'media_finished',
-        'media_left',
-        'media_summary',
-    ],
-    ('SPT', 'PROCUREMENT', 'PR'): [
-        'procurement_previous',
-        'media_finished',
-        'media_left',
-        'media_summary',
-    ],
-    # ('SPT', 'PROCUREMENT', 'COMBINED'): [  # TODO: 待測試完成後啟用
-    #     'procurement_previous',
-    #     'media_finished',
-    #     'media_left',
-    #     'media_summary',
-    # ],
-}
-
-# 支援的檔案格式
-SUPPORTED_FILE_FORMATS: List[str] = [
-    '.csv',
-    '.xlsx',
-    '.xls',
-]
+# === 業務常數 re-export（向後相容） ===
+from accrual_bot.tasks.config import (  # noqa: F401
+    ENTITY_CONFIG,
+    PROCESSING_TYPE_CONFIG,
+    PROCUREMENT_SOURCE_TYPES,
+    FILE_LABELS,
+    REQUIRED_FILES,
+    OPTIONAL_FILES,
+    SUPPORTED_FILE_FORMATS,
+    get_file_requirements,
+)
 
 # UI 主題色彩
 THEME_COLORS: Dict[str, str] = {
@@ -211,25 +36,3 @@ PAGE_CONFIG = {
     'layout': 'wide',
     'initial_sidebar_state': 'expanded',
 }
-
-
-def get_file_requirements(entity: str, proc_type: str, source_type: str = "") -> Tuple[List[str], List[str]]:
-    """
-    獲取檔案需求
-
-    Args:
-        entity: Entity 名稱 (如 'SPT', 'SPX')
-        proc_type: 處理類型 (如 'PO', 'PR', 'PROCUREMENT')
-        source_type: 子類型 (僅 PROCUREMENT 使用: 'PO', 'PR', 'COMBINED')
-
-    Returns:
-        (required_files, optional_files) 元組
-    """
-    if proc_type == 'PROCUREMENT' and source_type:
-        key = (entity, proc_type, source_type)
-    else:
-        key = (entity, proc_type)
-
-    required = REQUIRED_FILES.get(key, [])
-    optional = OPTIONAL_FILES.get(key, [])
-    return required, optional

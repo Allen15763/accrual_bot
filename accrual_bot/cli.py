@@ -112,6 +112,12 @@ def _generate_streamlit_app(ws: Path):
 
 def cmd_ui(args=None):
     """啟動 Streamlit UI"""
+    try:
+        import streamlit  # noqa: F401
+    except ImportError:
+        _safe_print("錯誤：需要安裝 UI 依賴。請執行：pip install 'accrual-bot[ui]'")
+        sys.exit(1)
+
     ws = get_workspace()
     app_entry = ws / "app" / "main_streamlit.py"
 
